@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
-import { preferenceClient, APP_URL, isLocalhost, getCheckoutUrl } from "@/lib/mercadopago/client";
+import { createPreference, getCheckoutUrl, APP_URL } from "@/lib/mercadopago/client";
 import { z } from "zod";
 
 const compraEntradaSchema = z.object({
@@ -171,35 +171,28 @@ export async function POST(request: NextRequest) {
     const externalReference = `EVT-${evento_id}-${entradaIds.join(",")}`;
     let preference;
     try {
-      preference = await preferenceClient.create({
-        body: {
-          items: [
-            {
-              id: `entrada-${tipo_entrada_id}`,
-              title: `${evento.titulo} — ${tipoEntrada.nombre} x${cantidad}`,
-              quantity: cantidad,
-              unit_price: precioUnitario,
-              currency_id: "UYU",
-            },
-          ],
-          ...(isLocalhost()
-            ? {}
-            : {
-                back_urls: {
-                  success: `${APP_URL}/eventos/${evento.slug}?compra=exitosa`,
-                  failure: `${APP_URL}/eventos/${evento.slug}?compra=fallida`,
-                  pending: `${APP_URL}/eventos/${evento.slug}?compra=pendiente`,
-                },
-                auto_return: "approved" as const,
-                notification_url: `${APP_URL}/api/webhooks/mercadopago`,
-              }),
-          external_reference: externalReference,
-          payer: {
-            name: nombre_asistente,
-            email: email_asistente,
+      preference = await createPreference({
+        items: [
+          {
+            id: `entrada-${tipo_entrada_id}`,
+            title: `${evento.titulo} — ${tipoEntrada.nombre} x${cantidad}`,
+            quantity: cantidad,
+            unit_price: precioUnitario,
+            currency_id: "UYU",
           },
-          statement_descriptor: "Club Seminario",
+        ],
+        external_reference: externalReference,
+        payer: {
+          name: nombre_asistente,
+          email: email_asistente,
         },
+        back_urls: {
+          success: `${APP_URL}/eventos/${evento.slug}?compra=exitosa`,
+          failure: `${APP_URL}/eventos/${evento.slug}?compra=fallida`,
+          pending: `${APP_URL}/eventos/${evento.slug}?compra=pendiente`,
+        },
+        notification_url: `${APP_URL}/api/webhooks/mercadopago`,
+        statement_descriptor: "Club Seminario",
       });
     } catch (mpError: any) {
       console.error("MercadoPago error:", mpError?.message, mpError?.cause || "");

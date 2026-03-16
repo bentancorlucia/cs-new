@@ -36,10 +36,6 @@ export const metadata: Metadata = {
       "Club deportivo, social y cultural de la comunidad jesuita en Uruguay.",
     images: ["/images/og-default.jpg"],
   },
-  icons: {
-    icon: "/favicon.ico",
-    apple: "/images/apple-touch-icon.png",
-  },
 };
 
 export const viewport: Viewport = {

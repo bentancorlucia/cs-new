@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
-import { preferenceClient, APP_URL, isLocalhost, getCheckoutUrl } from "@/lib/mercadopago/client";
+import { createPreference, getCheckoutUrl, APP_URL } from "@/lib/mercadopago/client";
 import { z } from "zod";
 
 const checkoutItemSchema = z.object({
@@ -201,33 +201,27 @@ export async function POST(request: NextRequest) {
     }
 
     // 8. Crear preferencia de MercadoPago
-    const preference = await preferenceClient.create({
-      body: {
-        items: itemsConPrecio.map((item) => ({
-          id: String(item.productoId),
-          title: item.nombre,
-          quantity: item.cantidad,
-          unit_price: item.precioUnitario,
-          currency_id: "UYU",
-        })),
-        ...(isLocalhost()
-          ? {}
-          : {
-              back_urls: {
-                success: `${APP_URL}/tienda/pedido/${pedido.id}?status=approved`,
-                failure: `${APP_URL}/tienda/pedido/${pedido.id}?status=failure`,
-                pending: `${APP_URL}/tienda/pedido/${pedido.id}?status=pending`,
-              },
-              auto_return: "approved" as const,
-              notification_url: `${APP_URL}/api/webhooks/mercadopago`,
-            }),
-        external_reference: pedido.numero_pedido,
-        payer: {
-          name: perfil.nombre,
-          surname: perfil.apellido,
-        },
-        statement_descriptor: "Club Seminario",
+    const preference = await createPreference({
+      items: itemsConPrecio.map((item) => ({
+        id: String(item.productoId),
+        title: item.nombre,
+        quantity: item.cantidad,
+        unit_price: item.precioUnitario,
+        currency_id: "UYU",
+      })),
+      external_reference: pedido.numero_pedido,
+      payer: {
+        email: user.email || "",
+        name: perfil.nombre,
+        surname: perfil.apellido,
       },
+      back_urls: {
+        success: `${APP_URL}/tienda/pedido/${pedido.id}?status=approved`,
+        failure: `${APP_URL}/tienda/pedido/${pedido.id}?status=failure`,
+        pending: `${APP_URL}/tienda/pedido/${pedido.id}?status=pending`,
+      },
+      notification_url: `${APP_URL}/api/webhooks/mercadopago`,
+      statement_descriptor: "Club Seminario",
     });
 
     // 9. Guardar preference_id en el pedido

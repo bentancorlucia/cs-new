@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/supabase/roles";
-import { preferenceClient, APP_URL, isLocalhost, getCheckoutUrl } from "@/lib/mercadopago/client";
+import { createPreference, getCheckoutUrl, APP_URL } from "@/lib/mercadopago/client";
 
 const TIENDA_ROLES = ["super_admin", "tienda"];
 
@@ -44,27 +44,20 @@ export async function POST(request: NextRequest) {
     if (itemsError) throw itemsError;
 
     // Crear preferencia de MercadoPago
-    const preference = await preferenceClient.create({
-      body: {
-        items: (items || []).map((item: any) => ({
-          id: String(item.producto_id),
-          title: item.productos?.nombre || `Producto #${item.producto_id}`,
-          unit_price: item.precio_unitario,
-          quantity: item.cantidad,
-          currency_id: "UYU",
-        })),
-        external_reference: pedido.numero_pedido,
-        ...(isLocalhost()
-          ? {}
-          : {
-              notification_url: `${APP_URL}/api/webhooks/mercadopago`,
-              back_urls: {
-                success: `${APP_URL}/admin/pos`,
-                failure: `${APP_URL}/admin/pos`,
-              },
-              auto_return: "approved" as const,
-            }),
+    const preference = await createPreference({
+      items: (items || []).map((item: any) => ({
+        id: String(item.producto_id),
+        title: item.productos?.nombre || `Producto #${item.producto_id}`,
+        unit_price: item.precio_unitario,
+        quantity: item.cantidad,
+        currency_id: "UYU",
+      })),
+      external_reference: pedido.numero_pedido,
+      back_urls: {
+        success: `${APP_URL}/admin/pos`,
+        failure: `${APP_URL}/admin/pos`,
       },
+      notification_url: `${APP_URL}/api/webhooks/mercadopago`,
     });
 
     // Guardar preference_id en pedido

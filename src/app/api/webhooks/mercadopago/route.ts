@@ -1,65 +1,66 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
-import { paymentClient } from "@/lib/mercadopago/client";
+import { createClient } from "@supabase/supabase-js";
+import { getPayment, isPaymentApproved, isPaymentRejected } from "@/lib/mercadopago/client";
+
+// Use service role for webhook processing (no user auth context)
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 // POST /api/webhooks/mercadopago — Webhook de notificaciones de MercadoPago
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // MercadoPago envía notificaciones de tipo "payment"
-    if (body.type !== "payment" && body.action !== "payment.updated") {
+    // MercadoPago envía diferentes tipos de notificación, solo procesamos pagos
+    if (body.type !== "payment") {
       return NextResponse.json({ received: true });
     }
 
     const paymentId = body.data?.id;
+
     if (!paymentId) {
+      console.error("Webhook missing payment ID:", body);
       return NextResponse.json({ received: true });
     }
 
     // Obtener detalles del pago desde MercadoPago
-    const payment = await paymentClient.get({ id: paymentId });
+    const payment = await getPayment(paymentId.toString());
 
-    if (!payment || !payment.external_reference) {
-      console.error("Webhook: pago sin external_reference", paymentId);
+    const externalRef = payment.external_reference;
+
+    if (!externalRef) {
+      console.error("Payment missing external_reference:", payment);
       return NextResponse.json({ received: true });
     }
-
-    const supabase = await createServerClient();
-    // Cast for admin operations (typed DB causes 'never' on insert/update)
-    const db = supabase as any;
-
-    const externalRef = payment.external_reference as string;
 
     // Detect if this is an event ticket payment (EVT-xxx-ids) or an order payment
     if (externalRef.startsWith("EVT-")) {
-      await handleEntradaPayment(db, externalRef, payment);
+      await handleEntradaPayment(externalRef, payment);
       return NextResponse.json({ received: true });
     }
 
-    // Buscar el pedido por numero_pedido (external_reference)
-    const { data: pedido, error: pedidoError } = await db
+    // --- Handle shop order payments ---
+    const { data: pedido, error: pedidoError } = await supabaseAdmin
       .from("pedidos")
       .select("id, estado, perfil_id")
       .eq("numero_pedido", externalRef)
       .single();
 
     if (pedidoError || !pedido) {
-      console.error(
-        "Webhook: pedido no encontrado para referencia",
-        externalRef
-      );
+      console.error("Webhook: pedido no encontrado para referencia", externalRef);
       return NextResponse.json({ received: true });
     }
 
     // Solo procesar si el pedido está pendiente
     if (pedido.estado !== "pendiente") {
-      return NextResponse.json({ received: true });
+      return NextResponse.json({ received: true, status: "already_processed" });
     }
 
-    if (payment.status === "approved") {
+    if (isPaymentApproved(payment)) {
       // 1. Actualizar pedido a "pagado"
-      await db
+      await supabaseAdmin
         .from("pedidos")
         .update({
           estado: "pagado",
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
         .eq("id", pedido.id);
 
       // 2. Obtener items del pedido para descontar stock
-      const { data: pedidoItems } = await db
+      const { data: pedidoItems } = await supabaseAdmin
         .from("pedido_items")
         .select("producto_id, variante_id, cantidad")
         .eq("pedido_id", pedido.id);
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
       if (pedidoItems) {
         for (const item of pedidoItems as any[]) {
           if (item.variante_id) {
-            const { data: variante } = await db
+            const { data: variante } = await supabaseAdmin
               .from("producto_variantes")
               .select("stock_actual")
               .eq("id", item.variante_id)
@@ -87,12 +88,12 @@ export async function POST(request: NextRequest) {
               const stockAnterior = variante.stock_actual;
               const stockNuevo = Math.max(0, stockAnterior - item.cantidad);
 
-              await db
+              await supabaseAdmin
                 .from("producto_variantes")
                 .update({ stock_actual: stockNuevo })
                 .eq("id", item.variante_id);
 
-              await db.from("stock_movimientos").insert({
+              await supabaseAdmin.from("stock_movimientos").insert({
                 producto_id: item.producto_id,
                 variante_id: item.variante_id,
                 tipo: "venta",
@@ -104,7 +105,7 @@ export async function POST(request: NextRequest) {
               });
             }
           } else {
-            const { data: producto } = await db
+            const { data: producto } = await supabaseAdmin
               .from("productos")
               .select("stock_actual")
               .eq("id", item.producto_id)
@@ -114,12 +115,12 @@ export async function POST(request: NextRequest) {
               const stockAnterior = producto.stock_actual;
               const stockNuevo = Math.max(0, stockAnterior - item.cantidad);
 
-              await db
+              await supabaseAdmin
                 .from("productos")
                 .update({ stock_actual: stockNuevo })
                 .eq("id", item.producto_id);
 
-              await db.from("stock_movimientos").insert({
+              await supabaseAdmin.from("stock_movimientos").insert({
                 producto_id: item.producto_id,
                 tipo: "venta",
                 cantidad: -item.cantidad,
@@ -134,7 +135,7 @@ export async function POST(request: NextRequest) {
       }
 
       // 3. Registrar pago en pagos_mercadopago
-      await db.from("pagos_mercadopago").insert({
+      await supabaseAdmin.from("pagos_mercadopago").insert({
         tipo_origen: "pedido",
         origen_id: pedido.id,
         mercadopago_payment_id: String(payment.id),
@@ -145,11 +146,10 @@ export async function POST(request: NextRequest) {
         metodo: payment.payment_method_id ?? null,
         raw_data: payment,
       });
-    } else if (
-      payment.status === "rejected" ||
-      payment.status === "cancelled"
-    ) {
-      await db
+
+      console.log(`Order ${externalRef} paid successfully`);
+    } else if (isPaymentRejected(payment)) {
+      await supabaseAdmin
         .from("pedidos")
         .update({
           estado: "cancelado",
@@ -157,6 +157,8 @@ export async function POST(request: NextRequest) {
           updated_at: new Date().toISOString(),
         })
         .eq("id", pedido.id);
+
+      console.log(`Order ${externalRef} cancelled/rejected`);
     }
 
     return NextResponse.json({ received: true });
@@ -168,26 +170,31 @@ export async function POST(request: NextRequest) {
 }
 
 // Handle event ticket payments (external_reference = "EVT-{eventoId}-{entradaId1,entradaId2,...}")
-async function handleEntradaPayment(db: any, externalRef: string, payment: any) {
+async function handleEntradaPayment(externalRef: string, payment: any) {
   // Parse: "EVT-123-45,46,47"
   const parts = externalRef.split("-");
   if (parts.length < 3) return;
 
-  const entradaIds = parts.slice(2).join("-").split(",").map(Number).filter(Boolean);
+  const entradaIds = parts
+    .slice(2)
+    .join("-")
+    .split(",")
+    .map(Number)
+    .filter(Boolean);
 
   if (entradaIds.length === 0) return;
 
-  if (payment.status === "approved") {
+  if (isPaymentApproved(payment)) {
     // Update all entries to "pagada"
     for (const entradaId of entradaIds) {
-      const { data: entrada } = await db
+      const { data: entrada } = await supabaseAdmin
         .from("entradas")
         .select("id, estado")
         .eq("id", entradaId)
         .single();
 
       if (entrada && entrada.estado === "pendiente") {
-        await db
+        await supabaseAdmin
           .from("entradas")
           .update({
             estado: "pagada",
@@ -200,7 +207,7 @@ async function handleEntradaPayment(db: any, externalRef: string, payment: any) 
     }
 
     // Register in pagos_mercadopago (using first entry as reference)
-    await db.from("pagos_mercadopago").insert({
+    await supabaseAdmin.from("pagos_mercadopago").insert({
       tipo_origen: "entrada",
       origen_id: entradaIds[0],
       mercadopago_payment_id: String(payment.id),
@@ -211,17 +218,19 @@ async function handleEntradaPayment(db: any, externalRef: string, payment: any) 
       metodo: payment.payment_method_id ?? null,
       raw_data: payment,
     });
-  } else if (payment.status === "rejected" || payment.status === "cancelled") {
+
+    console.log(`Event tickets [${entradaIds.join(",")}] paid successfully`);
+  } else if (isPaymentRejected(payment)) {
     // Cancel entries and restore lot availability
     for (const entradaId of entradaIds) {
-      const { data: entrada } = await db
+      const { data: entrada } = await supabaseAdmin
         .from("entradas")
         .select("id, estado, lote_id")
         .eq("id", entradaId)
         .single();
 
       if (entrada && entrada.estado === "pendiente") {
-        await db
+        await supabaseAdmin
           .from("entradas")
           .update({
             estado: "cancelada",
@@ -232,14 +241,14 @@ async function handleEntradaPayment(db: any, externalRef: string, payment: any) 
 
         // Restore lot availability
         if (entrada.lote_id) {
-          const { data: lote } = await db
+          const { data: lote } = await supabaseAdmin
             .from("lotes_entrada")
             .select("vendidas")
             .eq("id", entrada.lote_id)
             .single();
 
           if (lote && lote.vendidas > 0) {
-            await db
+            await supabaseAdmin
               .from("lotes_entrada")
               .update({ vendidas: lote.vendidas - 1 })
               .eq("id", entrada.lote_id);
@@ -247,5 +256,12 @@ async function handleEntradaPayment(db: any, externalRef: string, payment: any) 
         }
       }
     }
+
+    console.log(`Event tickets [${entradaIds.join(",")}] cancelled/rejected`);
   }
+}
+
+// MercadoPago also sends GET requests to verify the endpoint
+export async function GET() {
+  return NextResponse.json({ status: "ok" });
 }
