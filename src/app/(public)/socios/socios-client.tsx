@@ -2,26 +2,12 @@
 
 import { HeroSection } from "@/components/shared/hero-section";
 import {
-  AnimateOnScroll,
   AnimateStaggerGroup,
 } from "@/components/shared/animate-on-scroll";
 import { motion } from "framer-motion";
 import { fadeInUp, springBouncy } from "@/lib/motion";
-import { CreditCard, Users, ArrowRight, Phone, Mail, MapPin, Clock } from "lucide-react";
+import { CreditCard, Users, ArrowRight } from "lucide-react";
 import Link from "next/link";
-
-const BENEFIT_CATEGORIES = [
-  "Gastronomía",
-  "Automotor",
-  "Catering",
-  "Tecnología",
-  "Veterinaria",
-  "Hotelería",
-  "Indumentaria",
-  "Bienestar",
-  "Estética",
-  "Deportes",
-];
 
 export function SociosClient() {
   return (
@@ -158,86 +144,6 @@ export function SociosClient() {
         </div>
       </section>
 
-      {/* Benefits preview */}
-      <section className="py-16 sm:py-20 bg-superficie border-t border-linea">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 text-center">
-          <AnimateOnScroll variant="fadeInUp">
-            <span className="font-heading uppercase tracking-editorial text-xs text-bordo-800 block mb-3">
-              Beneficios
-            </span>
-            <h2 className="font-display text-title-2 uppercase tracking-tightest text-foreground mb-4">
-              Descuentos del 5% al 50%
-            </h2>
-            <p className="font-body text-sm text-muted-foreground mb-8 max-w-lg mx-auto">
-              Tu tarjeta de membresía te da acceso a descuentos en múltiples
-              categorías.
-            </p>
-          </AnimateOnScroll>
-
-          <AnimateStaggerGroup className="flex flex-wrap justify-center gap-2">
-            {BENEFIT_CATEGORIES.map((cat) => (
-              <motion.span
-                key={cat}
-                variants={fadeInUp}
-                className="inline-flex items-center rounded-full bg-white px-4 py-2 font-body text-sm text-foreground shadow-card"
-              >
-                {cat}
-              </motion.span>
-            ))}
-          </AnimateStaggerGroup>
-
-          <AnimateOnScroll variant="fadeInUp" delay={0.3}>
-            <Link href="/beneficios" className="inline-block mt-8">
-              <motion.span
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                transition={springBouncy}
-                className="inline-flex items-center gap-2 font-heading text-xs uppercase tracking-editorial text-bordo-800 hover:text-bordo-900"
-              >
-                Ver todos los beneficios
-                <ArrowRight className="size-4" />
-              </motion.span>
-            </Link>
-          </AnimateOnScroll>
-        </div>
-      </section>
-
-      {/* Contact */}
-      <section className="py-12 sm:py-16 bg-fondo border-t border-linea">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-          <AnimateOnScroll variant="fadeInUp">
-            <div className="bg-white rounded-2xl p-8 sm:p-10 shadow-card">
-              <h3 className="font-display text-title-3 uppercase tracking-tightest text-foreground mb-6 text-center">
-                Contacto Secretaría
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg mx-auto">
-                <a
-                  href="tel:099613671"
-                  className="flex items-center gap-3 font-body text-sm text-muted-foreground hover:text-bordo-800 transition-colors"
-                >
-                  <Phone className="size-4 text-bordo-800 shrink-0" />
-                  099 613 671
-                </a>
-                <a
-                  href="mailto:secretaria@clubseminario.com.uy"
-                  className="flex items-center gap-3 font-body text-sm text-muted-foreground hover:text-bordo-800 transition-colors"
-                >
-                  <Mail className="size-4 text-bordo-800 shrink-0" />
-                  secretaria@clubseminario.com.uy
-                </a>
-                <span className="flex items-center gap-3 font-body text-sm text-muted-foreground">
-                  <MapPin className="size-4 text-bordo-800 shrink-0" />
-                  Soriano 1472, Colegio Seminario
-                </span>
-                <span className="flex items-center gap-3 font-body text-sm text-muted-foreground">
-                  <Clock className="size-4 text-bordo-800 shrink-0" />
-                  Mar, Jue, Vie de 10 a 13 hs
-                </span>
-              </div>
-            </div>
-          </AnimateOnScroll>
-        </div>
-      </section>
     </>
   );
 }

@@ -15,6 +15,7 @@ export default function EstatutoPage() {
       description="El estatuto del Club Seminario define los principios fundacionales, la estructura organizativa y las normas que rigen nuestra institución."
       documentLabel="Estatuto del Club Seminario"
       heroImage="/images/club/foto-estatuto.webp"
+      pdfUrl="/documentos/Estatutos - Club Seminario.pdf"
     />
   );
 }

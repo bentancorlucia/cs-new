@@ -1,6 +1,7 @@
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageTransition } from "@/components/layout/page-transition";
+import { HaceteSocioCTA } from "@/components/shared/hacete-socio-cta";
 
 export default function PublicLayout({
   children,
@@ -19,6 +20,7 @@ export default function PublicLayout({
       <PageTransition>
         <main id="main-content" className="min-h-screen pt-20">{children}</main>
       </PageTransition>
+      <HaceteSocioCTA />
       <Footer />
     </>
   );

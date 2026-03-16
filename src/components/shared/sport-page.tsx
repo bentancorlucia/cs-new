@@ -2,7 +2,6 @@
 
 import { HeroSection } from "@/components/shared/hero-section";
 import {
-  AnimateOnScroll,
   AnimateStaggerGroup,
 } from "@/components/shared/animate-on-scroll";
 import { motion } from "framer-motion";
@@ -107,34 +106,6 @@ export function SportPage({
         </div>
       </section>
 
-      {/* Contact section */}
-      <section className="py-12 sm:py-16 bg-superficie border-t border-linea">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-          <AnimateOnScroll variant="fadeInUp">
-            <p className="font-heading uppercase tracking-editorial text-xs text-muted-foreground mb-2">
-              Contacto General
-            </p>
-            <p className="font-body text-sm text-muted-foreground">
-              <a
-                href="tel:099613671"
-                className="hover:text-bordo-800 transition-colors"
-              >
-                099 613 671
-              </a>
-              {" · "}
-              <a
-                href="mailto:secretaria@clubseminario.com.uy"
-                className="hover:text-bordo-800 transition-colors"
-              >
-                secretaria@clubseminario.com.uy
-              </a>
-            </p>
-            <p className="mt-1 font-body text-sm text-muted-foreground/70">
-              Soriano 1472 · Mar, Jue, Vie de 10 a 13 hs
-            </p>
-          </AnimateOnScroll>
-        </div>
-      </section>
     </>
   );
 }

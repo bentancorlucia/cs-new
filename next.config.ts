@@ -39,6 +39,16 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // Allow PDF embeds in same-origin iframes
+        source: "/documentos/(.*)",
+        headers: [
+          {
+            key: "X-Frame-Options",
+            value: "SAMEORIGIN",
+          },
+        ],
+      },
+      {
         // Cache immutable assets aggressively
         source: "/images/(.*)",
         headers: [

@@ -4,7 +4,7 @@ import { InstalacionesClient } from "./instalaciones-client";
 export const metadata: Metadata = {
   title: "Instalaciones — Club Seminario",
   description:
-    "Instalaciones deportivas del Club Seminario. Parque CUPRA, Polideportivo Gonzaga y Parque Loyola.",
+    "Parque CUPRA — el predio deportivo del Club Seminario en Cochabamba 2882, Montevideo.",
 };
 
 export default function InstalacionesPage() {

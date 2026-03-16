@@ -15,6 +15,7 @@ export default function ReglamentoPage() {
       description="El reglamento interno del Club Seminario establece las normas de convivencia, uso de instalaciones y participación en actividades deportivas."
       documentLabel="Reglamento del Club Seminario"
       heroImage="/images/club/foto-reglamento.webp"
+      pdfUrl="/documentos/Reglamento - Club Seminario.pdf"
     />
   );
 }
