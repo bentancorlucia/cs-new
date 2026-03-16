@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -24,6 +24,7 @@ import {
   X,
   ChevronLeft,
   ShoppingCart,
+  ShieldCheck,
 } from "lucide-react";
 import { useRoles } from "@/hooks/use-roles";
 import { RoleSwitcher } from "@/components/layout/role-switcher";
@@ -79,20 +80,46 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/secretaria/disciplinas", label: "Disciplinas", icon: Dumbbell },
     ],
   },
+  {
+    title: "Administración",
+    requiredRoles: ["super_admin"],
+    items: [
+      { href: "/admin/roles", label: "Roles", icon: ShieldCheck },
+    ],
+  },
 ];
 
 const BOTTOM_ITEMS: NavItem[] = [
   { href: "/mi-cuenta", label: "Mi cuenta", icon: UserCircle },
 ];
 
+/** Find the label of the current active page for the mobile top bar */
+function getActivePageLabel(pathname: string): string {
+  for (const section of NAV_SECTIONS) {
+    for (const item of section.items) {
+      if (pathname === item.href || pathname.startsWith(item.href + "/")) {
+        return item.label;
+      }
+    }
+  }
+  for (const item of BOTTOM_ITEMS) {
+    if (pathname === item.href || pathname.startsWith(item.href + "/")) {
+      return item.label;
+    }
+  }
+  return "Panel";
+}
+
 function SidebarNavItem({
   item,
   pathname,
   collapsed,
+  onNavigate,
 }: {
   item: NavItem;
   pathname: string;
   collapsed: boolean;
+  onNavigate?: () => void;
 }) {
   const isActive =
     pathname === item.href || pathname.startsWith(item.href + "/");
@@ -113,8 +140,9 @@ function SidebarNavItem({
       )}
       <Link
         href={item.href}
+        onClick={onNavigate}
         className={`
-          flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-body font-medium transition-colors duration-150
+          flex items-center gap-3 rounded-lg px-3 py-2.5 lg:py-2 text-sm font-body font-medium transition-colors duration-150
           ${collapsed ? "justify-center px-2" : ""}
           ${
             isActive
@@ -135,10 +163,12 @@ function SidebarContent({
   pathname,
   collapsed,
   onLogout,
+  onNavigate,
 }: {
   pathname: string;
   collapsed: boolean;
   onLogout: () => void;
+  onNavigate?: () => void;
 }) {
   const { hasAnyRole } = useRoles();
 
@@ -150,7 +180,7 @@ function SidebarContent({
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className={`px-4 py-5 ${collapsed ? "text-center" : ""}`}>
-        <Link href="/" className="inline-block">
+        <Link href="/" onClick={onNavigate} className="inline-block">
           <span className="font-display text-xl font-bold text-bordo-800 uppercase tracking-tightest">
             {collapsed ? "CS" : "CS"}
           </span>
@@ -187,6 +217,7 @@ function SidebarContent({
                     item={item}
                     pathname={pathname}
                     collapsed={collapsed}
+                    onNavigate={onNavigate}
                   />
                 ))}
               </div>
@@ -203,12 +234,13 @@ function SidebarContent({
             item={item}
             pathname={pathname}
             collapsed={collapsed}
+            onNavigate={onNavigate}
           />
         ))}
         <button
           onClick={onLogout}
           className={`
-            flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-body font-medium w-full
+            flex items-center gap-3 rounded-lg px-3 py-2.5 lg:py-2 text-sm font-body font-medium w-full
             text-muted-foreground hover:bg-superficie hover:text-foreground transition-colors duration-150
             ${collapsed ? "justify-center px-2" : ""}
           `}
@@ -227,11 +259,20 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Close mobile sheet on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
   const handleLogout = async () => {
     const supabase = createBrowserClient();
     await supabase.auth.signOut();
     window.location.href = "/login";
   };
+
+  const closeMobile = () => setMobileOpen(false);
+
+  const pageLabel = getActivePageLabel(pathname);
 
   return (
     <>
@@ -244,20 +285,30 @@ export function Sidebar() {
           <Menu className="size-5 text-foreground" />
           <span className="sr-only">Menú</span>
         </button>
-        <Link href="/" className="font-display text-lg font-bold text-bordo-800 uppercase tracking-tightest">
-          CS
-        </Link>
+        <div className="flex items-center gap-2 min-w-0">
+          <Link href="/" className="font-display text-lg font-bold text-bordo-800 uppercase tracking-tightest shrink-0">
+            CS
+          </Link>
+          <span className="text-linea select-none">/</span>
+          <span className="font-heading text-sm text-muted-foreground truncate">
+            {pageLabel}
+          </span>
+        </div>
       </div>
       {/* Spacer for fixed mobile bar */}
       <div className="lg:hidden h-14 shrink-0" />
 
       {/* Mobile Sheet */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" showCloseButton={false} className="w-72 p-0 border-none">
+        <SheetContent
+          side="left"
+          showCloseButton={false}
+          className="w-[85vw] max-w-xs p-0 border-none"
+        >
           <SheetTitle className="sr-only">Panel de navegación</SheetTitle>
           <div className="flex justify-end p-2">
             <button
-              onClick={() => setMobileOpen(false)}
+              onClick={closeMobile}
               className="p-2 text-muted-foreground hover:text-foreground transition-colors"
             >
               <X className="size-5" />
@@ -267,6 +318,7 @@ export function Sidebar() {
             pathname={pathname}
             collapsed={false}
             onLogout={handleLogout}
+            onNavigate={closeMobile}
           />
         </SheetContent>
       </Sheet>

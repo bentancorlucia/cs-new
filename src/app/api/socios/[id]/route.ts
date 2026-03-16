@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/roles";
 import { z } from "zod";
 
@@ -12,7 +12,7 @@ export async function GET(
 ) {
   try {
     await requireRole(SOCIOS_ROLES);
-    const supabase = await createServerClient();
+    const supabase = createAdminClient();
     const { id } = await params;
 
     const { data, error } = await supabase
@@ -28,7 +28,7 @@ export async function GET(
           fecha_ingreso,
           disciplinas (id, nombre, slug)
         ),
-        pagos_socios (
+        pagos_socios!perfil_id (
           id,
           monto,
           moneda,
@@ -39,7 +39,7 @@ export async function GET(
           notas,
           created_at
         ),
-        perfil_roles (
+        perfil_roles!perfil_id (
           id,
           rol_id,
           roles (id, nombre, descripcion)
@@ -50,11 +50,13 @@ export async function GET(
       .single();
 
     if (error) {
+      console.error("[GET /api/socios/[id]] Supabase error:", error.message, error.code, "id:", id);
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
 
     return NextResponse.json({ socio: data });
   } catch (err) {
+    console.error("[GET /api/socios/[id]] Unexpected error:", err);
     if (err instanceof Error && err.message === "No autorizado") {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
@@ -84,7 +86,7 @@ export async function PUT(
 ) {
   try {
     await requireRole(SOCIOS_ROLES);
-    const supabase = await createServerClient();
+    const supabase = createAdminClient();
     const { id } = await params;
 
     const body = await request.json();
@@ -175,7 +177,7 @@ export async function DELETE(
 ) {
   try {
     await requireRole(SOCIOS_ROLES);
-    const supabase = await createServerClient();
+    const supabase = createAdminClient();
     const { id } = await params;
 
     // Remove socio role

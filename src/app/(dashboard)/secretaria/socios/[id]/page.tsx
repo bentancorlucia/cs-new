@@ -122,37 +122,36 @@ export default function FichaSocioPage() {
   const [addDisciplinaOpen, setAddDisciplinaOpen] = useState(false);
 
   const fetchSocio = useCallback(async () => {
-    const supabase = createBrowserClient();
-    const { data, error } = await supabase
-      .from("perfiles")
-      .select(
-        `
-        *,
-        perfil_disciplinas (id, disciplina_id, categoria, activa, fecha_ingreso, disciplinas (id, nombre, slug)),
-        pagos_socios (id, monto, moneda, periodo_mes, periodo_anio, metodo_pago, referencia_pago, notas, created_at),
-        perfil_roles (id, rol_id, roles (id, nombre, descripcion))
-      `
-      )
-      .eq("id", id)
-      .single();
-
-    if (error || !data) {
-      toast.error("Socio no encontrado");
+    try {
+      const res = await fetch(`/api/socios/${id}`);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("Error al cargar socio:", res.status, errorData);
+        if (res.status === 403) {
+          toast.error("No tenés permisos para ver este socio");
+        } else {
+          toast.error(errorData.error || "Socio no encontrado");
+        }
+        router.push("/secretaria/socios");
+        return;
+      }
+      const { socio: data } = await res.json();
+      const socioData = data as SocioData;
+      setSocio(socioData);
+      setEditForm({
+        nombre: socioData.nombre,
+        apellido: socioData.apellido,
+        cedula: socioData.cedula,
+        telefono: socioData.telefono,
+        fecha_nacimiento: socioData.fecha_nacimiento,
+        notas: socioData.notas,
+      });
+    } catch {
+      toast.error("Error al cargar socio");
       router.push("/secretaria/socios");
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    const socioData = data as unknown as SocioData;
-    setSocio(socioData);
-    setEditForm({
-      nombre: socioData.nombre,
-      apellido: socioData.apellido,
-      cedula: socioData.cedula,
-      telefono: socioData.telefono,
-      fecha_nacimiento: socioData.fecha_nacimiento,
-      notas: socioData.notas,
-    });
-    setLoading(false);
   }, [id, router]);
 
   useEffect(() => {
@@ -863,7 +862,9 @@ function AddDisciplinaDialog({
                 <Label className="font-body text-sm">Disciplina</Label>
                 <Select value={selectedId} onValueChange={(v) => v && setSelectedId(v)}>
                   <SelectTrigger className="font-body">
-                    <SelectValue placeholder="Seleccionar..." />
+                    {selectedId
+                      ? available.find((d) => String(d.id) === selectedId)?.nombre
+                      : <SelectValue placeholder="Seleccionar..." />}
                   </SelectTrigger>
                   <SelectContent>
                     {available.map((d) => (

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole, getCurrentUser } from "@/lib/supabase/roles";
 import { z } from "zod";
 
@@ -9,7 +9,7 @@ const SOCIOS_ROLES = ["super_admin", "secretaria"];
 export async function GET(request: NextRequest) {
   try {
     await requireRole(SOCIOS_ROLES);
-    const supabase = await createServerClient();
+    const supabase = createAdminClient();
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
   try {
     await requireRole(SOCIOS_ROLES);
     const currentUser = await getCurrentUser();
-    const supabase = await createServerClient();
+    const supabase = createAdminClient();
 
     const body = await request.json();
     const parsed = crearSocioSchema.parse(body);

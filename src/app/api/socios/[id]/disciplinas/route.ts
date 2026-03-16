@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/roles";
 import { z } from "zod";
 
@@ -17,7 +17,7 @@ export async function POST(
 ) {
   try {
     await requireRole(SOCIOS_ROLES);
-    const supabase = await createServerClient();
+    const supabase = createAdminClient();
     const { id } = await params;
 
     const body = await request.json();
@@ -73,7 +73,7 @@ export async function DELETE(
 ) {
   try {
     await requireRole(SOCIOS_ROLES);
-    const supabase = await createServerClient();
+    const supabase = createAdminClient();
     await params; // validate params exist
 
     const body = await request.json();

@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   Search,
   UserPlus,
@@ -33,7 +33,6 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createBrowserClient } from "@/lib/supabase/client";
-import { staggerContainerFast, fadeInUp } from "@/lib/motion";
 
 interface Socio {
   id: string;
@@ -96,43 +95,29 @@ function SociosListContent() {
 
   const fetchSocios = useCallback(async () => {
     setLoading(true);
-    const supabase = createBrowserClient();
+    try {
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
+      if (estado !== "todos") params.set("estado", estado);
+      if (disciplina !== "todas") params.set("disciplina", disciplina);
+      params.set("page", String(page));
+      params.set("limit", String(LIMIT));
 
-    let query = supabase
-      .from("perfiles")
-      .select(
-        `
-        id, nombre, apellido, cedula, numero_socio, estado_socio, fecha_alta_socio,
-        perfil_disciplinas (id, disciplinas (nombre))
-      `,
-        { count: "exact" }
-      )
-      .eq("es_socio", true);
-
-    if (search) {
-      query = query.or(
-        `nombre.ilike.%${search}%,apellido.ilike.%${search}%,cedula.ilike.%${search}%`
-      );
+      const res = await fetch(`/api/socios?${params.toString()}`);
+      if (!res.ok) {
+        setSocios([]);
+        setTotal(0);
+        return;
+      }
+      const data = await res.json();
+      setSocios((data.socios as Socio[]) || []);
+      setTotal(data.total || 0);
+    } catch {
+      setSocios([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
     }
-    if (estado !== "todos") {
-      query = query.eq("estado_socio", estado as "activo" | "inactivo" | "moroso" | "suspendido");
-    }
-    if (disciplina !== "todas") {
-      query = query.filter(
-        "perfil_disciplinas.disciplina_id",
-        "eq",
-        disciplina
-      );
-    }
-
-    query = query
-      .order("apellido", { ascending: true })
-      .range((page - 1) * LIMIT, page * LIMIT - 1);
-
-    const { data, count } = await query;
-    setSocios((data as unknown as Socio[]) || []);
-    setTotal(count || 0);
-    setLoading(false);
   }, [search, estado, disciplina, page]);
 
   useEffect(() => {
@@ -320,98 +305,90 @@ function SociosListContent() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  <AnimatePresence mode="popLayout">
-                    <motion.tbody
-                      variants={staggerContainerFast}
-                      initial="hidden"
-                      animate="visible"
-                      className="contents"
-                    >
-                      {socios.map((socio) => {
-                        const estadoInfo = ESTADO_BADGE[socio.estado_socio];
-                        const disciplinasNames =
-                          socio.perfil_disciplinas
-                            ?.map((pd) => pd.disciplinas?.nombre)
-                            .filter(Boolean) || [];
+                  socios.map((socio, index) => {
+                    const estadoInfo = ESTADO_BADGE[socio.estado_socio];
+                    const disciplinasNames =
+                      socio.perfil_disciplinas
+                        ?.map((pd) => pd.disciplinas?.nombre)
+                        .filter(Boolean) || [];
 
-                        return (
-                          <motion.tr
-                            key={socio.id}
-                            variants={fadeInUp}
-                            layout
-                            onClick={() =>
-                              router.push(`/secretaria/socios/${socio.id}`)
-                            }
-                            className="cursor-pointer border-b border-linea last:border-0 hover:bg-superficie/50 transition-colors"
-                          >
-                            <TableCell className="py-3">
-                              <div>
-                                <p className="font-body text-sm font-medium text-foreground">
-                                  {socio.apellido}, {socio.nombre}
+                    return (
+                      <motion.tr
+                        key={socio.id}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.03, duration: 0.3 }}
+                        onClick={() =>
+                          router.push(`/secretaria/socios/${socio.id}`)
+                        }
+                        className="cursor-pointer border-b border-linea last:border-0 hover:bg-superficie/50 transition-colors"
+                      >
+                        <TableCell className="py-3">
+                          <div>
+                            <p className="font-body text-sm font-medium text-foreground">
+                              {socio.apellido}, {socio.nombre}
+                            </p>
+                            {socio.numero_socio && (
+                              <p className="font-body text-xs text-muted-foreground">
+                                N.° {socio.numero_socio}
+                              </p>
+                            )}
+                            {/* Mobile: show cedula + disciplines */}
+                            <div className="sm:hidden mt-0.5">
+                              {socio.cedula && (
+                                <p className="font-body text-xs text-muted-foreground">
+                                  CI: {socio.cedula}
                                 </p>
-                                {socio.numero_socio && (
-                                  <p className="font-body text-xs text-muted-foreground">
-                                    N.° {socio.numero_socio}
-                                  </p>
-                                )}
-                                {/* Mobile: show cedula + disciplines */}
-                                <div className="sm:hidden mt-0.5">
-                                  {socio.cedula && (
-                                    <p className="font-body text-xs text-muted-foreground">
-                                      CI: {socio.cedula}
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="lg:hidden mt-1 flex flex-wrap gap-1">
-                                  {disciplinasNames.slice(0, 2).map((name) => (
-                                    <Badge
-                                      key={name}
-                                      variant="secondary"
-                                      className="text-[9px] font-body py-0 h-4"
-                                    >
-                                      {name}
-                                    </Badge>
-                                  ))}
-                                  {disciplinasNames.length > 2 && (
-                                    <Badge variant="secondary" className="text-[9px] font-body py-0 h-4">
-                                      +{disciplinasNames.length - 2}
-                                    </Badge>
-                                  )}
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="hidden sm:table-cell font-body text-sm text-muted-foreground">
-                              {socio.cedula || "—"}
-                            </TableCell>
-                            <TableCell className="hidden lg:table-cell">
-                              <div className="flex flex-wrap gap-1">
-                                {disciplinasNames.length > 0 ? (
-                                  disciplinasNames.map((name) => (
-                                    <Badge
-                                      key={name}
-                                      variant="secondary"
-                                      className="text-[10px] font-body"
-                                    >
-                                      {name}
-                                    </Badge>
-                                  ))
-                                ) : (
-                                  <span className="text-sm text-muted-foreground">
-                                    —
-                                  </span>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="py-3">
-                              <Badge variant={estadoInfo?.variant || "secondary"}>
-                                {estadoInfo?.label || socio.estado_socio}
-                              </Badge>
-                            </TableCell>
-                          </motion.tr>
-                        );
-                      })}
-                    </motion.tbody>
-                  </AnimatePresence>
+                              )}
+                            </div>
+                            <div className="lg:hidden mt-1 flex flex-wrap gap-1">
+                              {disciplinasNames.slice(0, 2).map((name) => (
+                                <Badge
+                                  key={name}
+                                  variant="secondary"
+                                  className="text-[9px] font-body py-0 h-4"
+                                >
+                                  {name}
+                                </Badge>
+                              ))}
+                              {disciplinasNames.length > 2 && (
+                                <Badge variant="secondary" className="text-[9px] font-body py-0 h-4">
+                                  +{disciplinasNames.length - 2}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell font-body text-sm text-muted-foreground">
+                          {socio.cedula || "—"}
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          <div className="flex flex-wrap gap-1">
+                            {disciplinasNames.length > 0 ? (
+                              disciplinasNames.map((name) => (
+                                <Badge
+                                  key={name}
+                                  variant="secondary"
+                                  className="text-[10px] font-body"
+                                >
+                                  {name}
+                                </Badge>
+                              ))
+                            ) : (
+                              <span className="text-sm text-muted-foreground">
+                                —
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <Badge variant={estadoInfo?.variant || "secondary"}>
+                            {estadoInfo?.label || socio.estado_socio}
+                          </Badge>
+                        </TableCell>
+                      </motion.tr>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole, getCurrentUser } from "@/lib/supabase/roles";
 import { z } from "zod";
 
@@ -22,7 +22,7 @@ export async function POST(
   try {
     await requireRole(SOCIOS_ROLES);
     const currentUser = await getCurrentUser();
-    const supabase = await createServerClient();
+    const supabase = createAdminClient();
     const { id } = await params;
 
     const body = await request.json();

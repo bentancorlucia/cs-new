@@ -213,7 +213,8 @@ export default function MiCuentaPage() {
 
     try {
       const QRCode = (await import("qrcode")).default;
-      const dataUrl = await QRCode.toDataURL(perfil.id, {
+      const verifyUrl = `${window.location.origin}/socio/verificar/${perfil.id}`;
+      const dataUrl = await QRCode.toDataURL(verifyUrl, {
         width: 400,
         margin: 2,
         color: { dark: "#730d32", light: "#ffffff" },
@@ -698,7 +699,8 @@ export default function MiCuentaPage() {
                   className="flex justify-center pt-2"
                 >
                   <div className="bg-white p-2 rounded-lg">
-                    <Image
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
                       src={qrDataUrl}
                       alt="QR Carnet"
                       width={200}
@@ -1119,7 +1121,8 @@ function EntradasTab() {
                 animate={{ scale: 1, opacity: 1 }}
                 className="flex flex-col items-center gap-3"
               >
-                <Image
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
                   src={qrDataUrl}
                   alt="QR de entrada"
                   width={256}
