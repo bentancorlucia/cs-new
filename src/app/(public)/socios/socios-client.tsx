@@ -63,7 +63,7 @@ export function SociosClient() {
 
               <div className="mb-6">
                 <span className="font-display text-hero tracking-tightest text-bordo-800">
-                  $480
+                  $510
                 </span>
                 <span className="font-body text-sm text-muted-foreground ml-1">
                   /mes

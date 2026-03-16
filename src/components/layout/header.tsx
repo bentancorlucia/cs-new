@@ -483,8 +483,8 @@ export function Header() {
 
         {/* Right section */}
         <div className="flex items-center gap-3">
-          {/* Cart */}
-          <Link href="/tienda/carrito" className="relative p-2" aria-label="Carrito de compras">
+          {/* Cart — hidden on mobile when logged in so the logo stays centered */}
+          <Link href="/tienda/carrito" className={`relative p-2 ${user ? "hidden md:block" : ""}`} aria-label="Carrito de compras">
             <motion.div
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
