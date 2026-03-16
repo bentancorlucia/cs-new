@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
 
     // Filter by estado_socio
     if (estado && estado !== "todos") {
-      query = query.eq("estado_socio", estado);
+      query = query.eq("estado_socio", estado as "activo" | "inactivo" | "moroso" | "suspendido");
     }
 
     // Filter by disciplina

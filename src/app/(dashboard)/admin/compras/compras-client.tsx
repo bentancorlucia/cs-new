@@ -98,7 +98,7 @@ export default function AdminComprasPage() {
       query = query.ilike("numero_compra", `%${search}%`);
     }
     if (estado) {
-      query = query.eq("estado", estado);
+      query = query.eq("estado", estado as "borrador" | "confirmada" | "recibida" | "cancelada");
     }
     if (proveedorFilter) {
       query = query.eq("proveedor_id", parseInt(proveedorFilter));

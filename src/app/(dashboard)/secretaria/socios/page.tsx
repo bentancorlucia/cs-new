@@ -115,7 +115,7 @@ function SociosListContent() {
       );
     }
     if (estado !== "todos") {
-      query = query.eq("estado_socio", estado);
+      query = query.eq("estado_socio", estado as "activo" | "inactivo" | "moroso" | "suspendido");
     }
     if (disciplina !== "todas") {
       query = query.filter(

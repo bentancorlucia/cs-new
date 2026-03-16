@@ -77,8 +77,8 @@ export default function AdminPedidosPage() {
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
 
-    if (estado) query = query.eq("estado", estado);
-    if (tipo) query = query.eq("tipo", tipo);
+    if (estado) query = query.eq("estado", estado as "pendiente" | "pagado" | "preparando" | "listo_retiro" | "retirado" | "cancelado");
+    if (tipo) query = query.eq("tipo", tipo as "online" | "pos");
     if (search) {
       query = query.or(`numero_pedido.ilike.%${search}%,nombre_cliente.ilike.%${search}%`);
     }

@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (estado) {
-      query = query.eq("estado", estado);
+      query = query.eq("estado", estado as "borrador" | "confirmada" | "recibida" | "cancelada");
     }
 
     if (proveedor_id) {
