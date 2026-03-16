@@ -86,25 +86,42 @@ export interface MercadoPagoPayment {
 export async function createPreference(
   params: CreatePreferenceParams
 ): Promise<MercadoPagoPreference> {
+  const isLocal =
+    APP_URL.includes("localhost") || APP_URL.includes("127.0.0.1");
+
+  // En localhost, MP no puede alcanzar las URLs — omitirlas para evitar errores
+  const { notification_url, back_urls, ...rest } = params;
+
+  const body: Record<string, unknown> = {
+    ...rest,
+    statement_descriptor: params.statement_descriptor || "CLUB SEMINARIO",
+    payment_methods: {
+      installments: 1,
+    },
+  };
+
+  // En localhost MP no puede alcanzar las URLs — omitir todo
+  // auto_return requiere back_urls, así que también se omite
+  if (!isLocal) {
+    if (back_urls) {
+      body.back_urls = back_urls;
+      body.auto_return = params.auto_return || "approved";
+    }
+    if (notification_url) body.notification_url = notification_url;
+  }
+
   const response = await fetch(`${MERCADOPAGO_API_URL}/checkout/preferences`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${MERCADOPAGO_ACCESS_TOKEN}`,
     },
-    body: JSON.stringify({
-      ...params,
-      auto_return: params.auto_return || "approved",
-      statement_descriptor: params.statement_descriptor || "CLUB SEMINARIO",
-      payment_methods: {
-        installments: 1,
-      },
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
     const error = await response.json();
-    console.error("MercadoPago preference error:", error);
+    console.error("MercadoPago preference error:", JSON.stringify(error, null, 2));
     throw new Error(error.message || "Error creating MercadoPago preference");
   }
 
