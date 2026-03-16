@@ -38,6 +38,14 @@ export function isSandbox(): boolean {
 }
 
 /**
+ * True cuando APP_URL es localhost — en ese caso MP no puede enviar webhooks
+ * ni redirigir de vuelta, así que omitimos back_urls y notification_url.
+ */
+export function isLocalhost(): boolean {
+  return APP_URL.includes("localhost") || APP_URL.includes("127.0.0.1");
+}
+
+/**
  * Devuelve la URL de checkout correcta según el entorno (sandbox o producción).
  */
 export function getCheckoutUrl(preference: {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
-import { preferenceClient, APP_URL, isSandbox, getCheckoutUrl } from "@/lib/mercadopago/client";
+import { preferenceClient, APP_URL, isLocalhost, getCheckoutUrl } from "@/lib/mercadopago/client";
 import { z } from "zod";
 
 const compraEntradaSchema = z.object({
@@ -169,8 +169,6 @@ export async function POST(request: NextRequest) {
     // 10. Create MercadoPago preference
     const entradaIds = entradas.map((e: any) => e.id);
     const externalReference = `EVT-${evento_id}-${entradaIds.join(",")}`;
-    const sandbox = isSandbox();
-
     let preference;
     try {
       preference = await preferenceClient.create({
@@ -184,7 +182,7 @@ export async function POST(request: NextRequest) {
               currency_id: "UYU",
             },
           ],
-          ...(sandbox
+          ...(isLocalhost()
             ? {}
             : {
                 back_urls: {
@@ -198,7 +196,7 @@ export async function POST(request: NextRequest) {
           external_reference: externalReference,
           payer: {
             name: nombre_asistente,
-            email: sandbox ? "test_user_123@testuser.com" : email_asistente,
+            email: email_asistente,
           },
           statement_descriptor: "Club Seminario",
         },

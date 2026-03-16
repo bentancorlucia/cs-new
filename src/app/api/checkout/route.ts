@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
-import { preferenceClient, APP_URL, isSandbox, getCheckoutUrl } from "@/lib/mercadopago/client";
+import { preferenceClient, APP_URL, isLocalhost, getCheckoutUrl } from "@/lib/mercadopago/client";
 import { z } from "zod";
 
 const checkoutItemSchema = z.object({
@@ -201,8 +201,6 @@ export async function POST(request: NextRequest) {
     }
 
     // 8. Crear preferencia de MercadoPago
-    const sandbox = isSandbox();
-
     const preference = await preferenceClient.create({
       body: {
         items: itemsConPrecio.map((item) => ({
@@ -212,7 +210,7 @@ export async function POST(request: NextRequest) {
           unit_price: item.precioUnitario,
           currency_id: "UYU",
         })),
-        ...(sandbox
+        ...(isLocalhost()
           ? {}
           : {
               back_urls: {
@@ -227,7 +225,6 @@ export async function POST(request: NextRequest) {
         payer: {
           name: perfil.nombre,
           surname: perfil.apellido,
-          ...(sandbox ? { email: "test_user_123@testuser.com" } : {}),
         },
         statement_descriptor: "Club Seminario",
       },

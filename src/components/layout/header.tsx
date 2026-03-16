@@ -434,28 +434,30 @@ export function Header() {
         <MobileNav pathname={pathname} user={user} onLogout={handleLogout} />
 
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5 group">
-          <motion.div
-            whileHover={{ scale: 1.05, rotate: 2 }}
-            transition={springBouncy}
-          >
+        <motion.div
+          whileHover={{ scale: 1.015 }}
+          whileTap={{ scale: 0.99 }}
+          transition={springBouncy}
+        >
+          <Link href="/" className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/images/escudo/logo-cs.png"
               alt="Escudo Club Seminario"
               width={40}
               height={40}
-              className="size-10 md:hidden"
+              className="size-10"
             />
-          </motion.div>
-          <motion.span
-            className="hidden md:inline font-display text-xl sm:text-2xl font-bold uppercase tracking-tightest text-dorado-300"
-            whileHover={{ scale: 1.02 }}
-            transition={springSmooth}
-          >
-            Club Seminario
-          </motion.span>
-        </Link>
+            <div className="hidden md:flex flex-col">
+              <span className="font-display text-xl font-bold uppercase tracking-tightest text-dorado-300 leading-tight">
+                Club Seminario
+              </span>
+              <span className="font-heading text-[10px] uppercase tracking-[0.25em] text-dorado-400/70 leading-none">
+                Desde 2010
+              </span>
+            </div>
+          </Link>
+        </motion.div>
 
         {/* Desktop Nav */}
         <nav className="hidden md:flex items-baseline gap-6 lg:gap-8" aria-label="Navegación principal">

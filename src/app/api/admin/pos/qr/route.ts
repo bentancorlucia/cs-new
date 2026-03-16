@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/supabase/roles";
-import { preferenceClient, APP_URL, isSandbox, getCheckoutUrl } from "@/lib/mercadopago/client";
+import { preferenceClient, APP_URL, isLocalhost, getCheckoutUrl } from "@/lib/mercadopago/client";
 
 const TIENDA_ROLES = ["super_admin", "tienda"];
 
@@ -44,8 +44,6 @@ export async function POST(request: NextRequest) {
     if (itemsError) throw itemsError;
 
     // Crear preferencia de MercadoPago
-    const sandbox = isSandbox();
-
     const preference = await preferenceClient.create({
       body: {
         items: (items || []).map((item: any) => ({
@@ -56,7 +54,7 @@ export async function POST(request: NextRequest) {
           currency_id: "UYU",
         })),
         external_reference: pedido.numero_pedido,
-        ...(sandbox
+        ...(isLocalhost()
           ? {}
           : {
               notification_url: `${APP_URL}/api/webhooks/mercadopago`,
