@@ -17,7 +17,7 @@ export default function HockeyPage() {
         {
           name: "Hockey",
           description:
-            "Espacio para ex alumnos que disfrutan del deporte y quieren seguir aprendiendo, priorizando el esfuerzo y el compromiso.",
+            "Buscamos hacer propio el Ut Serviam poniendo nuestras mejores cualidades al servicio del equipo. Nuestro objetivo es que haya un lugar para todas las exalumnas que les gusta el deporte y quieran seguir aprendiendo, formando parte de un equipo donde se prioriza el esfuerzo y el compromiso.",
           schedule: "Martes y jueves de 19:30 a 22:30",
           location: "Parque Loyola",
           contact: { name: "Lola Delafond", phone: "091 878 717" },
@@ -26,7 +26,7 @@ export default function HockeyPage() {
         {
           name: "Mami Hockey",
           description:
-            "Práctica recreativa y competitiva con desarrollo del espíritu de equipo. Compiten en varias categorías del Torneo LID Mami Hockey.",
+            "Lo que buscamos es practicar hockey en forma recreativa y competitiva, promover un espíritu de grupo y representar los valores del Club Seminario en todas las canchas. Competimos con diferentes equipos, en distintas categorías del Torneo de Mami Hockey de LID.",
           schedule: "Lunes y miércoles de 20:30 a 22:00",
           location: "Parque Loyola",
           contact: { name: "Alejandra Castro", phone: "094 274 524" },

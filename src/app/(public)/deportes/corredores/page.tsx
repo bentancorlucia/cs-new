@@ -17,7 +17,7 @@ export default function CorredoresPage() {
         {
           name: "Corredores",
           description:
-            "Grupo de running enfocado en el disfrute, la motivación y el logro de metas colectivas. Los miembros participan en distancias desde los 5K hasta el maratón.",
+            "Disfrutamos de la rambla, nos motivamos, nos acompañamos y cumplimos objetivos juntos. Lo importante es tener ganas de moverse, compartir buenos momentos. Desde 5k a Maratón, corremos todas las distancias y participamos en distintas carreras según los intereses de cada uno.",
           schedule: "Martes y jueves a las 8:10 AM",
           location: "Mojón 7.500, Rambla de Punta Carretas",
           contact: { name: "María Victoria Pieri", phone: "099 443 230" },

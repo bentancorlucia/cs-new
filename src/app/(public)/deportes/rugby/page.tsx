@@ -17,7 +17,7 @@ export default function RugbyPage() {
         {
           name: "Rugby",
           description:
-            "Compite en la Unión de Rugby del Uruguay en tres niveles: M19, Intermedia y Primera. La misión es permitir a los jóvenes seguir disfrutando del deporte con sus amigos.",
+            "Competimos en la Unión de Rugby del Uruguay en tres categorías, M19, Intermedia y Primera. Nuestro objetivo es que los chiquilines sigan disfrutando del deporte con sus amigos una vez que egresan del Colegio.",
           schedule: "Martes y jueves de 20:00 a 22:00",
           location: "Parque CUPRA",
           contact: { name: "Julio Gutiérrez", phone: "099 606 827" },

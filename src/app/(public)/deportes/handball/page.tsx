@@ -17,7 +17,7 @@ export default function HandballPage() {
         {
           name: "Handball Femenino",
           description:
-            "Compiten en la liga ACB, categoría Mayores A. Equipo compuesto principalmente por ex alumnas con experiencia deportiva previa.",
+            "Competimos en la liga ACB, en la categoría Mayores A. El plantel esta compuesto mayoritariamente por exalumnas, aunque no es excluyente para formar parte del equipo. Todas las jugadoras cuentan con experiencia previa en el deporte.",
           schedule: "Lunes 19:45–21:30 / Miércoles 19:45–21:00",
           location: "Parque Loyola",
           contact: { name: "Agustina Olivera", phone: "099 625 705" },
@@ -26,7 +26,7 @@ export default function HandballPage() {
         {
           name: "Handball Masculino",
           description:
-            "Compiten en la Superliga de ACB con partidos los sábados. Diversos rangos de edad y experiencia. No es necesario ser ex alumno.",
+            "Competimos en la Superliga de ACB, los partidos son los sábados. Las edades de los jugadores son muy variadas pero todos contamos con experiencia previa en el deporte. No es un requisito excluyente ser exalumno del Colegio para formar parte del plantel.",
           schedule: "Martes y jueves de 20:00 a 21:30",
           location: "Parque Loyola",
           contact: { name: "Facundo Domínguez", phone: "091 075 988" },
@@ -35,7 +35,7 @@ export default function HandballPage() {
         {
           name: "Mami Handball",
           description:
-            "Compiten en ADIC y ACB Liga con partidos cada 15 días. Pueden participar ex alumnas, madres y personal del colegio.",
+            "El objetivo principal es seguir compitiendo y disfrutando del deporte que más nos gusta. Competimos en ADIC y en la Liga ACB. Los partidos son cada 15 días y pueden participar exalumnas, madres y funcionarias del Colegio.",
           schedule: "Martes y jueves de 19:15 a 20:30",
           location: "Polideportivo Gonzaga",
           contact: { name: "Graciela Palacios", phone: "097 300 320" },
