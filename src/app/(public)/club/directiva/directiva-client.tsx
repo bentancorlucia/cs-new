@@ -85,7 +85,7 @@ export function DirectivaClient() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <AnimateOnScroll variant="fadeInUp">
             <h2 className="font-display text-title-2 uppercase tracking-tightest text-foreground mb-8">
-              Cargos Directivos
+              Titulares
             </h2>
           </AnimateOnScroll>
 
@@ -93,16 +93,6 @@ export function DirectivaClient() {
             {DIRECTIVOS.map((d) => (
               <PersonCard key={d.nombre} nombre={d.nombre} cargo={d.cargo} />
             ))}
-          </AnimateStaggerGroup>
-
-          {/* Vocales Titulares */}
-          <AnimateOnScroll variant="fadeInUp" className="mt-16">
-            <h2 className="font-display text-title-2 uppercase tracking-tightest text-foreground mb-8">
-              Vocales Titulares
-            </h2>
-          </AnimateOnScroll>
-
-          <AnimateStaggerGroup className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {VOCALES_TITULARES.map((nombre) => (
               <PersonCard key={nombre} nombre={nombre} />
             ))}
@@ -111,7 +101,7 @@ export function DirectivaClient() {
           {/* Vocales Suplentes */}
           <AnimateOnScroll variant="fadeInUp" className="mt-16">
             <h2 className="font-display text-title-2 uppercase tracking-tightest text-foreground mb-8">
-              Vocales Suplentes
+              Suplentes
             </h2>
           </AnimateOnScroll>
 
