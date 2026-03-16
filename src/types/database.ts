@@ -64,6 +64,7 @@ export interface Database {
           notas?: string | null;
           updated_at?: string;
         };
+        Relationships: [];
       };
       roles: {
         Row: {
@@ -80,6 +81,7 @@ export interface Database {
           nombre?: string;
           descripcion?: string | null;
         };
+        Relationships: [];
       };
       perfil_roles: {
         Row: {
@@ -101,6 +103,7 @@ export interface Database {
           rol_id?: number;
           asignado_por?: string | null;
         };
+        Relationships: [];
       };
       disciplinas: {
         Row: {
@@ -137,6 +140,7 @@ export interface Database {
           contacto_email?: string | null;
           activa?: boolean;
         };
+        Relationships: [];
       };
       perfil_disciplinas: {
         Row: {
@@ -164,6 +168,7 @@ export interface Database {
           activa?: boolean;
           fecha_ingreso?: string;
         };
+        Relationships: [];
       };
       pagos_socios: {
         Row: {
@@ -203,6 +208,7 @@ export interface Database {
           registrado_por?: string | null;
           notas?: string | null;
         };
+        Relationships: [];
       };
       categorias_producto: {
         Row: {
@@ -233,6 +239,7 @@ export interface Database {
           orden?: number;
           activa?: boolean;
         };
+        Relationships: [];
       };
       productos: {
         Row: {
@@ -290,6 +297,7 @@ export interface Database {
           destacado?: boolean;
           updated_at?: string;
         };
+        Relationships: [];
       };
       producto_variantes: {
         Row: {
@@ -323,6 +331,7 @@ export interface Database {
           atributos?: Json;
           activo?: boolean;
         };
+        Relationships: [];
       };
       producto_imagenes: {
         Row: {
@@ -350,6 +359,7 @@ export interface Database {
           orden?: number;
           es_principal?: boolean;
         };
+        Relationships: [];
       };
       pedidos: {
         Row: {
@@ -410,6 +420,7 @@ export interface Database {
           vendedor_id?: string | null;
           updated_at?: string;
         };
+        Relationships: [];
       };
       pedido_items: {
         Row: {
@@ -440,6 +451,7 @@ export interface Database {
           precio_unitario?: number;
           subtotal?: number;
         };
+        Relationships: [];
       };
       stock_movimientos: {
         Row: {
@@ -482,6 +494,7 @@ export interface Database {
           motivo?: string | null;
           registrado_por?: string | null;
         };
+        Relationships: [];
       };
       pagos_mercadopago: {
         Row: {
@@ -524,6 +537,7 @@ export interface Database {
           raw_data?: Json | null;
           updated_at?: string;
         };
+        Relationships: [];
       };
       proveedores: {
         Row: {
@@ -569,6 +583,7 @@ export interface Database {
           activo?: boolean;
           updated_at?: string;
         };
+        Relationships: [];
       };
       producto_proveedores: {
         Row: {
@@ -596,6 +611,7 @@ export interface Database {
           codigo_proveedor?: string | null;
           es_principal?: boolean;
         };
+        Relationships: [];
       };
       compras_proveedor: {
         Row: {
@@ -644,6 +660,7 @@ export interface Database {
           registrado_por?: string | null;
           updated_at?: string;
         };
+        Relationships: [];
       };
       compra_items: {
         Row: {
@@ -677,6 +694,7 @@ export interface Database {
           subtotal?: number;
           cantidad_recibida?: number;
         };
+        Relationships: [];
       };
       pagos_proveedor: {
         Row: {
@@ -713,6 +731,7 @@ export interface Database {
           notas?: string | null;
           registrado_por?: string | null;
         };
+        Relationships: [];
       };
       eventos: {
         Row: {
@@ -770,6 +789,7 @@ export interface Database {
           creado_por?: string | null;
           updated_at?: string;
         };
+        Relationships: [];
       };
       tipo_entradas: {
         Row: {
@@ -809,6 +829,7 @@ export interface Database {
           orden?: number;
           activo?: boolean;
         };
+        Relationships: [];
       };
       lotes_entrada: {
         Row: {
@@ -848,6 +869,7 @@ export interface Database {
           estado?: "pendiente" | "activo" | "agotado" | "cerrado";
           orden?: number;
         };
+        Relationships: [];
       };
       entradas: {
         Row: {
@@ -914,6 +936,7 @@ export interface Database {
           notas?: string | null;
           updated_at?: string;
         };
+        Relationships: [];
       };
       escaneos_entrada: {
         Row: {
@@ -944,6 +967,7 @@ export interface Database {
           escaneado_por?: string;
           ip_address?: string | null;
         };
+        Relationships: [];
       };
       contenido_paginas: {
         Row: {
@@ -981,6 +1005,7 @@ export interface Database {
           updated_at?: string;
           updated_by?: string | null;
         };
+        Relationships: [];
       };
       memorias: {
         Row: {
@@ -1002,6 +1027,7 @@ export interface Database {
           titulo?: string | null;
           archivo_url?: string;
         };
+        Relationships: [];
       };
       directivos: {
         Row: {
@@ -1035,8 +1061,10 @@ export interface Database {
           periodo?: string | null;
           activo?: boolean;
         };
+        Relationships: [];
       };
     };
+    Views: Record<string, never>;
     Functions: {
       tiene_rol: {
         Args: { rol_nombre: string };
@@ -1052,5 +1080,6 @@ export interface Database {
       };
     };
     Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 }

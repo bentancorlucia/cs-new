@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
-import { preferenceClient, APP_URL } from "@/lib/mercadopago/client";
+import { preferenceClient, APP_URL, isSandbox, getCheckoutUrl } from "@/lib/mercadopago/client";
 import { z } from "zod";
 
 const compraEntradaSchema = z.object({
@@ -169,35 +169,47 @@ export async function POST(request: NextRequest) {
     // 10. Create MercadoPago preference
     const entradaIds = entradas.map((e: any) => e.id);
     const externalReference = `EVT-${evento_id}-${entradaIds.join(",")}`;
+    const sandbox = isSandbox();
 
-    const isLocalhost = APP_URL.includes("localhost") || APP_URL.includes("127.0.0.1");
-
-    const preference = await preferenceClient.create({
-      body: {
-        items: [
-          {
-            id: `entrada-${tipo_entrada_id}`,
-            title: `${evento.titulo} — ${tipoEntrada.nombre} x${cantidad}`,
-            quantity: cantidad,
-            unit_price: precioUnitario,
-            currency_id: "UYU",
+    let preference;
+    try {
+      preference = await preferenceClient.create({
+        body: {
+          items: [
+            {
+              id: `entrada-${tipo_entrada_id}`,
+              title: `${evento.titulo} — ${tipoEntrada.nombre} x${cantidad}`,
+              quantity: cantidad,
+              unit_price: precioUnitario,
+              currency_id: "UYU",
+            },
+          ],
+          ...(sandbox
+            ? {}
+            : {
+                back_urls: {
+                  success: `${APP_URL}/eventos/${evento.slug}?compra=exitosa`,
+                  failure: `${APP_URL}/eventos/${evento.slug}?compra=fallida`,
+                  pending: `${APP_URL}/eventos/${evento.slug}?compra=pendiente`,
+                },
+                auto_return: "approved" as const,
+                notification_url: `${APP_URL}/api/webhooks/mercadopago`,
+              }),
+          external_reference: externalReference,
+          payer: {
+            name: nombre_asistente,
+            email: sandbox ? "test_user_123@testuser.com" : email_asistente,
           },
-        ],
-        back_urls: {
-          success: `${APP_URL}/eventos/${evento.slug}?compra=exitosa`,
-          failure: `${APP_URL}/eventos/${evento.slug}?compra=fallida`,
-          pending: `${APP_URL}/eventos/${evento.slug}?compra=pendiente`,
+          statement_descriptor: "Club Seminario",
         },
-        auto_return: "approved",
-        ...(isLocalhost ? {} : { notification_url: `${APP_URL}/api/webhooks/mercadopago` }),
-        external_reference: externalReference,
-        payer: {
-          name: nombre_asistente,
-          email: email_asistente,
-        },
-        statement_descriptor: "Club Seminario",
-      },
-    });
+      });
+    } catch (mpError: any) {
+      console.error("MercadoPago error:", mpError?.message, mpError?.cause || "");
+      return NextResponse.json(
+        { error: "Error al conectar con MercadoPago. Intentá de nuevo." },
+        { status: 502 }
+      );
+    }
 
     // 11. Save MP preference ids on entries
     for (const entrada of entradas) {
@@ -209,7 +221,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       entrada_ids: entradaIds,
-      checkout_url: preference.init_point,
+      checkout_url: getCheckoutUrl(preference),
       gratuito: false,
     });
   } catch (error) {

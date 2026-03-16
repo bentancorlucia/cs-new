@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
-import { preferenceClient, APP_URL } from "@/lib/mercadopago/client";
+import { preferenceClient, APP_URL, isSandbox, getCheckoutUrl } from "@/lib/mercadopago/client";
 import { z } from "zod";
 
 const checkoutItemSchema = z.object({
@@ -201,6 +201,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 8. Crear preferencia de MercadoPago
+    const sandbox = isSandbox();
+
     const preference = await preferenceClient.create({
       body: {
         items: itemsConPrecio.map((item) => ({
@@ -210,17 +212,22 @@ export async function POST(request: NextRequest) {
           unit_price: item.precioUnitario,
           currency_id: "UYU",
         })),
-        back_urls: {
-          success: `${APP_URL}/tienda/pedido/${pedido.id}?status=approved`,
-          failure: `${APP_URL}/tienda/pedido/${pedido.id}?status=failure`,
-          pending: `${APP_URL}/tienda/pedido/${pedido.id}?status=pending`,
-        },
-        auto_return: "approved",
-        notification_url: `${APP_URL}/api/webhooks/mercadopago`,
+        ...(sandbox
+          ? {}
+          : {
+              back_urls: {
+                success: `${APP_URL}/tienda/pedido/${pedido.id}?status=approved`,
+                failure: `${APP_URL}/tienda/pedido/${pedido.id}?status=failure`,
+                pending: `${APP_URL}/tienda/pedido/${pedido.id}?status=pending`,
+              },
+              auto_return: "approved" as const,
+              notification_url: `${APP_URL}/api/webhooks/mercadopago`,
+            }),
         external_reference: pedido.numero_pedido,
         payer: {
           name: perfil.nombre,
           surname: perfil.apellido,
+          ...(sandbox ? { email: "test_user_123@testuser.com" } : {}),
         },
         statement_descriptor: "Club Seminario",
       },
@@ -235,7 +242,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       pedido_id: pedido.id,
       numero_pedido: pedido.numero_pedido,
-      checkout_url: preference.init_point,
+      checkout_url: getCheckoutUrl(preference),
     });
   } catch (error) {
     console.error("Error en checkout:", error);

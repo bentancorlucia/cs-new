@@ -528,7 +528,7 @@ export function POSClient() {
           if (!qrRes.ok) {
             toast.error(qrJson.error || "Error al generar QR");
           } else {
-            setQrUrl(qrJson.data.init_point || qrJson.data.sandbox_init_point);
+            setQrUrl(qrJson.data.checkout_url);
             setShowQRModal(true);
           }
         }

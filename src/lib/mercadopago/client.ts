@@ -27,3 +27,25 @@ export const paymentClient = new Proxy({} as Payment, {
 
 export const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+/**
+ * Determina si estamos en modo sandbox.
+ * Se activa con MERCADOPAGO_SANDBOX=true o cuando APP_URL apunta a localhost.
+ */
+export function isSandbox(): boolean {
+  if (process.env.MERCADOPAGO_SANDBOX === "true") return true;
+  return APP_URL.includes("localhost") || APP_URL.includes("127.0.0.1");
+}
+
+/**
+ * Devuelve la URL de checkout correcta según el entorno (sandbox o producción).
+ */
+export function getCheckoutUrl(preference: {
+  init_point?: string;
+  sandbox_init_point?: string;
+}): string {
+  if (isSandbox()) {
+    return preference.sandbox_init_point || preference.init_point || "";
+  }
+  return preference.init_point || "";
+}
