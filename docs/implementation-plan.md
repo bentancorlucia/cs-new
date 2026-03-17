@@ -859,6 +859,212 @@ npm install qrcode @yudiel/react-qr-scanner
 
 ---
 
+## Fase 14 — Tesorería: Cuentas, Movimientos y Categorías
+
+**Objetivo:** Base del módulo financiero: multi-cuentas multi-moneda, categorías de ingresos/egresos, movimientos manuales y automáticos, transferencias entre cuentas, y caja chica.
+
+**Docs de referencia:** `docs/tesoreria.md`, `docs/database-schema.md` (tablas 28-36)
+
+### Tareas:
+
+14.1. Crear migraciones para tablas de tesorería:
+- `cuentas_financieras`, `categorias_financieras`, `movimientos_financieros`
+- `transferencias_internas`, `arqueos_caja`
+- Triggers: `actualizar_saldo_cuenta`, `proteger_periodo_cerrado`
+
+14.2. Crear seed con categorías iniciales (árbol de ingresos y egresos)
+
+14.3. Crear dashboard de tesorería (`/tesoreria`):
+- Stats cards: saldo total, ingresos/egresos del mes, resultado
+- Gráfico ingresos vs egresos últimos 12 meses (recharts)
+- Saldos por cuenta
+- Top categorías del mes
+- Count-up animations en todos los números
+
+14.4. Crear gestión de cuentas (`/tesoreria/cuentas`):
+- CRUD de cuentas (bancaria, mercadopago, caja_chica, virtual)
+- Soporte UYU y USD
+- Detalle de cuenta con movimientos filtrados y gráfico de evolución de saldo
+
+14.5. Crear gestión de categorías (`/tesoreria/categorias`):
+- CRUD jerárquico (categorías y subcategorías)
+- Tipo: ingreso o egreso
+- Color e ícono por categoría
+- Vista de árbol drag & drop
+
+14.6. Crear gestión de movimientos (`/tesoreria/movimientos`):
+- DataTable cross-account con filtros (cuenta, tipo, categoría, fechas, búsqueda)
+- Formulario nuevo movimiento manual (con upload de comprobante)
+- Totales: ingresos, egresos, neto del período filtrado
+- Exportar CSV
+
+14.7. Crear integración automática con otros módulos:
+- Helper `registrarMovimientoAutomatico()` (ver `docs/tesoreria.md`)
+- Hooks en webhooks de MercadoPago (tienda y eventos)
+- Hooks en registro de cuota de socio
+- Hooks en pagos a proveedores
+- Cada módulo genera movimiento en la cuenta correspondiente
+
+14.8. Crear transferencias entre cuentas (`/tesoreria/transferencias`):
+- Formulario con cuenta origen, destino, monto
+- Soporte de conversión UYU↔USD con tipo de cambio
+- Genera 2 movimientos vinculados (egreso + ingreso)
+
+14.9. Crear funcionalidad de caja chica:
+- Apertura/cierre de caja
+- Arqueo (saldo sistema vs saldo físico)
+- Retiros y depósitos desde/hacia cuentas bancarias
+
+14.10. Crear APIs:
+- `GET/POST/PUT /api/tesoreria/cuentas`
+- `GET/POST /api/tesoreria/movimientos`
+- `GET/POST/PUT /api/tesoreria/categorias`
+- `POST /api/tesoreria/transferencias`
+- `POST /api/tesoreria/caja-chica/arqueo`
+
+14.11. Verificar flujo: crear cuentas → categorías → movimiento manual → venta en tienda genera movimiento auto → transferencia entre cuentas → arqueo caja chica
+
+### Entregable:
+- Multi-cuentas multi-moneda funcionando
+- Categorías jerárquicas
+- Movimientos manuales y automáticos
+- Transferencias entre cuentas con conversión
+- Caja chica con arqueo
+
+---
+
+## Fase 15 — Tesorería: Presupuesto, Proyecciones y Flujo de Caja
+
+**Objetivo:** Herramientas de planificación financiera con gráficos interactivos.
+
+**Docs de referencia:** `docs/tesoreria.md` → Presupuesto, Proyecciones, Flujo de Caja
+
+### Tareas:
+
+15.1. Crear migraciones: tabla `presupuestos`
+
+15.2. Crear módulo de presupuesto (`/tesoreria/presupuesto`):
+- Vista mensual y anual acumulada
+- Edición inline de montos por categoría
+- "Copiar de mes/año anterior"
+- Tabla comparativa: presupuestado vs real con desvío y %
+- Gráfico de barras dobles (presup. vs real)
+- Progress bars animadas por categoría
+- Colores: rojo si egreso supera presupuesto, verde si ingreso supera
+
+15.3. Crear módulo de proyecciones (`/tesoreria/proyecciones`):
+- Configurar período (próximos 3/6/12 meses) y método (presupuesto, promedio, tendencia, mixto)
+- Gráfico de línea: histórico (sólido) + proyectado (punteado) + banda de confianza
+- Tabla detallada por categoría y mes con saldo acumulado
+- 3 escenarios: optimista, base, pesimista (ajustable con slider)
+- Línea que se "dibuja" con animación al cargar
+
+15.4. Crear módulo de flujo de caja (`/tesoreria/flujo-caja`):
+- Gráfico waterfall/cascada mes a mes
+- Tabla: saldo inicial → ingresos → egresos → neto → saldo final
+- Gráficos de torta para distribución de ingresos y egresos por categoría
+- Meses futuros marcados como "proyectado"
+
+15.5. Crear APIs:
+- `GET/POST/PUT /api/tesoreria/presupuestos`
+- `GET /api/tesoreria/proyecciones`
+- `GET /api/tesoreria/flujo-caja`
+
+15.6. Verificar: crear presupuesto → ver comparativo con datos reales → ver proyección → ver flujo de caja
+
+### Entregable:
+- Presupuesto editable con comparativo real vs plan
+- Proyecciones a 12 meses con 3 escenarios
+- Flujo de caja con waterfall chart
+- Todos los gráficos animados e interactivos
+
+---
+
+## Fase 16 — Tesorería: Conciliaciones, Cierres y Reportes PDF
+
+**Objetivo:** Conciliación bancaria con upload de extracto, cierres mensuales que bloquean períodos, y generación de PDFs profesionales.
+
+**Docs de referencia:** `docs/tesoreria.md` → Conciliación, Cierres, Reportes PDF
+
+### Tareas:
+
+16.1. Crear migraciones: tablas `conciliaciones`, `conciliacion_items`, `cierres_mensuales`
+
+16.2. Crear módulo de conciliación (`/tesoreria/conciliacion`):
+- Selector de cuenta y período
+- Upload de extracto bancario (CSV/Excel)
+- Parseo del archivo (soportar formatos de bancos uruguayos comunes)
+- Algoritmo de matching automático (monto + fecha ± 2 días)
+- UI de revisión: matcheados, pendientes banco, pendientes sistema
+- Acciones: confirmar match, crear movimiento desde banco, ignorar
+- Estadísticas: saldo banco vs sistema, diferencia
+
+16.3. Crear módulo de cierres mensuales (`/tesoreria/cierres`):
+- Lista de meses con estado (abierto/cerrado)
+- Vista de resumen pre-cierre (ingresos, egresos, resultado, saldos)
+- Botón "Cerrar mes" con confirmación
+- Al cerrar: snapshot de saldos, bloqueo de movimientos del período
+- Trigger/RLS que impide editar movimientos de períodos cerrados
+
+16.4. Crear generador de reportes PDF (`/tesoreria/reportes`):
+- Selector de tipo de reporte y período
+- Tipos: Estado de Resultados, Flujo de Caja, Balance por Cuenta, Presupuesto vs Real, Proyección, Cierre Mensual
+- PDF con branding del club (logo, colores bordó/dorado)
+- Gráficos incrustados en el PDF
+- Tablas formateadas
+- Implementar con `@react-pdf/renderer` o HTML → PDF con Puppeteer
+
+16.5. Instalar dependencias:
+```bash
+npm install @react-pdf/renderer xlsx papaparse
+```
+
+16.6. Crear APIs:
+- `POST /api/tesoreria/conciliacion/upload`
+- `POST /api/tesoreria/conciliacion/matchear`
+- `PUT /api/tesoreria/conciliacion/[id]/confirmar`
+- `POST /api/tesoreria/cierres`
+- `GET /api/tesoreria/reportes/[tipo]` (genera y retorna PDF)
+
+16.7. Verificar flujo completo: subir extracto → matchear → crear movimientos faltantes → cerrar mes → generar reporte PDF
+
+### Entregable:
+- Conciliación bancaria con upload de extracto y matching automático
+- Cierres mensuales que bloquean edición
+- 6 tipos de reportes PDF profesionales con gráficos y branding
+
+---
+
+## Fase 17 — Pulido, Performance y QA
+
+**Objetivo:** Pulir animaciones, optimizar performance, corregir bugs y preparar para producción.
+
+### Tareas:
+
+17.1–17.8: (Mismas tareas que la fase 14 original — auditoría de animaciones, Lighthouse, responsive QA, seguridad, SEO, accesibilidad, error handling, bug fixes)
+
+### Entregable:
+- Aplicación pulida y lista para deploy
+- Lighthouse 90+
+- Sin bugs conocidos
+
+---
+
+## Fase 18 — Deploy a Producción
+
+**Objetivo:** Aplicación desplegada en Vercel con dominio configurado.
+
+### Tareas:
+
+18.1–18.8: (Mismas tareas que la fase 15 original — Vercel, Supabase cloud, MercadoPago prod, dominio, contenido real, super_admin, testing, lanzamiento)
+
+### Entregable:
+- Sitio en producción en clubseminario.com.uy
+- Todos los módulos funcionando
+- Datos reales cargados
+
+---
+
 ## Resumen de Fases
 
 | Fase | Nombre | Dependencias |
@@ -876,8 +1082,11 @@ npm install qrcode @yudiel/react-qr-scanner
 | 11 | Eventos y Entradas | Fase 4, 8 |
 | 12 | Escáner de QR | Fase 11 |
 | 13 | Panel Mi Cuenta | Fase 6, 7, 11 |
-| 14 | Pulido y QA | Todas |
-| 15 | Deploy | Fase 14 |
+| 14 | Tesorería: Cuentas y Movimientos | Fase 4 |
+| 15 | Tesorería: Presupuesto y Proyecciones | Fase 14 |
+| 16 | Tesorería: Conciliaciones y Reportes | Fase 14, 15 |
+| 17 | Pulido y QA | Todas |
+| 18 | Deploy | Fase 17 |
 
 ```
 Fase 1 → Fase 2 → Fase 3 → Fase 4 ──┬── Fase 5 (Páginas)
@@ -885,7 +1094,10 @@ Fase 1 → Fase 2 → Fase 3 → Fase 4 ──┬── Fase 5 (Páginas)
                                        ├── Fase 7 (Tienda) → Fase 8 (MP) ┼→ Fase 13 (Mi Cuenta)
                                        │     ├── Fase 9 (POS)             │
                                        │     └── Fase 10 (Proveedores)    │
-                                       └── Fase 11 (Eventos) → Fase 12 ──┘
-                                                                    ↓
-                                                              Fase 14 (QA) → Fase 15 (Deploy)
+                                       ├── Fase 11 (Eventos) → Fase 12 ──┘
+                                       └── Fase 14 (Tesorería Base)
+                                             ├── Fase 15 (Presupuesto/Proyecciones)
+                                             └── Fase 16 (Conciliaciones/Reportes)
+                                                            ↓
+                                                      Fase 17 (QA) → Fase 18 (Deploy)
 ```

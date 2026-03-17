@@ -42,6 +42,7 @@
 | `secretaria` | Staff secretaría | Secretaría (socios + disciplinas) |
 | `eventos` | Staff eventos | Admin Eventos + Entradas |
 | `scanner` | Portero/escáner | Solo pantalla de escaneo QR |
+| `tesorero` | Staff tesorería | Tesorería (cuentas, movimientos, presupuesto, reportes, conciliaciones) |
 | `socio` | Socio activo | Mi Cuenta + descuentos + compra entradas |
 | `no_socio` | Usuario base | Navegación pública + compra tienda/entradas |
 
@@ -50,6 +51,7 @@
 Un perfil puede tener **múltiples roles simultáneos**. Por ejemplo:
 - María: `socio` + `secretaria` + `eventos`
 - Juan: `socio` + `scanner`
+- Pedro: `tesorero` + `socio`
 - Admin: `super_admin` (implica acceso a todo)
 
 ### Role Switcher
@@ -71,6 +73,7 @@ const PANEL_CONFIG = {
   super_admin: { label: "Admin", icon: Shield, href: "/admin" },
   tienda:      { label: "Tienda", icon: Store, href: "/admin/productos" },
   secretaria:  { label: "Secretaría", icon: Users, href: "/secretaria/socios" },
+  tesorero:    { label: "Tesorería", icon: Wallet, href: "/tesoreria" },
   eventos:     { label: "Eventos", icon: Calendar, href: "/eventos" },
   scanner:     { label: "Scanner", icon: QrCode, href: "/eventos/scanner" },
 };
@@ -125,10 +128,11 @@ const PROTECTED_ROUTES: Record<string, string[]> = {
   "/admin/proveedores": ["super_admin", "tienda"],
   "/admin/pos":         ["super_admin", "tienda"],
   "/secretaria":        ["super_admin", "secretaria"],
+  "/tesoreria":         ["super_admin", "tesorero"],
   "/eventos/crear":     ["super_admin", "eventos"],
   "/eventos/entradas":  ["super_admin", "eventos"],
   "/eventos/scanner":   ["super_admin", "eventos", "scanner"],
-  "/mi-cuenta":         ["super_admin", "tienda", "secretaria", "eventos", "scanner", "socio"],
+  "/mi-cuenta":         ["super_admin", "tienda", "secretaria", "tesorero", "eventos", "scanner", "socio"],
 };
 
 export async function middleware(request: NextRequest) {

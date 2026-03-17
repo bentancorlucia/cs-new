@@ -10,7 +10,6 @@ Rediseño completo del sitio web de Club Seminario (clubseminario.com.uy) — cl
 - **Base de datos**: Supabase (PostgreSQL + Auth + Storage + Realtime)
 - **UI**: Shadcn/ui + Tailwind CSS v4
 - **Animaciones**: Framer Motion (PRIORIDAD — ver docs/ui-components.md)
-- **Tipografías**: Clash Display (display), Cabinet Grotesk (headings), Satoshi (body) — de Fontshare
 - **Lenguaje**: TypeScript (strict mode)
 - **Pagos**: MercadoPago SDK (checkout pro + QR para POS)
 - **QR**: Generación y escaneo de códigos QR para entradas y carnet de socio
@@ -41,6 +40,7 @@ Texto secundario:  #6b7280
 │   ├── eventos-entradas.md      # Eventos, entradas, QR
 │   ├── secretaria-socios.md     # Gestión de socios y disciplinas
 │   ├── proveedores.md           # Gestión de proveedores y cuentas corrientes
+│   ├── tesoreria.md             # Tesorería: cuentas, presupuesto, reportes
 │   ├── pages-content.md         # Contenido original del sitio a migrar
 │   └── ui-components.md         # Sistema de diseño y componentes UI
 ├── src/
@@ -83,6 +83,15 @@ Texto secundario:  #6b7280
 │   │   │   ├── secretaria/       # Panel secretaría
 │   │   │   │   ├── socios/
 │   │   │   │   └── disciplinas/
+│   │   │   ├── tesoreria/       # Panel tesorería
+│   │   │   │   ├── cuentas/
+│   │   │   │   ├── movimientos/
+│   │   │   │   ├── categorias/
+│   │   │   │   ├── transferencias/
+│   │   │   │   ├── conciliacion/
+│   │   │   │   ├── flujo-presupuesto/  # Flujo + Presupuesto combinados (multimoneda)
+│   │   │   │   ├── cierres/
+│   │   │   │   └── reportes/
 │   │   │   └── mi-cuenta/        # Perfil del usuario / socio
 │   │   ├── api/                  # Route handlers
 │   │   └── layout.tsx
@@ -134,6 +143,7 @@ Texto secundario:  #6b7280
 | `secretaria` | Panel secretaría + gestión de socios |
 | `eventos` | Panel eventos + creación + entradas |
 | `scanner` | Solo escáner de QR en eventos |
+| `tesorero` | Panel tesorería: cuentas, movimientos, presupuesto, reportes |
 | `socio` | Mi cuenta + descuentos + compra entradas |
 | `no_socio` | Navegación pública + compra tienda/entradas |
 

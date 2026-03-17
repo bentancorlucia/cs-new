@@ -87,6 +87,7 @@ INSERT INTO roles (nombre, descripcion) VALUES
   ('secretaria', 'Gestión de socios y disciplinas'),
   ('eventos', 'Gestión de eventos y entradas'),
   ('scanner', 'Escaneo de QR en eventos'),
+  ('tesorero', 'Gestión financiera, cuentas, presupuesto y reportes'),
   ('socio', 'Socio activo del club'),
   ('no_socio', 'Usuario registrado sin membresía');
 ```
@@ -696,6 +697,242 @@ CREATE POLICY "Secretaría actualiza perfiles"
 
 Aplicar patrón similar para cada tabla según qué roles necesitan acceso.
 
+---
+
+## Módulo Tesorería
+
+### 28. `cuentas_financieras`
+
+```sql
+CREATE TABLE cuentas_financieras (
+  id SERIAL PRIMARY KEY,
+  nombre VARCHAR(200) NOT NULL,
+  tipo VARCHAR(20) NOT NULL
+    CHECK (tipo IN ('bancaria', 'mercadopago', 'caja_chica', 'virtual')),
+  moneda VARCHAR(3) NOT NULL CHECK (moneda IN ('UYU', 'USD')),
+  banco VARCHAR(100),
+  numero_cuenta VARCHAR(50),
+  saldo_actual DECIMAL(14,2) NOT NULL DEFAULT 0,
+  saldo_inicial DECIMAL(14,2) NOT NULL DEFAULT 0,
+  descripcion TEXT,
+  color VARCHAR(7), -- hex para UI
+  activa BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 29. `categorias_financieras`
+
+```sql
+CREATE TABLE categorias_financieras (
+  id SERIAL PRIMARY KEY,
+  nombre VARCHAR(100) NOT NULL,
+  slug VARCHAR(100) UNIQUE NOT NULL,
+  tipo VARCHAR(10) NOT NULL CHECK (tipo IN ('ingreso', 'egreso')),
+  padre_id INTEGER REFERENCES categorias_financieras(id) ON DELETE SET NULL,
+  color VARCHAR(7),
+  icono VARCHAR(50),
+  presupuesto_mensual DECIMAL(12,2),
+  orden INTEGER DEFAULT 0,
+  activa BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 30. `movimientos_financieros`
+
+```sql
+CREATE TABLE movimientos_financieros (
+  id SERIAL PRIMARY KEY,
+  cuenta_id INTEGER NOT NULL REFERENCES cuentas_financieras(id),
+  tipo VARCHAR(10) NOT NULL CHECK (tipo IN ('ingreso', 'egreso')),
+  categoria_id INTEGER NOT NULL REFERENCES categorias_financieras(id),
+  subcategoria_id INTEGER REFERENCES categorias_financieras(id),
+  monto DECIMAL(14,2) NOT NULL CHECK (monto > 0),
+  moneda VARCHAR(3) NOT NULL CHECK (moneda IN ('UYU', 'USD')),
+  fecha DATE NOT NULL,
+  descripcion VARCHAR(500) NOT NULL,
+  comprobante_url TEXT,
+  referencia VARCHAR(100),
+  origen_tipo VARCHAR(30),
+    -- 'manual', 'pedido', 'cuota', 'entrada', 'transferencia', 'pago_proveedor', 'conciliacion'
+  origen_id INTEGER,
+  transferencia_id INTEGER REFERENCES transferencias_internas(id),
+  conciliado BOOLEAN DEFAULT FALSE,
+  conciliacion_id INTEGER REFERENCES conciliaciones(id),
+  tags TEXT[], -- array de etiquetas libres
+  notas TEXT,
+  registrado_por UUID REFERENCES perfiles(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Trigger para actualizar saldo de la cuenta
+CREATE OR REPLACE FUNCTION actualizar_saldo_cuenta()
+RETURNS TRIGGER AS $$
+DECLARE
+  delta DECIMAL(14,2);
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    delta := CASE WHEN NEW.tipo = 'ingreso' THEN NEW.monto ELSE -NEW.monto END;
+    UPDATE cuentas_financieras
+    SET saldo_actual = saldo_actual + delta, updated_at = NOW()
+    WHERE id = NEW.cuenta_id;
+  ELSIF TG_OP = 'DELETE' THEN
+    delta := CASE WHEN OLD.tipo = 'ingreso' THEN -OLD.monto ELSE OLD.monto END;
+    UPDATE cuentas_financieras
+    SET saldo_actual = saldo_actual + delta, updated_at = NOW()
+    WHERE id = OLD.cuenta_id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER on_movimiento_financiero
+  AFTER INSERT OR DELETE ON movimientos_financieros
+  FOR EACH ROW EXECUTE FUNCTION actualizar_saldo_cuenta();
+```
+
+### 31. `transferencias_internas`
+
+```sql
+CREATE TABLE transferencias_internas (
+  id SERIAL PRIMARY KEY,
+  cuenta_origen_id INTEGER NOT NULL REFERENCES cuentas_financieras(id),
+  cuenta_destino_id INTEGER NOT NULL REFERENCES cuentas_financieras(id),
+  monto DECIMAL(14,2) NOT NULL CHECK (monto > 0),
+  moneda_origen VARCHAR(3) NOT NULL,
+  moneda_destino VARCHAR(3) NOT NULL,
+  tipo_cambio DECIMAL(10,4), -- si es conversión UYU↔USD
+  monto_destino DECIMAL(14,2) NOT NULL, -- monto convertido si aplica
+  fecha DATE NOT NULL,
+  descripcion VARCHAR(500),
+  comprobante_url TEXT,
+  movimiento_egreso_id INTEGER REFERENCES movimientos_financieros(id),
+  movimiento_ingreso_id INTEGER REFERENCES movimientos_financieros(id),
+  registrado_por UUID REFERENCES perfiles(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 32. `presupuestos`
+
+```sql
+CREATE TABLE presupuestos (
+  id SERIAL PRIMARY KEY,
+  anio INTEGER NOT NULL,
+  mes INTEGER NOT NULL CHECK (mes BETWEEN 1 AND 12),
+  categoria_id INTEGER NOT NULL REFERENCES categorias_financieras(id),
+  monto_presupuestado DECIMAL(12,2) NOT NULL,
+  notas TEXT,
+  created_by UUID REFERENCES perfiles(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(anio, mes, categoria_id)
+);
+```
+
+### 33. `conciliaciones`
+
+```sql
+CREATE TABLE conciliaciones (
+  id SERIAL PRIMARY KEY,
+  cuenta_id INTEGER NOT NULL REFERENCES cuentas_financieras(id),
+  periodo_desde DATE NOT NULL,
+  periodo_hasta DATE NOT NULL,
+  saldo_banco DECIMAL(14,2) NOT NULL,
+  saldo_sistema DECIMAL(14,2) NOT NULL,
+  diferencia DECIMAL(14,2) NOT NULL,
+  archivo_extracto_url TEXT, -- CSV/Excel subido
+  estado VARCHAR(20) NOT NULL DEFAULT 'en_proceso'
+    CHECK (estado IN ('en_proceso', 'completada')),
+  movimientos_matcheados INTEGER DEFAULT 0,
+  movimientos_pendientes_banco INTEGER DEFAULT 0,
+  movimientos_pendientes_sistema INTEGER DEFAULT 0,
+  completada_por UUID REFERENCES perfiles(id),
+  completada_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 34. `conciliacion_items`
+
+```sql
+CREATE TABLE conciliacion_items (
+  id SERIAL PRIMARY KEY,
+  conciliacion_id INTEGER NOT NULL REFERENCES conciliaciones(id) ON DELETE CASCADE,
+  movimiento_id INTEGER REFERENCES movimientos_financieros(id),
+  fecha_banco DATE,
+  descripcion_banco VARCHAR(500),
+  monto_banco DECIMAL(14,2),
+  estado VARCHAR(20) NOT NULL
+    CHECK (estado IN ('matcheado', 'pendiente_sistema', 'pendiente_banco', 'ignorado')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 35. `cierres_mensuales`
+
+```sql
+CREATE TABLE cierres_mensuales (
+  id SERIAL PRIMARY KEY,
+  anio INTEGER NOT NULL,
+  mes INTEGER NOT NULL CHECK (mes BETWEEN 1 AND 12),
+  total_ingresos DECIMAL(14,2) NOT NULL,
+  total_egresos DECIMAL(14,2) NOT NULL,
+  resultado DECIMAL(14,2) NOT NULL,
+  saldos_snapshot JSONB NOT NULL, -- {"cuenta_id": saldo, ...}
+  categorias_snapshot JSONB, -- resumen por categoría
+  estado VARCHAR(10) NOT NULL DEFAULT 'abierto'
+    CHECK (estado IN ('abierto', 'cerrado')),
+  cerrado_por UUID REFERENCES perfiles(id),
+  cerrado_at TIMESTAMPTZ,
+  notas TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(anio, mes)
+);
+
+-- Proteger movimientos de períodos cerrados
+CREATE OR REPLACE FUNCTION proteger_periodo_cerrado()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM cierres_mensuales
+    WHERE estado = 'cerrado'
+    AND anio = EXTRACT(YEAR FROM COALESCE(NEW.fecha, OLD.fecha))
+    AND mes = EXTRACT(MONTH FROM COALESCE(NEW.fecha, OLD.fecha))
+  ) THEN
+    RAISE EXCEPTION 'No se pueden modificar movimientos de un período cerrado';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER check_periodo_cerrado
+  BEFORE INSERT OR UPDATE OR DELETE ON movimientos_financieros
+  FOR EACH ROW EXECUTE FUNCTION proteger_periodo_cerrado();
+```
+
+### 36. `arqueos_caja`
+Para caja chica.
+
+```sql
+CREATE TABLE arqueos_caja (
+  id SERIAL PRIMARY KEY,
+  cuenta_id INTEGER NOT NULL REFERENCES cuentas_financieras(id),
+  fecha DATE NOT NULL,
+  saldo_sistema DECIMAL(14,2) NOT NULL,
+  saldo_fisico DECIMAL(14,2) NOT NULL,
+  diferencia DECIMAL(14,2) NOT NULL,
+  notas TEXT,
+  registrado_por UUID REFERENCES perfiles(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+---
+
 ## Función Helper para Verificar Roles
 
 ```sql
@@ -746,6 +983,18 @@ CREATE INDEX idx_compras_proveedor ON compras_proveedor(proveedor_id);
 CREATE INDEX idx_pagos_proveedor ON pagos_proveedor(proveedor_id);
 CREATE INDEX idx_pagos_socios_perfil ON pagos_socios(perfil_id);
 CREATE INDEX idx_lotes_entrada_tipo ON lotes_entrada(tipo_entrada_id);
+
+-- Tesorería
+CREATE INDEX idx_movimientos_cuenta ON movimientos_financieros(cuenta_id);
+CREATE INDEX idx_movimientos_fecha ON movimientos_financieros(fecha DESC);
+CREATE INDEX idx_movimientos_categoria ON movimientos_financieros(categoria_id);
+CREATE INDEX idx_movimientos_tipo ON movimientos_financieros(tipo);
+CREATE INDEX idx_movimientos_origen ON movimientos_financieros(origen_tipo, origen_id);
+CREATE INDEX idx_movimientos_conciliado ON movimientos_financieros(conciliado) WHERE conciliado = FALSE;
+CREATE INDEX idx_presupuestos_periodo ON presupuestos(anio, mes);
+CREATE INDEX idx_cierres_periodo ON cierres_mensuales(anio, mes);
+CREATE INDEX idx_transferencias_fecha ON transferencias_internas(fecha DESC);
+CREATE INDEX idx_categorias_fin_tipo ON categorias_financieras(tipo) WHERE activa = TRUE;
 ```
 
 ## Supabase Storage Buckets
@@ -756,4 +1005,7 @@ eventos/          -- Imágenes de eventos (público)
 avatars/          -- Fotos de perfil (público)
 memorias/         -- PDFs de memorias anuales (público)
 documentos/       -- Documentos internos (privado)
+comprobantes/     -- Comprobantes financieros (privado, solo tesorero/admin)
+extractos/        -- Extractos bancarios subidos (privado)
+reportes/         -- PDFs de reportes generados (privado)
 ```

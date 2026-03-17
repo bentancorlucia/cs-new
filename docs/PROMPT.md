@@ -55,7 +55,7 @@ El proyecto se implementa en **15 fases incrementales**. Consultar `docs/impleme
 
 **Uso:** Decir "implementa fase X" para ejecutar una fase. No avanzar a la siguiente hasta que la actual funcione.
 
-Resumen: Fase 1 (Setup) → 2 (DB) → 3 (Auth) → 4 (Layout) → 5 (Páginas) → 6 (Secretaría) → 7 (Tienda) → 8 (MercadoPago) → 9 (POS) → 10 (Proveedores) → 11 (Eventos) → 12 (Scanner) → 13 (Mi Cuenta) → 14 (QA) → 15 (Deploy)
+Resumen: Fase 1 (Setup) → 2 (DB) → 3 (Auth) → 4 (Layout) → 5 (Páginas) → 6 (Secretaría) → 7 (Tienda) → 8 (MercadoPago) → 9 (POS) → 10 (Proveedores) → 11 (Eventos) → 12 (Scanner) → 13 (Mi Cuenta) → 14 (Tesorería Base) → 15 (Presupuesto/Proyecciones) → 16 (Conciliaciones/Reportes) → 17 (QA) → 18 (Deploy)
 
 ### Principios clave:
 - **Mobile-first**: Todo se diseña primero para mobile y se adapta a desktop

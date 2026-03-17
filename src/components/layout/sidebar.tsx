@@ -25,6 +25,16 @@ import {
   ChevronLeft,
   ShoppingCart,
   ShieldCheck,
+  Wallet,
+  ArrowRightLeft,
+  FolderTree,
+  Receipt,
+  Landmark,
+  Archive,
+  Target,
+  GitCompareArrows,
+  Lock,
+  FileText,
 } from "lucide-react";
 import { useRoles } from "@/hooks/use-roles";
 import { RoleSwitcher } from "@/components/layout/role-switcher";
@@ -78,6 +88,22 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/secretaria/socios", label: "Socios", icon: Users },
       { href: "/secretaria/disciplinas", label: "Disciplinas", icon: Dumbbell },
+    ],
+  },
+  {
+    title: "Tesorería",
+    requiredRoles: ["super_admin", "tesorero"],
+    items: [
+      { href: "/tesoreria", label: "Dashboard", icon: Wallet },
+      { href: "/tesoreria/cuentas", label: "Cuentas", icon: Landmark },
+      { href: "/tesoreria/movimientos", label: "Movimientos", icon: Receipt },
+      { href: "/tesoreria/categorias", label: "Categorías", icon: FolderTree },
+      { href: "/tesoreria/transferencias", label: "Transferencias", icon: ArrowRightLeft },
+      { href: "/tesoreria/caja-chica", label: "Caja Chica", icon: Archive },
+      { href: "/tesoreria/flujo-presupuesto", label: "Flujo y Presupuesto", icon: Target },
+      { href: "/tesoreria/conciliacion", label: "Conciliación", icon: GitCompareArrows },
+      { href: "/tesoreria/cierres", label: "Cierres", icon: Lock },
+      { href: "/tesoreria/reportes", label: "Reportes", icon: FileText },
     ],
   },
   {
