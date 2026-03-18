@@ -132,6 +132,10 @@ export function ScannerClient() {
   const scannedCodesRef = useRef<Set<string>>(new Set());
   const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Time-based debounce: silently ignore the same code detected repeatedly by the camera
+  const lastCodeRef = useRef<string>("");
+  const lastCodeTimeRef = useRef<number>(0);
+
   // Stats
   const [ingresaron, setIngresaron] = useState(0);
   const [capacidadTotal, setCapacidadTotal] = useState<number | null>(null);
@@ -259,9 +263,21 @@ export function ScannerClient() {
       const code = detectedCodes?.[0]?.rawValue;
       if (!code) return;
 
-      // Block double scans: if this code was already successfully scanned, show warning immediately
+      const now = Date.now();
+
+      // Time-based debounce: silently ignore same code within 5 seconds
+      // This prevents the camera from re-triggering on a QR still in frame
+      if (code === lastCodeRef.current && now - lastCodeTimeRef.current < 5000) {
+        return;
+      }
+
+      // Update debounce tracker
+      lastCodeRef.current = code;
+      lastCodeTimeRef.current = now;
+
+      // Block double scans for codes already validated in this session
+      // Show warning ONCE (the debounce above prevents repeated triggers)
       if (scannedCodesRef.current.has(code)) {
-        // Still show feedback but don't hit the API
         feedbackForResult("ya_usado");
         setLastScan({
           resultado: "ya_usado",
@@ -288,7 +304,7 @@ export function ScannerClient() {
         setLastScan(data);
         feedbackForResult(data.resultado);
 
-        // Track scanned codes
+        // Track scanned codes to prevent future API calls for the same code
         if (data.resultado === "valido" || data.resultado === "ya_usado") {
           scannedCodesRef.current.add(code);
         }
@@ -296,7 +312,7 @@ export function ScannerClient() {
         // Add to local list immediately with name info
         setEscaneos((prev) => [
           {
-            id: Date.now(), // Temporary ID, will be replaced by realtime
+            id: Date.now(),
             resultado: data.resultado,
             codigo_escaneado: code,
             created_at: new Date().toISOString(),
@@ -332,11 +348,12 @@ export function ScannerClient() {
           2500
         );
       } finally {
-        // Allow next scan after a short cooldown
+        // Allow next scan after overlay starts fading — short cooldown
+        // so a NEW QR can be scanned right away
         setTimeout(() => {
           scanningRef.current = false;
           setScanning(false);
-        }, 1200);
+        }, 800);
       }
     },
     [eventoId]
@@ -345,6 +362,8 @@ export function ScannerClient() {
   const porcentaje = capacidadTotal
     ? Math.min(Math.round((ingresaron / capacidadTotal) * 100), 100)
     : null;
+
+  const eventoNombre = eventos.find((e) => e.id === eventoId)?.titulo || null;
 
   if (loading) {
     return (
@@ -363,6 +382,7 @@ export function ScannerClient() {
             resultado={lastScan.resultado}
             entrada={lastScan.entrada}
             mensaje={lastScan.mensaje}
+            eventoNombre={eventoNombre}
             onDismiss={() => setShowOverlay(false)}
           />
         )}
@@ -651,11 +671,13 @@ function FullScreenOverlay({
   resultado,
   entrada,
   mensaje,
+  eventoNombre,
   onDismiss,
 }: {
   resultado: ScanResultado;
   entrada: ScanResponse["entrada"];
   mensaje: string;
+  eventoNombre: string | null;
   onDismiss: () => void;
 }) {
   const config = overlayConfig[resultado];
@@ -746,12 +768,24 @@ function FullScreenOverlay({
           {resultado === "ya_usado" ? mensaje : config.subtitle}
         </motion.p>
 
+        {/* Event name */}
+        {eventoNombre && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.5 }}
+            transition={{ delay: 0.5, duration: 0.3 }}
+            className="text-xs mt-2 font-medium"
+          >
+            {eventoNombre}
+          </motion.p>
+        )}
+
         {/* Tap to dismiss hint */}
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 0.4 }}
           transition={{ delay: 0.6 }}
-          className="text-xs mt-8"
+          className="text-xs mt-6"
         >
           Tocá para cerrar
         </motion.p>
