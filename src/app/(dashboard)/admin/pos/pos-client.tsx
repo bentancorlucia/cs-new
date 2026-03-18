@@ -82,7 +82,6 @@ interface SocioInfo {
   nombre: string;
   apellido: string;
   cedula: string | null;
-  numero_socio: string | null;
   es_socio: boolean;
 }
 
@@ -473,8 +472,8 @@ export function POSClient() {
     const db = supabase as any;
     const { data, error } = await db
       .from("perfiles")
-      .select("id, nombre, apellido, cedula, numero_socio, es_socio")
-      .or(`cedula.eq.${cedulaBusqueda.trim()},numero_socio.eq.${cedulaBusqueda.trim()}`)
+      .select("id, nombre, apellido, cedula, es_socio")
+      .or(`cedula.eq.${cedulaBusqueda.trim()}`)
       .limit(1)
       .single();
 
@@ -807,7 +806,7 @@ export function POSClient() {
                   {socio.nombre} {socio.apellido}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Socio #{socio.numero_socio || socio.cedula}
+                  Socio - CI: {socio.cedula}
                 </p>
               </div>
               <button

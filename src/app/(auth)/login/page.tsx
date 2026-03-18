@@ -41,7 +41,10 @@ export default function LoginPage() {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect") || "/mi-cuenta";
+  const rawRedirect = searchParams.get("redirect") || "/mi-cuenta";
+  // Prevent open redirect: only allow relative paths starting with /
+  const redirectTo = rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") ? rawRedirect : "/mi-cuenta";
+  const errorParam = searchParams.get("error");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -65,6 +68,8 @@ function LoginForm() {
       if (error) {
         if (error.message.includes("Invalid login")) {
           toast.error("Email o contraseña incorrectos");
+        } else if (error.message.includes("Email not confirmed")) {
+          toast.error("Debés confirmar tu email antes de iniciar sesión. Revisá tu bandeja de entrada.");
         } else {
           toast.error(error.message);
         }
@@ -118,6 +123,11 @@ function LoginForm() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {errorParam === "auth" && (
+              <div className="mb-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+                El enlace ya no es válido o expiró. Intentá de nuevo.
+              </div>
+            )}
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
@@ -170,6 +180,15 @@ function LoginForm() {
                     {errors.password.message}
                   </p>
                 )}
+              </div>
+
+              <div className="flex justify-end">
+                <Link
+                  href="/recuperar"
+                  className="text-xs text-muted-foreground hover:text-dorado-500 underline-offset-4 hover:underline transition-colors"
+                >
+                  ¿Olvidaste tu contraseña?
+                </Link>
               </div>
 
               <Button

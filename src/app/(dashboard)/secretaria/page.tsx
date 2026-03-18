@@ -137,21 +137,16 @@ export default function SecretariaDashboard() {
         pagosResult,
       ] = await Promise.all([
         supabase
-          .from("perfiles")
+          .from("padron_socios")
           .select("*", { count: "exact", head: true })
-          .eq("es_socio", true)
-          .eq("estado_socio", "activo"),
+          .eq("activo", true),
+        // Morosos: for now return 0 — moroso logic lives outside padron_socios
+        Promise.resolve({ count: 0 }),
         supabase
-          .from("perfiles")
+          .from("padron_socios")
           .select("*", { count: "exact", head: true })
-          .eq("es_socio", true)
-          .eq("estado_socio", "moroso"),
-        supabase
-          .from("perfiles")
-          .select("*", { count: "exact", head: true })
-          .eq("es_socio", true)
           .gte(
-            "fecha_alta_socio",
+            "created_at",
             new Date(
               new Date().getFullYear(),
               new Date().getMonth(),

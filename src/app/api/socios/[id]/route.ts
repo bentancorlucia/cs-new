@@ -74,9 +74,6 @@ const updateSocioSchema = z.object({
   cedula: z.string().max(20).optional(),
   telefono: z.string().max(20).nullable().optional(),
   fecha_nacimiento: z.string().nullable().optional(),
-  estado_socio: z
-    .enum(["activo", "inactivo", "moroso", "suspendido"])
-    .optional(),
   notas: z.string().nullable().optional(),
 });
 
@@ -92,54 +89,7 @@ export async function PUT(
     const body = await request.json();
     const parsed = updateSocioSchema.parse(body);
 
-    // Handle state change side effects
-    if (parsed.estado_socio === "inactivo") {
-      // Remove socio role
-      const { data: rolSocioData } = await supabase
-        .from("roles")
-        .select("id")
-        .eq("nombre", "socio")
-        .single();
-      const rolSocio = rolSocioData as unknown as { id: number } | null;
-
-      if (rolSocio) {
-        await supabase
-          .from("perfil_roles")
-          .delete()
-          .eq("perfil_id", id)
-          .eq("rol_id", rolSocio.id);
-      }
-
-      parsed.estado_socio = "inactivo";
-    } else if (
-      parsed.estado_socio === "activo" ||
-      parsed.estado_socio === "moroso"
-    ) {
-      // Ensure socio role exists
-      const { data: rolSocioData2 } = await supabase
-        .from("roles")
-        .select("id")
-        .eq("nombre", "socio")
-        .single();
-      const rolSocio2 = rolSocioData2 as unknown as { id: number } | null;
-
-      if (rolSocio2) {
-        await supabase.from("perfil_roles").upsert(
-          {
-            perfil_id: id,
-            rol_id: rolSocio2.id,
-          } as never,
-          { onConflict: "perfil_id,rol_id" }
-        );
-      }
-    }
-
     const updateData: Record<string, unknown> = { ...parsed };
-    if (parsed.estado_socio === "inactivo") {
-      updateData.es_socio = false;
-    } else if (parsed.estado_socio === "activo") {
-      updateData.es_socio = true;
-    }
 
     const { data, error } = await supabase
       .from("perfiles")
@@ -201,7 +151,6 @@ export async function DELETE(
       .from("perfiles")
       .update({
         es_socio: false,
-        estado_socio: "inactivo" as const,
       } as never)
       .eq("id", id);
 

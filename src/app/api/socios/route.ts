@@ -17,7 +17,9 @@ export async function GET(request: NextRequest) {
     const disciplina = searchParams.get("disciplina") || "";
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
-    const sortBy = searchParams.get("sortBy") || "apellido";
+    const ALLOWED_SORT_COLUMNS = ["apellido", "nombre", "cedula", "created_at"];
+    const rawSortBy = searchParams.get("sortBy") || "apellido";
+    const sortBy = ALLOWED_SORT_COLUMNS.includes(rawSortBy) ? rawSortBy : "apellido";
     const sortOrder = searchParams.get("sortOrder") || "asc";
     const offset = (page - 1) * limit;
 
@@ -40,15 +42,14 @@ export async function GET(request: NextRequest) {
 
     // Search by name or cedula
     if (search) {
+      const s = search.replace(/%/g, "\\%").replace(/_/g, "\\_");
       query = query.or(
-        `nombre.ilike.%${search}%,apellido.ilike.%${search}%,cedula.ilike.%${search}%`
+        `nombre.ilike.%${s}%,apellido.ilike.%${s}%,cedula.ilike.%${s}%`
       );
     }
 
-    // Filter by estado_socio
-    if (estado && estado !== "todos") {
-      query = query.eq("estado_socio", estado as "activo" | "inactivo" | "moroso" | "suspendido");
-    }
+    // Filter by estado — no longer on perfiles (moved to padron_socios)
+    // Kept as no-op for backwards compatibility until fully replaced by /api/padron
 
     // Filter by disciplina
     if (disciplina) {
@@ -61,9 +62,7 @@ export async function GET(request: NextRequest) {
 
     // Sorting
     const ascending = sortOrder === "asc";
-    query = query.order(sortBy as "apellido" | "nombre" | "created_at", {
-      ascending,
-    });
+    query = query.order(sortBy, { ascending });
 
     // Pagination
     query = query.range(offset, offset + limit - 1);
@@ -119,14 +118,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const parsed = crearSocioSchema.parse(body);
 
-    // Generate numero_socio
-    const { count } = await supabase
-      .from("perfiles")
-      .select("*", { count: "exact", head: true })
-      .eq("es_socio", true);
-
-    const numeroSocio = `CS-${String((count || 0) + 1).padStart(4, "0")}`;
-
     if (parsed.perfil_id) {
       // Update existing profile to be socio
       const { error: updateError } = await supabase
@@ -138,9 +129,6 @@ export async function POST(request: NextRequest) {
           telefono: parsed.telefono || null,
           fecha_nacimiento: parsed.fecha_nacimiento || null,
           es_socio: true,
-          numero_socio: numeroSocio,
-          estado_socio: "activo" as const,
-          fecha_alta_socio: new Date().toISOString(),
         } as never)
         .eq("id", parsed.perfil_id);
 
@@ -181,7 +169,6 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         socio_id: parsed.perfil_id,
-        numero_socio: numeroSocio,
       });
     } else {
       // Create new profile via Supabase Auth invite or manual insert
@@ -196,9 +183,6 @@ export async function POST(request: NextRequest) {
         telefono: parsed.telefono || null,
         fecha_nacimiento: parsed.fecha_nacimiento || null,
         es_socio: true,
-        numero_socio: numeroSocio,
-        estado_socio: "activo" as const,
-        fecha_alta_socio: new Date().toISOString(),
       } as never);
 
       if (insertError) {
@@ -218,7 +202,7 @@ export async function POST(request: NextRequest) {
       await supabase.from("perfil_disciplinas").insert(disciplinasData2 as never);
 
       return NextResponse.json(
-        { socio_id: newId, numero_socio: numeroSocio },
+        { socio_id: newId },
         { status: 201 }
       );
     }

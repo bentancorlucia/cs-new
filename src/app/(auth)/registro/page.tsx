@@ -62,6 +62,7 @@ export default function RegistroPage() {
         email: data.email,
         password: data.password,
         options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/mi-cuenta`,
           data: {
             nombre: data.nombre,
             apellido: data.apellido,
@@ -81,7 +82,7 @@ export default function RegistroPage() {
       }
 
       toast.success("Cuenta creada. Revisá tu email para confirmar.");
-      router.push("/login");
+      router.push(`/confirmar-email?email=${encodeURIComponent(data.email)}`);
     } catch {
       toast.error("Error al crear la cuenta");
     } finally {

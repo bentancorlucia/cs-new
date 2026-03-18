@@ -54,21 +54,6 @@ export async function POST(
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // If socio was moroso and pays, check if should update to activo
-    const { data: perfil } = await supabase
-      .from("perfiles")
-      .select("estado_socio")
-      .eq("id", id)
-      .single();
-
-    const perfilData = perfil as unknown as { estado_socio: string } | null;
-    if (perfilData?.estado_socio === "moroso") {
-      await supabase
-        .from("perfiles")
-        .update({ estado_socio: "activo" as const } as never)
-        .eq("id", id);
-    }
-
     return NextResponse.json({ pago: data }, { status: 201 });
   } catch (err) {
     if (err instanceof z.ZodError) {

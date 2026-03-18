@@ -5,6 +5,7 @@ import {
   getCheckoutUrl,
   APP_URL,
 } from "@/lib/mercadopago/client";
+import { sendTicketConfirmation } from "@/lib/email";
 import { z } from "zod";
 
 const compraEntradaSchema = z.object({
@@ -188,8 +189,22 @@ export async function POST(request: NextRequest) {
 
     const entradaIds = entradas.map((e: any) => e.id);
 
-    // 9. If free event, return directly
+    // 9. If free event, send confirmation email and return
     if (evento.es_gratuito) {
+      try {
+        await sendTicketConfirmation(email_asistente, {
+          nombreAsistente: nombre_asistente,
+          eventoTitulo: evento.titulo,
+          tipoEntrada: tipoEntrada.nombre,
+          cantidad,
+          total: 0,
+          codigos: entradas.map((e: any) => e.codigo).filter(Boolean),
+          eventoUrl: `${APP_URL}/eventos/${evento.slug}`,
+        });
+      } catch (emailError) {
+        console.error("Error sending free ticket email:", emailError);
+      }
+
       return NextResponse.json({
         entrada_ids: entradaIds,
         gratuito: true,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole, getCurrentUser } from "@/lib/supabase/roles";
+import { sendOrderReady, sendOrderCancelled } from "@/lib/email";
 import { z } from "zod";
 
 const TIENDA_ROLES = ["super_admin", "tienda"];
@@ -131,6 +132,41 @@ export async function PUT(
       .single();
 
     if (error) throw error;
+
+    // Send cancellation email
+    if (parsed.estado === "cancelado" && data?.perfil_id) {
+      try {
+        const { data: authUser } = await supabase.auth.admin.getUserById(data.perfil_id);
+        const userEmail = authUser?.user?.email;
+        if (userEmail) {
+          await sendOrderCancelled(userEmail, {
+            nombreCliente: data.nombre_cliente || "Cliente",
+            numeroPedido: data.numero_pedido,
+            motivo: parsed.motivo_cancelacion,
+          });
+        }
+      } catch (emailError) {
+        console.error("Error sending order cancelled email:", emailError);
+      }
+    }
+
+    // Send "ready for pickup" email when order transitions to listo_retiro
+    if (parsed.estado === "listo_retiro" && data?.perfil_id) {
+      try {
+        const { data: authUser } = await supabase.auth.admin.getUserById(data.perfil_id);
+        const userEmail = authUser?.user?.email;
+        if (userEmail) {
+          const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://clubseminario.com.uy";
+          await sendOrderReady(userEmail, {
+            nombreCliente: data.nombre_cliente || "Cliente",
+            numeroPedido: data.numero_pedido,
+            pedidoUrl: `${APP_URL}/tienda/pedido/${data.id}`,
+          });
+        }
+      } catch (emailError) {
+        console.error("Error sending order ready email:", emailError);
+      }
+    }
 
     return NextResponse.json({ data });
   } catch (error: any) {

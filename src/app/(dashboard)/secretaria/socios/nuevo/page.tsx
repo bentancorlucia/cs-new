@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, UserPlus, Search, Check } from "lucide-react";
+import { ArrowLeft, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -11,6 +11,7 @@ import { z } from "zod";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,7 @@ const socioSchema = z.object({
   cedula: z.string().min(1, "Cédula requerida").max(20),
   telefono: z.string().max(20).optional().or(z.literal("")),
   fecha_nacimiento: z.string().optional().or(z.literal("")),
+  notas: z.string().optional().or(z.literal("")),
 });
 
 type SocioFormData = z.infer<typeof socioSchema>;
@@ -40,14 +42,6 @@ interface SelectedDisciplina {
   categoria: string;
 }
 
-interface ExistingUser {
-  id: string;
-  nombre: string;
-  apellido: string;
-  cedula: string | null;
-  es_socio: boolean;
-}
-
 export default function NuevoSocioPage() {
   const router = useRouter();
   const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
@@ -56,22 +50,14 @@ export default function NuevoSocioPage() {
   >([]);
   const [submitting, setSubmitting] = useState(false);
 
-  // Existing user search
-  const [searchEmail, setSearchEmail] = useState("");
-  const [searchResults, setSearchResults] = useState<ExistingUser[]>([]);
-  const [linkedUser, setLinkedUser] = useState<ExistingUser | null>(null);
-  const [searching, setSearching] = useState(false);
-
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors },
   } = useForm<SocioFormData>({
     resolver: zodResolver(socioSchema),
   });
 
-  // Load disciplinas
   useEffect(() => {
     async function load() {
       const supabase = createBrowserClient();
@@ -84,32 +70,6 @@ export default function NuevoSocioPage() {
     }
     load();
   }, []);
-
-  // Search existing users
-  const searchUsers = async () => {
-    if (!searchEmail.trim()) return;
-    setSearching(true);
-    const supabase = createBrowserClient();
-    const { data } = await supabase
-      .from("perfiles")
-      .select("id, nombre, apellido, cedula, es_socio")
-      .or(
-        `cedula.ilike.%${searchEmail}%,nombre.ilike.%${searchEmail}%,apellido.ilike.%${searchEmail}%`
-      )
-      .eq("es_socio", false)
-      .limit(5);
-    setSearchResults(data || []);
-    setSearching(false);
-  };
-
-  const linkUser = (user: ExistingUser) => {
-    setLinkedUser(user);
-    setValue("nombre", user.nombre);
-    setValue("apellido", user.apellido);
-    if (user.cedula) setValue("cedula", user.cedula);
-    setSearchResults([]);
-    setSearchEmail("");
-  };
 
   const toggleDisciplina = (disc: Disciplina) => {
     setSelectedDisciplinas((prev) => {
@@ -130,21 +90,16 @@ export default function NuevoSocioPage() {
   };
 
   const onSubmit = async (data: SocioFormData) => {
-    if (selectedDisciplinas.length === 0) {
-      toast.error("Seleccioná al menos una disciplina");
-      return;
-    }
-
     setSubmitting(true);
     try {
-      const res = await fetch("/api/socios", {
+      const res = await fetch("/api/padron", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...data,
           telefono: data.telefono || undefined,
           fecha_nacimiento: data.fecha_nacimiento || undefined,
-          perfil_id: linkedUser?.id,
+          notas: data.notas || undefined,
           disciplinas: selectedDisciplinas.map((d) => ({
             disciplina_id: d.disciplina_id,
             categoria: d.categoria || undefined,
@@ -159,8 +114,8 @@ export default function NuevoSocioPage() {
         return;
       }
 
-      toast.success(`Socio ${result.numero_socio} creado correctamente`);
-      router.push(`/secretaria/socios/${result.socio_id}`);
+      toast.success("Socio creado correctamente");
+      router.push(`/secretaria/socios/${result.socio.id}`);
     } catch {
       toast.error("Error de conexión");
     } finally {
@@ -187,7 +142,7 @@ export default function NuevoSocioPage() {
           Nuevo Socio
         </h1>
         <p className="mt-1 font-body text-sm text-muted-foreground">
-          Alta de un nuevo socio del club
+          Alta de un nuevo socio en el padrón del club
         </p>
       </motion.div>
 
@@ -198,81 +153,6 @@ export default function NuevoSocioPage() {
         onSubmit={handleSubmit(onSubmit)}
         className="space-y-6"
       >
-        {/* Link existing user */}
-        <motion.div variants={fadeInUp} transition={springSmooth}>
-          <Card className="border-linea">
-            <CardHeader>
-              <CardTitle className="font-heading text-sm uppercase tracking-editorial">
-                Vincular usuario existente (opcional)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {linkedUser ? (
-                <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-50 border border-emerald-200">
-                  <div className="flex items-center gap-2">
-                    <Check className="size-4 text-emerald-600" />
-                    <span className="font-body text-sm">
-                      {linkedUser.nombre} {linkedUser.apellido}
-                      {linkedUser.cedula && ` — CI: ${linkedUser.cedula}`}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setLinkedUser(null)}
-                    className="text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    Desvincular
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Buscar por nombre o cédula..."
-                        value={searchEmail}
-                        onChange={(e) => setSearchEmail(e.target.value)}
-                        onKeyDown={(e) =>
-                          e.key === "Enter" && (e.preventDefault(), searchUsers())
-                        }
-                        className="pl-10 font-body"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={searchUsers}
-                      disabled={searching}
-                      className="px-4 py-2 rounded-lg border border-linea text-sm font-body hover:bg-superficie transition-colors disabled:opacity-50"
-                    >
-                      {searching ? "..." : "Buscar"}
-                    </button>
-                  </div>
-                  {searchResults.length > 0 && (
-                    <div className="border border-linea rounded-lg divide-y divide-linea">
-                      {searchResults.map((user) => (
-                        <button
-                          key={user.id}
-                          type="button"
-                          onClick={() => linkUser(user)}
-                          className="w-full text-left p-3 hover:bg-superficie transition-colors font-body text-sm"
-                        >
-                          {user.nombre} {user.apellido}
-                          {user.cedula && (
-                            <span className="text-muted-foreground ml-2">
-                              CI: {user.cedula}
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-
         {/* Personal data */}
         <motion.div variants={fadeInUp} transition={springSmooth}>
           <Card className="border-linea">
@@ -343,15 +223,29 @@ export default function NuevoSocioPage() {
                   />
                 </div>
               </div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="fecha_nacimiento" className="font-body text-sm">
+                    Fecha de nacimiento
+                  </Label>
+                  <Input
+                    id="fecha_nacimiento"
+                    type="date"
+                    {...register("fecha_nacimiento")}
+                    className="font-body"
+                  />
+                </div>
+              </div>
               <div className="space-y-1.5">
-                <Label htmlFor="fecha_nacimiento" className="font-body text-sm">
-                  Fecha de nacimiento
+                <Label htmlFor="notas" className="font-body text-sm">
+                  Notas
                 </Label>
-                <Input
-                  id="fecha_nacimiento"
-                  type="date"
-                  {...register("fecha_nacimiento")}
+                <Textarea
+                  id="notas"
+                  {...register("notas")}
+                  placeholder="Observaciones sobre el socio..."
                   className="font-body"
+                  rows={2}
                 />
               </div>
             </CardContent>
@@ -363,7 +257,7 @@ export default function NuevoSocioPage() {
           <Card className="border-linea">
             <CardHeader>
               <CardTitle className="font-heading text-sm uppercase tracking-editorial">
-                Disciplinas *
+                Disciplinas
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -390,7 +284,6 @@ export default function NuevoSocioPage() {
                 })}
               </div>
 
-              {/* Categoría for each selected */}
               {selectedDisciplinas.length > 0 && (
                 <div className="space-y-3 pt-2 border-t border-linea">
                   <p className="font-body text-xs text-muted-foreground">
@@ -415,12 +308,6 @@ export default function NuevoSocioPage() {
                     </div>
                   ))}
                 </div>
-              )}
-
-              {selectedDisciplinas.length === 0 && (
-                <p className="text-xs text-amber-600 font-body">
-                  Seleccioná al menos una disciplina
-                </p>
               )}
             </CardContent>
           </Card>

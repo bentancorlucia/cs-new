@@ -12,6 +12,8 @@ import {
   ChevronRight,
   Filter,
   Users,
+  Link2,
+  Unlink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,34 +36,24 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { createBrowserClient } from "@/lib/supabase/client";
 
-interface Socio {
-  id: string;
+interface PadronSocio {
+  id: number;
   nombre: string;
   apellido: string;
-  cedula: string | null;
-  numero_socio: string | null;
-  estado_socio: "activo" | "inactivo" | "moroso" | "suspendido";
-  fecha_alta_socio: string | null;
-  perfil_disciplinas: {
+  cedula: string;
+  activo: boolean;
+  perfil_id: string | null;
+  padron_disciplinas: {
     id: number;
     disciplinas: { nombre: string } | null;
   }[];
+  perfiles: { id: string; nombre: string; apellido: string } | null;
 }
 
 interface Disciplina {
   id: number;
   nombre: string;
 }
-
-const ESTADO_BADGE: Record<
-  string,
-  { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
-> = {
-  activo: { label: "Activo", variant: "default" },
-  moroso: { label: "Moroso", variant: "destructive" },
-  inactivo: { label: "Inactivo", variant: "secondary" },
-  suspendido: { label: "Suspendido", variant: "outline" },
-};
 
 const LIMIT = 20;
 
@@ -77,15 +69,18 @@ function SociosListContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [socios, setSocios] = useState<Socio[]>([]);
+  const [socios, setSocios] = useState<PadronSocio[]>([]);
   const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState(searchParams.get("search") || "");
-  const [estado, setEstado] = useState(searchParams.get("estado") || "todos");
+  const [activo, setActivo] = useState(searchParams.get("activo") || "todos");
   const [disciplina, setDisciplina] = useState(
     searchParams.get("disciplina") || "todas"
+  );
+  const [vinculado, setVinculado] = useState(
+    searchParams.get("vinculado") || "todos"
   );
   const [page, setPage] = useState(
     parseInt(searchParams.get("page") || "1")
@@ -98,19 +93,20 @@ function SociosListContent() {
     try {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
-      if (estado !== "todos") params.set("estado", estado);
+      if (activo !== "todos") params.set("activo", activo);
       if (disciplina !== "todas") params.set("disciplina", disciplina);
+      if (vinculado !== "todos") params.set("vinculado", vinculado);
       params.set("page", String(page));
       params.set("limit", String(LIMIT));
 
-      const res = await fetch(`/api/socios?${params.toString()}`);
+      const res = await fetch(`/api/padron?${params.toString()}`);
       if (!res.ok) {
         setSocios([]);
         setTotal(0);
         return;
       }
       const data = await res.json();
-      setSocios((data.socios as Socio[]) || []);
+      setSocios((data.socios as PadronSocio[]) || []);
       setTotal(data.total || 0);
     } catch {
       setSocios([]);
@@ -118,7 +114,7 @@ function SociosListContent() {
     } finally {
       setLoading(false);
     }
-  }, [search, estado, disciplina, page]);
+  }, [search, activo, disciplina, vinculado, page]);
 
   useEffect(() => {
     async function loadDisciplinas() {
@@ -139,7 +135,7 @@ function SociosListContent() {
       fetchSocios();
     }, 300);
     return () => clearTimeout(timer);
-  }, [search, estado, disciplina, fetchSocios]);
+  }, [search, activo, disciplina, vinculado, fetchSocios]);
 
   useEffect(() => {
     fetchSocios();
@@ -147,14 +143,14 @@ function SociosListContent() {
 
   const exportCSV = () => {
     if (!socios.length) return;
-    const headers = ["Apellido", "Nombre", "Cédula", "Nro Socio", "Estado", "Disciplinas"];
+    const headers = ["Apellido", "Nombre", "Cédula", "Estado", "Vinculado", "Disciplinas"];
     const rows = socios.map((s) => [
       s.apellido,
       s.nombre,
       s.cedula || "",
-      s.numero_socio || "",
-      s.estado_socio,
-      s.perfil_disciplinas
+      s.activo ? "Activo" : "Inactivo",
+      s.perfil_id ? "Sí" : "No",
+      s.padron_disciplinas
         ?.map((pd) => pd.disciplinas?.nombre)
         .filter(Boolean)
         .join("; ") || "",
@@ -180,7 +176,7 @@ function SociosListContent() {
       >
         <div>
           <h1 className="font-display text-2xl sm:text-3xl uppercase tracking-tightest text-foreground">
-            Socios
+            Padrón de Socios
           </h1>
           <p className="mt-1 font-body text-sm text-muted-foreground">
             {total} socios registrados
@@ -222,21 +218,19 @@ function SociosListContent() {
           />
         </div>
         <div className="flex gap-2">
-          <Select value={estado} onValueChange={(v) => v && setEstado(v)}>
-            <SelectTrigger className="flex-1 sm:w-[140px] font-body">
+          <Select value={activo} onValueChange={(v) => v && setActivo(v)}>
+            <SelectTrigger className="flex-1 sm:w-[130px] font-body">
               <Filter className="size-3.5 mr-1.5 text-muted-foreground" />
               <SelectValue placeholder="Estado" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos</SelectItem>
-              <SelectItem value="activo">Activos</SelectItem>
-              <SelectItem value="moroso">Morosos</SelectItem>
-              <SelectItem value="inactivo">Inactivos</SelectItem>
-              <SelectItem value="suspendido">Suspendidos</SelectItem>
+              <SelectItem value="true">Activos</SelectItem>
+              <SelectItem value="false">Inactivos</SelectItem>
             </SelectContent>
           </Select>
           <Select value={disciplina} onValueChange={(v) => v && setDisciplina(v)}>
-            <SelectTrigger className="flex-1 sm:w-[160px] font-body">
+            <SelectTrigger className="flex-1 sm:w-[150px] font-body">
               <SelectValue placeholder="Disciplina" />
             </SelectTrigger>
             <SelectContent>
@@ -246,6 +240,16 @@ function SociosListContent() {
                   {d.nombre}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+          <Select value={vinculado} onValueChange={(v) => v && setVinculado(v)}>
+            <SelectTrigger className="flex-1 sm:w-[140px] font-body">
+              <SelectValue placeholder="Vinculación" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              <SelectItem value="true">Vinculados</SelectItem>
+              <SelectItem value="false">Sin vincular</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -306,9 +310,8 @@ function SociosListContent() {
                   </TableRow>
                 ) : (
                   socios.map((socio, index) => {
-                    const estadoInfo = ESTADO_BADGE[socio.estado_socio];
                     const disciplinasNames =
-                      socio.perfil_disciplinas
+                      socio.padron_disciplinas
                         ?.map((pd) => pd.disciplinas?.nombre)
                         .filter(Boolean) || [];
 
@@ -328,18 +331,24 @@ function SociosListContent() {
                             <p className="font-body text-sm font-medium text-foreground">
                               {socio.apellido}, {socio.nombre}
                             </p>
-                            {socio.numero_socio && (
-                              <p className="font-body text-xs text-muted-foreground">
-                                N.° {socio.numero_socio}
-                              </p>
-                            )}
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {socio.perfil_id ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600">
+                                  <Link2 className="size-3" />
+                                  Vinculado
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                                  <Unlink className="size-3" />
+                                  Sin vincular
+                                </span>
+                              )}
+                            </div>
                             {/* Mobile: show cedula + disciplines */}
                             <div className="sm:hidden mt-0.5">
-                              {socio.cedula && (
-                                <p className="font-body text-xs text-muted-foreground">
-                                  CI: {socio.cedula}
-                                </p>
-                              )}
+                              <p className="font-body text-xs text-muted-foreground">
+                                CI: {socio.cedula}
+                              </p>
                             </div>
                             <div className="lg:hidden mt-1 flex flex-wrap gap-1">
                               {disciplinasNames.slice(0, 2).map((name) => (
@@ -360,7 +369,7 @@ function SociosListContent() {
                           </div>
                         </TableCell>
                         <TableCell className="hidden sm:table-cell font-body text-sm text-muted-foreground">
-                          {socio.cedula || "—"}
+                          {socio.cedula}
                         </TableCell>
                         <TableCell className="hidden lg:table-cell">
                           <div className="flex flex-wrap gap-1">
@@ -382,8 +391,8 @@ function SociosListContent() {
                           </div>
                         </TableCell>
                         <TableCell className="py-3">
-                          <Badge variant={estadoInfo?.variant || "secondary"}>
-                            {estadoInfo?.label || socio.estado_socio}
+                          <Badge variant={socio.activo ? "default" : "secondary"}>
+                            {socio.activo ? "Activo" : "Inactivo"}
                           </Badge>
                         </TableCell>
                       </motion.tr>
@@ -454,4 +463,3 @@ function SociosListContent() {
     </div>
   );
 }
-

@@ -20,18 +20,33 @@ export async function GET(
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
 
-  const { data: perfil, error } = await supabase
+  // Look up the profile to get avatar and basic info
+  const { data: perfil, error: perfilError } = await supabase
     .from("perfiles")
-    .select("nombre, apellido, cedula, es_socio, numero_socio, estado_socio, avatar_url")
+    .select("nombre, apellido, cedula, es_socio, avatar_url, padron_socio_id")
     .eq("id", id)
     .eq("es_socio", true)
     .single();
 
-  if (error || !perfil) {
+  if (perfilError || !perfil) {
     return NextResponse.json(
       { error: "Socio no encontrado" },
       { status: 404 }
     );
+  }
+
+  // Get padron info if linked
+  let estado: "activo" | "inactivo" = "inactivo";
+  if (perfil.padron_socio_id) {
+    const { data: padron } = await supabase
+      .from("padron_socios")
+      .select("activo")
+      .eq("id", perfil.padron_socio_id)
+      .single();
+
+    if (padron?.activo) {
+      estado = "activo";
+    }
   }
 
   // Mask cedula: show first 2 and last 1 digit
@@ -62,8 +77,8 @@ export async function GET(
     nombre: perfil.nombre,
     apellido: perfil.apellido,
     cedula_masked: cedulaMasked,
-    numero_socio: perfil.numero_socio,
-    estado: perfil.estado_socio,
+    numero_socio: null,
+    estado,
     avatar_url: perfil.avatar_url,
     disciplinas: disciplinaNames,
   });

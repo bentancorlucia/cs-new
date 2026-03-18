@@ -5,6 +5,7 @@ import {
   isPaymentApproved,
   isPaymentRejected,
 } from "@/lib/mercadopago/client";
+import { sendOrderConfirmation, sendTicketConfirmation } from "@/lib/email";
 
 // Service role for webhook processing (no user auth context)
 const supabaseAdmin = createClient(
@@ -99,6 +100,33 @@ async function handleEntradaPayment(
       raw_data: payment,
     });
 
+    // Send ticket confirmation email
+    try {
+      const { data: entradaDetails } = await supabaseAdmin
+        .from("entradas")
+        .select("codigo, email_asistente, nombre_asistente, precio_pagado, tipo_entradas(nombre), eventos(titulo, slug)")
+        .in("id", entradaIds);
+
+      if (entradaDetails && entradaDetails.length > 0) {
+        const first = entradaDetails[0] as any;
+        const emailTo = first.email_asistente;
+        if (emailTo) {
+          const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://clubseminario.com.uy";
+          await sendTicketConfirmation(emailTo, {
+            nombreAsistente: first.nombre_asistente || "Asistente",
+            eventoTitulo: first.eventos?.titulo || "Evento",
+            tipoEntrada: first.tipo_entradas?.nombre || "General",
+            cantidad: entradaDetails.length,
+            total: entradaDetails.reduce((sum: number, e: any) => sum + Number(e.precio_pagado || 0), 0),
+            codigos: entradaDetails.map((e: any) => e.codigo).filter(Boolean),
+            eventoUrl: `${APP_URL}/eventos/${first.eventos?.slug || ""}`,
+          });
+        }
+      }
+    } catch (emailError) {
+      console.error("Error sending ticket email:", emailError);
+    }
+
     console.log(
       `Event tickets [${entradaIds.join(",")}] paid successfully`
     );
@@ -186,7 +214,7 @@ async function handlePedidoPayment(
     // 2. Deduct stock for each item
     const { data: pedidoItems } = await supabaseAdmin
       .from("pedido_items")
-      .select("producto_id, variante_id, cantidad")
+      .select("producto_id, variante_id, cantidad, precio_unitario")
       .eq("pedido_id", pedido.id);
 
     if (pedidoItems) {
@@ -260,6 +288,59 @@ async function handlePedidoPayment(
       metodo: payment.payment_method_id || null,
       raw_data: payment,
     });
+
+    // Send order confirmation email
+    try {
+      // Get user email and order details
+      const { data: perfilData } = await supabaseAdmin
+        .from("perfiles")
+        .select("nombre, apellido")
+        .eq("id", pedido.perfil_id)
+        .single();
+
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(pedido.perfil_id);
+      const userEmail = authUser?.user?.email;
+
+      if (userEmail && pedidoItems) {
+        const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://clubseminario.com.uy";
+
+        // Get product names for items
+        const itemsForEmail: { nombre: string; cantidad: number; precioUnitario: number }[] = [];
+        for (const item of pedidoItems) {
+          const { data: prod } = await supabaseAdmin
+            .from("productos")
+            .select("nombre")
+            .eq("id", item.producto_id)
+            .single();
+
+          let nombre = prod?.nombre || `Producto #${item.producto_id}`;
+          if (item.variante_id) {
+            const { data: vari } = await supabaseAdmin
+              .from("producto_variantes")
+              .select("nombre")
+              .eq("id", item.variante_id)
+              .single();
+            if (vari) nombre += ` - ${vari.nombre}`;
+          }
+
+          itemsForEmail.push({
+            nombre,
+            cantidad: item.cantidad,
+            precioUnitario: Number((item as any).precio_unitario || 0),
+          });
+        }
+
+        await sendOrderConfirmation(userEmail, {
+          nombreCliente: perfilData ? `${perfilData.nombre} ${perfilData.apellido}` : "Cliente",
+          numeroPedido,
+          items: itemsForEmail,
+          total: Number(payment.transaction_amount || 0),
+          pedidoUrl: `${APP_URL}/tienda/pedido/${pedido.id}`,
+        });
+      }
+    } catch (emailError) {
+      console.error("Error sending order email:", emailError);
+    }
 
     console.log(`Order ${numeroPedido} paid successfully`);
   } else if (isPaymentRejected(payment)) {

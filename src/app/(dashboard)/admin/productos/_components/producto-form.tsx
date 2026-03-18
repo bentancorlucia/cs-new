@@ -1055,7 +1055,11 @@ export function ProductoForm({ producto }: Props) {
                     }
                   >
                     <SelectTrigger className="mt-1.5">
-                      <SelectValue placeholder="Sin categoría" />
+                      <SelectValue placeholder="Sin categoría">
+                        {categoriaId && categoriaId !== "none"
+                          ? categorias.find((c) => c.id.toString() === categoriaId)?.nombre ?? "Sin categoría"
+                          : "Sin categoría"}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Sin categoría</SelectItem>

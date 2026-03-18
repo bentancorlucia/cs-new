@@ -47,7 +47,6 @@ interface Perfil {
   apellido: string;
   cedula: string | null;
   es_socio: boolean;
-  numero_socio: string | null;
 }
 
 interface PerfilConRoles extends Perfil {
@@ -60,6 +59,7 @@ const ROLES_DISPONIBLES = [
   { nombre: "secretaria", label: "Secretaría", color: "bg-purple-100 text-purple-800 border-purple-200" },
   { nombre: "eventos", label: "Eventos", color: "bg-amber-100 text-amber-800 border-amber-200" },
   { nombre: "scanner", label: "Scanner", color: "bg-cyan-100 text-cyan-800 border-cyan-200" },
+  { nombre: "tesorero", label: "Tesorero", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
   { nombre: "socio", label: "Socio", color: "bg-green-100 text-green-800 border-green-200" },
   { nombre: "no_socio", label: "No Socio", color: "bg-gray-100 text-gray-700 border-gray-200" },
 ];
@@ -101,11 +101,12 @@ export default function RolesPage() {
     // First get profiles with count
     let query = supabase
       .from("perfiles")
-      .select("id, nombre, apellido, cedula, es_socio, numero_socio", { count: "exact" });
+      .select("id, nombre, apellido, cedula, es_socio", { count: "exact" });
 
     if (search) {
+      const s = search.replace(/%/g, "\\%").replace(/_/g, "\\_");
       query = query.or(
-        `nombre.ilike.%${search}%,apellido.ilike.%${search}%,cedula.ilike.%${search}%`
+        `nombre.ilike.%${s}%,apellido.ilike.%${s}%,cedula.ilike.%${s}%`
       );
     }
 
@@ -335,9 +336,9 @@ export default function RolesPage() {
                               <p className="font-body text-sm font-medium text-foreground">
                                 {perfil.apellido}, {perfil.nombre}
                               </p>
-                              {perfil.numero_socio && (
+                              {perfil.es_socio && (
                                 <p className="font-body text-xs text-muted-foreground">
-                                  Socio N.° {perfil.numero_socio}
+                                  Socio
                                 </p>
                               )}
                               {/* Mobile: show cedula */}

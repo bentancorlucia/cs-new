@@ -46,6 +46,7 @@ import {
   easeSmooth,
   scaleIn,
 } from "@/lib/motion";
+import { VerificarSocio } from "@/components/shared/verificar-socio";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -58,29 +59,11 @@ interface Perfil {
   fecha_nacimiento: string | null;
   avatar_url: string | null;
   es_socio: boolean;
-  numero_socio: string | null;
-  estado_socio: "activo" | "inactivo" | "moroso" | "suspendido";
-  fecha_alta_socio: string | null;
+  socio_verificado: boolean;
   email: string;
   disciplinas: { nombre: string; categoria: string | null }[];
   roles: string[];
 }
-
-// ── Constants ──────────────────────────────────────────
-
-const estadoColors: Record<string, string> = {
-  activo: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  inactivo: "bg-gray-100 text-gray-800 border-gray-200",
-  moroso: "bg-amber-100 text-amber-800 border-amber-200",
-  suspendido: "bg-red-100 text-red-800 border-red-200",
-};
-
-const estadoDot: Record<string, string> = {
-  activo: "bg-emerald-500",
-  inactivo: "bg-gray-400",
-  moroso: "bg-amber-500",
-  suspendido: "bg-red-500",
-};
 
 // ── Main Component ─────────────────────────────────────
 
@@ -350,12 +333,12 @@ export default function MiCuentaPage() {
                           <p className="text-sm text-muted-foreground truncate">
                             {perfil.email}
                           </p>
-                          {perfil.es_socio && perfil.numero_socio && (
+                          {perfil.es_socio && (
                             <Badge
                               variant="outline"
-                              className="mt-1.5 font-mono text-xs border-bordo-200 text-bordo-700"
+                              className="mt-1.5 text-xs border-emerald-200 text-emerald-700"
                             >
-                              {perfil.numero_socio}
+                              Socio verificado
                             </Badge>
                           )}
                         </div>
@@ -492,30 +475,6 @@ export default function MiCuentaPage() {
                         <>
                           <Separator />
                           <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <span className="font-body text-sm font-medium text-foreground">
-                                Estado de socio
-                              </span>
-                              <Badge
-                                className={`gap-1.5 ${estadoColors[perfil.estado_socio] ?? ""}`}
-                                variant="secondary"
-                              >
-                                <span
-                                  className={`size-2 rounded-full ${estadoDot[perfil.estado_socio] ?? ""}`}
-                                />
-                                {perfil.estado_socio.charAt(0).toUpperCase() +
-                                  perfil.estado_socio.slice(1)}
-                              </Badge>
-                            </div>
-                            {perfil.fecha_alta_socio && (
-                              <InfoRow
-                                icon={Calendar}
-                                label="Socio desde"
-                                value={new Date(
-                                  perfil.fecha_alta_socio
-                                ).toLocaleDateString("es-UY")}
-                              />
-                            )}
                             {perfil.disciplinas.length > 0 && (
                               <div className="space-y-2">
                                 <span className="text-sm text-muted-foreground font-body">
@@ -577,17 +536,11 @@ export default function MiCuentaPage() {
                             <span className="font-display text-xs uppercase tracking-widest text-dorado-400">
                               Club Seminario
                             </span>
-                            <Badge className="bg-dorado-400/20 text-dorado-300 border-dorado-400/30 text-[10px]">
-                              {perfil.estado_socio.toUpperCase()}
-                            </Badge>
                           </div>
 
                           <div>
                             <p className="font-heading font-bold text-base">
                               {perfil.nombre} {perfil.apellido}
-                            </p>
-                            <p className="text-xs text-bordo-200 font-mono">
-                              {perfil.numero_socio}
                             </p>
                           </div>
 
@@ -614,6 +567,13 @@ export default function MiCuentaPage() {
                           </Button>
                         </CardContent>
                       </Card>
+                    </motion.div>
+                  )}
+
+                  {/* Verificar socio */}
+                  {!perfil.es_socio && !perfil.socio_verificado && (
+                    <motion.div variants={fadeInUp} transition={springSmooth}>
+                      <VerificarSocio onVerified={fetchPerfil} />
                     </motion.div>
                   )}
 
@@ -680,9 +640,6 @@ export default function MiCuentaPage() {
                 <p className="font-heading font-bold text-lg">
                   {perfil.nombre} {perfil.apellido}
                 </p>
-                <p className="text-xs text-bordo-200 font-mono">
-                  {perfil.numero_socio}
-                </p>
               </div>
               {perfil.cedula && (
                 <p className="text-xs text-bordo-300">CI: {perfil.cedula}</p>
@@ -713,14 +670,6 @@ export default function MiCuentaPage() {
                   <Loader2 className="size-8 animate-spin text-dorado-400" />
                 </div>
               )}
-              <div className="flex items-center justify-center gap-1.5 pt-1">
-                <span
-                  className={`size-2 rounded-full ${estadoDot[perfil.estado_socio] ?? "bg-gray-400"}`}
-                />
-                <span className="text-xs uppercase tracking-wide">
-                  {perfil.estado_socio}
-                </span>
-              </div>
             </div>
           </div>
         </DialogContent>

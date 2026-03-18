@@ -11,11 +11,9 @@ import {
   X,
   Plus,
   Trash2,
-  CreditCard,
+  Link2,
   CheckCircle,
-  AlertTriangle,
   XCircle,
-  PauseCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,19 +35,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { fadeInUp, staggerContainer, springSmooth } from "@/lib/motion";
 
-interface PerfilDisciplina {
+interface PadronDisciplina {
   id: number;
   disciplina_id: number;
   categoria: string | null;
@@ -58,38 +48,27 @@ interface PerfilDisciplina {
   disciplinas: { id: number; nombre: string; slug: string } | null;
 }
 
-interface PagoSocio {
+interface PadronSocioData {
   id: number;
-  monto: number;
-  moneda: string;
-  periodo_mes: number;
-  periodo_anio: number;
-  metodo_pago: string;
-  referencia_pago: string | null;
-  notas: string | null;
-  created_at: string;
-}
-
-interface PerfilRol {
-  id: number;
-  rol_id: number;
-  roles: { id: number; nombre: string; descripcion: string | null } | null;
-}
-
-interface SocioData {
-  id: string;
   nombre: string;
   apellido: string;
-  cedula: string | null;
+  cedula: string;
   telefono: string | null;
   fecha_nacimiento: string | null;
-  numero_socio: string | null;
-  estado_socio: "activo" | "inactivo" | "moroso" | "suspendido";
-  fecha_alta_socio: string | null;
+  activo: boolean;
   notas: string | null;
-  perfil_disciplinas: PerfilDisciplina[];
-  pagos_socios: PagoSocio[];
-  perfil_roles: PerfilRol[];
+  perfil_id: string | null;
+  vinculado_at: string | null;
+  created_at: string;
+  padron_disciplinas: PadronDisciplina[];
+  perfiles: {
+    id: string;
+    nombre: string;
+    apellido: string;
+    avatar_url: string | null;
+    cedula: string | null;
+    telefono: string | null;
+  } | null;
 }
 
 interface Disciplina {
@@ -97,36 +76,22 @@ interface Disciplina {
   nombre: string;
 }
 
-const ESTADO_CONFIG = {
-  activo: { icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-50", label: "Activo" },
-  moroso: { icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50", label: "Moroso" },
-  inactivo: { icon: XCircle, color: "text-gray-500", bg: "bg-gray-100", label: "Inactivo" },
-  suspendido: { icon: PauseCircle, color: "text-red-600", bg: "bg-red-50", label: "Suspendido" },
-};
-
-const MESES = [
-  "Ene", "Feb", "Mar", "Abr", "May", "Jun",
-  "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
-];
-
 export default function FichaSocioPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [socio, setSocio] = useState<SocioData | null>(null);
+  const [socio, setSocio] = useState<PadronSocioData | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [editForm, setEditForm] = useState<Partial<SocioData>>({});
+  const [editForm, setEditForm] = useState<Partial<PadronSocioData>>({});
   const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
-  const [pagoDialogOpen, setPagoDialogOpen] = useState(false);
   const [addDisciplinaOpen, setAddDisciplinaOpen] = useState(false);
 
   const fetchSocio = useCallback(async () => {
     try {
-      const res = await fetch(`/api/socios/${id}`);
+      const res = await fetch(`/api/padron/${id}`);
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        console.error("Error al cargar socio:", res.status, errorData);
         if (res.status === 403) {
           toast.error("No tenés permisos para ver este socio");
         } else {
@@ -136,15 +101,14 @@ export default function FichaSocioPage() {
         return;
       }
       const { socio: data } = await res.json();
-      const socioData = data as SocioData;
-      setSocio(socioData);
+      setSocio(data as PadronSocioData);
       setEditForm({
-        nombre: socioData.nombre,
-        apellido: socioData.apellido,
-        cedula: socioData.cedula,
-        telefono: socioData.telefono,
-        fecha_nacimiento: socioData.fecha_nacimiento,
-        notas: socioData.notas,
+        nombre: data.nombre,
+        apellido: data.apellido,
+        cedula: data.cedula,
+        telefono: data.telefono,
+        fecha_nacimiento: data.fecha_nacimiento,
+        notas: data.notas,
       });
     } catch {
       toast.error("Error al cargar socio");
@@ -174,7 +138,7 @@ export default function FichaSocioPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`/api/socios/${id}`, {
+      const res = await fetch(`/api/padron/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editForm),
@@ -194,19 +158,20 @@ export default function FichaSocioPage() {
     }
   };
 
-  const handleEstadoChange = async (nuevoEstado: string | null) => {
-    if (!nuevoEstado) return;
+  const handleToggleActivo = async () => {
+    if (!socio) return;
+    const nuevoEstado = !socio.activo;
     try {
-      const res = await fetch(`/api/socios/${id}`, {
+      const res = await fetch(`/api/padron/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ estado_socio: nuevoEstado }),
+        body: JSON.stringify({ activo: nuevoEstado }),
       });
       if (!res.ok) {
         toast.error("Error al cambiar estado");
         return;
       }
-      toast.success(`Estado actualizado a ${nuevoEstado}`);
+      toast.success(`Socio ${nuevoEstado ? "activado" : "desactivado"}`);
       fetchSocio();
     } catch {
       toast.error("Error de conexión");
@@ -218,7 +183,7 @@ export default function FichaSocioPage() {
     categoria: string
   ) => {
     try {
-      const res = await fetch(`/api/socios/${id}/disciplinas`, {
+      const res = await fetch(`/api/padron/${id}/disciplinas`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ disciplina_id: disciplinaId, categoria }),
@@ -236,13 +201,12 @@ export default function FichaSocioPage() {
     }
   };
 
-  const handleRemoveDisciplina = async (perfilDisciplinaId: number) => {
+  const handleRemoveDisciplina = async (disciplinaId: number) => {
     try {
-      const res = await fetch(`/api/socios/${id}/disciplinas`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ perfil_disciplina_id: perfilDisciplinaId }),
-      });
+      const res = await fetch(
+        `/api/padron/${id}/disciplinas?disciplina_id=${disciplinaId}`,
+        { method: "DELETE" }
+      );
       if (!res.ok) {
         toast.error("Error al quitar disciplina");
         return;
@@ -263,13 +227,6 @@ export default function FichaSocioPage() {
       </div>
     );
   }
-
-  const estadoConfig = ESTADO_CONFIG[socio.estado_socio];
-  const EstadoIcon = estadoConfig.icon;
-  const sortedPagos = [...(socio.pagos_socios || [])].sort(
-    (a, b) =>
-      b.periodo_anio - a.periodo_anio || b.periodo_mes - a.periodo_mes
-  );
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -293,17 +250,19 @@ export default function FichaSocioPage() {
               {socio.nombre} {socio.apellido}
             </h1>
             <div className="flex items-center gap-3 mt-1">
-              {socio.numero_socio && (
-                <span className="font-body text-sm text-muted-foreground">
-                  {socio.numero_socio}
+              <Badge variant={socio.activo ? "default" : "secondary"}>
+                {socio.activo ? "Activo" : "Inactivo"}
+              </Badge>
+              {socio.perfil_id ? (
+                <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-body">
+                  <Link2 className="size-3.5" />
+                  Vinculado
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-body">
+                  Sin vincular
                 </span>
               )}
-              <div
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-body font-medium ${estadoConfig.bg} ${estadoConfig.color}`}
-              >
-                <EstadoIcon className="size-3.5" />
-                {estadoConfig.label}
-              </div>
             </div>
           </div>
           <button
@@ -429,19 +388,15 @@ export default function FichaSocioPage() {
                     label="Fecha de nacimiento"
                     value={
                       socio.fecha_nacimiento
-                        ? new Date(socio.fecha_nacimiento).toLocaleDateString(
-                            "es-UY"
-                          )
+                        ? new Date(socio.fecha_nacimiento).toLocaleDateString("es-UY")
                         : null
                     }
                   />
                   <InfoRow
                     label="Socio desde"
                     value={
-                      socio.fecha_alta_socio
-                        ? new Date(socio.fecha_alta_socio).toLocaleDateString(
-                            "es-UY"
-                          )
+                      socio.created_at
+                        ? new Date(socio.created_at).toLocaleDateString("es-UY")
                         : null
                     }
                   />
@@ -456,6 +411,37 @@ export default function FichaSocioPage() {
           </Card>
         </motion.div>
 
+        {/* Linked user info */}
+        {socio.perfiles && (
+          <motion.div variants={fadeInUp} transition={springSmooth}>
+            <Card className="border-linea border-emerald-200 bg-emerald-50/30">
+              <CardHeader>
+                <CardTitle className="font-heading text-sm uppercase tracking-editorial text-emerald-800">
+                  Usuario vinculado
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid sm:grid-cols-2 gap-y-3 gap-x-8">
+                  <InfoRow
+                    label="Nombre (cuenta)"
+                    value={`${socio.perfiles.nombre} ${socio.perfiles.apellido}`}
+                  />
+                  <InfoRow label="Cédula (cuenta)" value={socio.perfiles.cedula} />
+                  <InfoRow label="Teléfono (cuenta)" value={socio.perfiles.telefono} />
+                  <InfoRow
+                    label="Vinculado el"
+                    value={
+                      socio.vinculado_at
+                        ? new Date(socio.vinculado_at).toLocaleDateString("es-UY")
+                        : null
+                    }
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
         {/* Disciplinas */}
         <motion.div variants={fadeInUp} transition={springSmooth}>
           <Card className="border-linea">
@@ -467,21 +453,19 @@ export default function FichaSocioPage() {
                 open={addDisciplinaOpen}
                 onOpenChange={setAddDisciplinaOpen}
                 disciplinas={disciplinas}
-                existing={socio.perfil_disciplinas.map(
-                  (pd) => pd.disciplina_id
-                )}
+                existing={socio.padron_disciplinas.map((pd) => pd.disciplina_id)}
                 onAdd={handleAddDisciplina}
               />
             </CardHeader>
             <CardContent>
-              {socio.perfil_disciplinas.length === 0 ? (
+              {socio.padron_disciplinas.length === 0 ? (
                 <p className="font-body text-sm text-muted-foreground">
                   Sin disciplinas asignadas
                 </p>
               ) : (
                 <div className="space-y-2">
                   <AnimatePresence mode="popLayout">
-                    {socio.perfil_disciplinas.map((pd) => (
+                    {socio.padron_disciplinas.map((pd) => (
                       <motion.div
                         key={pd.id}
                         layout
@@ -501,7 +485,7 @@ export default function FichaSocioPage() {
                           )}
                         </div>
                         <button
-                          onClick={() => handleRemoveDisciplina(pd.id)}
+                          onClick={() => handleRemoveDisciplina(pd.disciplina_id)}
                           className="text-muted-foreground hover:text-red-500 transition-colors"
                         >
                           <Trash2 className="size-3.5" />
@@ -509,71 +493,6 @@ export default function FichaSocioPage() {
                       </motion.div>
                     ))}
                   </AnimatePresence>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Payment History */}
-        <motion.div variants={fadeInUp} transition={springSmooth}>
-          <Card className="border-linea">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="font-heading text-sm uppercase tracking-editorial">
-                Historial de Cuotas
-              </CardTitle>
-              <PagoDialog
-                open={pagoDialogOpen}
-                onOpenChange={setPagoDialogOpen}
-                socioId={id}
-                onSuccess={fetchSocio}
-              />
-            </CardHeader>
-            <CardContent>
-              {sortedPagos.length === 0 ? (
-                <p className="font-body text-sm text-muted-foreground">
-                  Sin pagos registrados
-                </p>
-              ) : (
-                <div className="rounded-lg border border-linea overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="hover:bg-transparent">
-                        <TableHead className="font-heading uppercase tracking-editorial text-[10px]">
-                          Período
-                        </TableHead>
-                        <TableHead className="font-heading uppercase tracking-editorial text-[10px]">
-                          Monto
-                        </TableHead>
-                        <TableHead className="font-heading uppercase tracking-editorial text-[10px] hidden sm:table-cell">
-                          Método
-                        </TableHead>
-                        <TableHead className="font-heading uppercase tracking-editorial text-[10px] hidden md:table-cell">
-                          Fecha
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {sortedPagos.map((pago) => (
-                        <TableRow key={pago.id}>
-                          <TableCell className="font-body text-sm">
-                            {MESES[pago.periodo_mes - 1]} {pago.periodo_anio}
-                          </TableCell>
-                          <TableCell className="font-body text-sm font-medium">
-                            ${pago.monto.toLocaleString("es-UY")}
-                          </TableCell>
-                          <TableCell className="font-body text-sm text-muted-foreground hidden sm:table-cell capitalize">
-                            {pago.metodo_pago}
-                          </TableCell>
-                          <TableCell className="font-body text-xs text-muted-foreground hidden md:table-cell">
-                            {new Date(pago.created_at).toLocaleDateString(
-                              "es-UY"
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
                 </div>
               )}
             </CardContent>
@@ -589,20 +508,26 @@ export default function FichaSocioPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-3">
-              <Select
-                value={socio.estado_socio}
-                onValueChange={handleEstadoChange}
+              <button
+                onClick={handleToggleActivo}
+                className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-body transition-colors ${
+                  socio.activo
+                    ? "border-red-200 text-red-600 hover:bg-red-50"
+                    : "border-emerald-200 text-emerald-600 hover:bg-emerald-50"
+                }`}
               >
-                <SelectTrigger className="w-[180px] font-body">
-                  <SelectValue placeholder="Cambiar estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="activo">Activo</SelectItem>
-                  <SelectItem value="moroso">Moroso</SelectItem>
-                  <SelectItem value="inactivo">Inactivo</SelectItem>
-                  <SelectItem value="suspendido">Suspendido</SelectItem>
-                </SelectContent>
-              </Select>
+                {socio.activo ? (
+                  <>
+                    <XCircle className="size-4" />
+                    Desactivar socio
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="size-4" />
+                    Reactivar socio
+                  </>
+                )}
+              </button>
               <button
                 onClick={async () => {
                   if (
@@ -611,7 +536,7 @@ export default function FichaSocioPage() {
                     )
                   )
                     return;
-                  const res = await fetch(`/api/socios/${id}`, {
+                  const res = await fetch(`/api/padron/${id}`, {
                     method: "DELETE",
                   });
                   if (res.ok) {
@@ -650,170 +575,6 @@ function InfoRow({
         {value || "—"}
       </dd>
     </div>
-  );
-}
-
-function PagoDialog({
-  open,
-  onOpenChange,
-  socioId,
-  onSuccess,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  socioId: string;
-  onSuccess: () => void;
-}) {
-  const [monto, setMonto] = useState("");
-  const [mes, setMes] = useState(String(new Date().getMonth() + 1));
-  const [anio, setAnio] = useState(String(new Date().getFullYear()));
-  const [metodo, setMetodo] = useState("efectivo");
-  const [referencia, setReferencia] = useState("");
-  const [notas, setNotas] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleSubmit = async () => {
-    if (!monto || parseFloat(monto) <= 0) {
-      toast.error("Ingresá un monto válido");
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const res = await fetch(`/api/socios/${socioId}/pagos`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          monto: parseFloat(monto),
-          periodo_mes: parseInt(mes),
-          periodo_anio: parseInt(anio),
-          metodo_pago: metodo,
-          referencia_pago: referencia || undefined,
-          notas: notas || undefined,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || "Error al registrar pago");
-        return;
-      }
-
-      toast.success("Pago registrado");
-      onOpenChange(false);
-      setMonto("");
-      setReferencia("");
-      setNotas("");
-      onSuccess();
-    } catch {
-      toast.error("Error de conexión");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger
-        render={
-          <button className="inline-flex items-center gap-1.5 rounded-lg bg-bordo-800 px-3 py-1.5 text-xs font-body font-medium text-white hover:bg-bordo-700 transition-colors">
-            <CreditCard className="size-3.5" />
-            Registrar pago
-          </button>
-        }
-      />
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="font-heading text-base uppercase tracking-editorial">
-            Registrar pago de cuota
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 pt-2">
-          <div className="space-y-1.5">
-            <Label className="font-body text-sm">Monto ($)</Label>
-            <Input
-              type="number"
-              value={monto}
-              onChange={(e) => setMonto(e.target.value)}
-              placeholder="480"
-              className="font-body"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="font-body text-sm">Mes</Label>
-              <Select value={mes} onValueChange={(v) => v && setMes(v)}>
-                <SelectTrigger className="font-body">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MESES.map((m, i) => (
-                    <SelectItem key={i} value={String(i + 1)}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="font-body text-sm">Año</Label>
-              <Select value={anio} onValueChange={(v) => v && setAnio(v)}>
-                <SelectTrigger className="font-body">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[2024, 2025, 2026, 2027].map((y) => (
-                    <SelectItem key={y} value={String(y)}>
-                      {y}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="font-body text-sm">Método de pago</Label>
-            <Select value={metodo} onValueChange={(v) => v && setMetodo(v)}>
-              <SelectTrigger className="font-body">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="efectivo">Efectivo</SelectItem>
-                <SelectItem value="transferencia">Transferencia</SelectItem>
-                <SelectItem value="mercadopago">MercadoPago</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="font-body text-sm">
-              Referencia (opcional)
-            </Label>
-            <Input
-              value={referencia}
-              onChange={(e) => setReferencia(e.target.value)}
-              placeholder="Nro de transferencia..."
-              className="font-body"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="font-body text-sm">Notas (opcional)</Label>
-            <Textarea
-              value={notas}
-              onChange={(e) => setNotas(e.target.value)}
-              className="font-body"
-              rows={2}
-            />
-          </div>
-          <button
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-bordo-800 px-4 py-2.5 text-sm font-body font-medium text-white hover:bg-bordo-700 transition-colors disabled:opacity-50"
-          >
-            {submitting ? "Registrando..." : "Registrar pago"}
-          </button>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }
 
