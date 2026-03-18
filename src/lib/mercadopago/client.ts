@@ -8,7 +8,7 @@ export const APP_URL =
 
 // --- Types ---
 
-interface MercadoPagoItem {
+export interface MercadoPagoItem {
   id: string;
   title: string;
   description?: string;
@@ -17,7 +17,7 @@ interface MercadoPagoItem {
   unit_price: number;
 }
 
-interface MercadoPagoPayer {
+export interface MercadoPagoPayer {
   email: string;
   name?: string;
   surname?: string;
@@ -32,16 +32,16 @@ interface MercadoPagoPayer {
   };
 }
 
-interface CreatePreferenceParams {
+export interface CreatePreferenceParams {
   items: MercadoPagoItem[];
-  payer?: MercadoPagoPayer;
+  payer: MercadoPagoPayer;
   external_reference: string;
-  back_urls?: {
+  back_urls: {
     success: string;
     failure: string;
-    pending?: string;
+    pending: string;
   };
-  notification_url?: string;
+  notification_url: string;
   auto_return?: "approved" | "all";
   statement_descriptor?: string;
 }
@@ -86,37 +86,20 @@ export interface MercadoPagoPayment {
 export async function createPreference(
   params: CreatePreferenceParams
 ): Promise<MercadoPagoPreference> {
-  const isLocal =
-    APP_URL.includes("localhost") || APP_URL.includes("127.0.0.1");
-
-  // En localhost, MP no puede alcanzar las URLs — omitirlas para evitar errores
-  const { notification_url, back_urls, ...rest } = params;
-
-  const body: Record<string, unknown> = {
-    ...rest,
-    statement_descriptor: params.statement_descriptor || "CLUB SEMINARIO",
-    payment_methods: {
-      installments: 1,
-    },
-  };
-
-  // En localhost MP no puede alcanzar las URLs — omitir todo
-  // auto_return requiere back_urls, así que también se omite
-  if (!isLocal) {
-    if (back_urls) {
-      body.back_urls = back_urls;
-      body.auto_return = params.auto_return || "approved";
-    }
-    if (notification_url) body.notification_url = notification_url;
-  }
-
   const response = await fetch(`${MERCADOPAGO_API_URL}/checkout/preferences`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${MERCADOPAGO_ACCESS_TOKEN}`,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      ...params,
+      auto_return: params.auto_return || "approved",
+      statement_descriptor: params.statement_descriptor || "CLUB SEMINARIO",
+      payment_methods: {
+        installments: 1,
+      },
+    }),
   });
 
   if (!response.ok) {
@@ -149,28 +132,25 @@ export async function getPayment(
   return response.json();
 }
 
-// --- Helper Functions ---
+// --- Helpers ---
 
-/**
- * Determina si estamos en modo sandbox.
- */
 export function isSandbox(): boolean {
   if (process.env.MERCADOPAGO_SANDBOX === "true") return true;
   return APP_URL.includes("localhost") || APP_URL.includes("127.0.0.1");
 }
 
-/**
- * Devuelve la URL de checkout correcta según el entorno.
- */
 export function getCheckoutUrl(preference: MercadoPagoPreference): string {
-  if (isSandbox()) {
-    return preference.sandbox_init_point || preference.init_point || "";
-  }
-  return preference.init_point || "";
+  return isSandbox()
+    ? preference.sandbox_init_point || preference.init_point
+    : preference.init_point;
 }
 
 export function isPaymentApproved(payment: MercadoPagoPayment): boolean {
   return payment.status === "approved";
+}
+
+export function isPaymentPending(payment: MercadoPagoPayment): boolean {
+  return payment.status === "pending" || payment.status === "in_process";
 }
 
 export function isPaymentRejected(payment: MercadoPagoPayment): boolean {

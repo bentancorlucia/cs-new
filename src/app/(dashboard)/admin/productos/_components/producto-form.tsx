@@ -20,6 +20,9 @@ import {
   Info,
   Check,
   AlertCircle,
+  Truck,
+  Plus,
+  Layers,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -45,6 +48,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { createBrowserClient } from "@/lib/supabase/client";
+import { VariantesSection } from "./variantes-section";
 import {
   fadeInUp,
   fadeInLeft,
@@ -60,6 +64,15 @@ import Image from "next/image";
 
 // --- Schema ---
 
+const UNIDADES = [
+  { value: "un", label: "Unidad (un)" },
+  { value: "kg", label: "Kilogramo (kg)" },
+  { value: "lt", label: "Litro (lt)" },
+  { value: "mt", label: "Metro (mt)" },
+  { value: "par", label: "Par" },
+  { value: "docena", label: "Docena" },
+] as const;
+
 const schema = z.object({
   nombre: z.string().min(1, "Nombre requerido").max(200),
   slug: z.string().min(1, "Slug requerido").max(200),
@@ -71,6 +84,7 @@ const schema = z.object({
   sku: z.string().max(50).optional(),
   stock_actual: z.string(),
   stock_minimo: z.string(),
+  unidad: z.string().default("un"),
   activo: z.boolean(),
   destacado: z.boolean(),
 });
@@ -90,6 +104,20 @@ interface ProductoImagen {
   alt_text: string | null;
   orden: number;
   es_principal: boolean;
+}
+
+interface Proveedor {
+  id: number;
+  nombre: string;
+}
+
+interface ProductoProveedor {
+  id?: number;
+  proveedor_id: number;
+  costo: number | null;
+  codigo_proveedor: string | null;
+  es_principal: boolean;
+  proveedores?: { id: number; nombre: string };
 }
 
 interface Props {
@@ -461,6 +489,236 @@ function ImageUploader({
   );
 }
 
+// --- Proveedores section ---
+
+function ProveedoresSection({
+  productoId,
+  initialProveedores,
+  onChange,
+}: {
+  productoId?: number;
+  initialProveedores: ProductoProveedor[];
+  onChange?: (proveedores: ProductoProveedor[]) => void;
+}) {
+  const [proveedoresProducto, setProveedoresProducto] = useState<ProductoProveedor[]>(initialProveedores);
+  const [allProveedores, setAllProveedores] = useState<Proveedor[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  const isLocal = !productoId;
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createBrowserClient();
+      const { data } = await supabase
+        .from("proveedores")
+        .select("id, nombre")
+        .eq("activo", true)
+        .order("nombre");
+      if (data) setAllProveedores(data);
+    }
+    load();
+  }, []);
+
+  const setAndNotify = (updater: (prev: ProductoProveedor[]) => ProductoProveedor[]) => {
+    setProveedoresProducto((prev) => {
+      const next = updater(prev);
+      if (isLocal && onChange) onChange(next);
+      return next;
+    });
+  };
+
+  const addRow = () => {
+    setAndNotify((prev) => [
+      ...prev,
+      { proveedor_id: 0, costo: null, codigo_proveedor: null, es_principal: prev.length === 0 },
+    ]);
+  };
+
+  const removeRow = (index: number) => {
+    setAndNotify((prev) => {
+      const updated = prev.filter((_, i) => i !== index);
+      if (updated.length > 0 && !updated.some((p) => p.es_principal)) {
+        updated[0].es_principal = true;
+      }
+      return updated;
+    });
+  };
+
+  const updateRow = (index: number, field: keyof ProductoProveedor, value: any) => {
+    setAndNotify((prev) =>
+      prev.map((row, i) => {
+        if (i !== index) {
+          if (field === "es_principal" && value === true) {
+            return { ...row, es_principal: false };
+          }
+          return row;
+        }
+        return { ...row, [field]: value };
+      })
+    );
+  };
+
+  const handleSave = async () => {
+    const valid = proveedoresProducto.filter((p) => p.proveedor_id > 0);
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/productos/${productoId}/proveedores`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          proveedores: valid.map((p) => ({
+            proveedor_id: p.proveedor_id,
+            costo: p.costo,
+            codigo_proveedor: p.codigo_proveedor,
+            es_principal: p.es_principal,
+          })),
+        }),
+      });
+      if (!res.ok) throw new Error("Error al guardar proveedores");
+      const { data } = await res.json();
+      setProveedoresProducto(data);
+      toast.success("Proveedores actualizados");
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Filter out already-assigned proveedores
+  const usedIds = new Set(proveedoresProducto.map((p) => p.proveedor_id));
+
+  return (
+    <div className="space-y-3">
+      <AnimatePresence mode="popLayout">
+        {proveedoresProducto.map((row, index) => (
+          <motion.div
+            key={`prov-${index}`}
+            layout
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8, transition: { duration: 0.15 } }}
+            transition={springSmooth}
+            className={`rounded-xl border p-3 space-y-3 ${
+              row.es_principal ? "border-primary/30 bg-primary/5" : "border-border/50"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <Select
+                  value={row.proveedor_id > 0 ? row.proveedor_id.toString() : ""}
+                  onValueChange={(v) => updateRow(index, "proveedor_id", parseInt(v))}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Seleccionar proveedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allProveedores
+                      .filter((p) => !usedIds.has(p.id) || p.id === row.proveedor_id)
+                      .map((p) => (
+                        <SelectItem key={p.id} value={p.id.toString()}>
+                          {p.nombre}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeRow(index)}
+                className="flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-[11px] text-muted-foreground">Costo</Label>
+                <div className="relative mt-0.5">
+                  <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                    $
+                  </span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={row.costo ?? ""}
+                    onChange={(e) =>
+                      updateRow(index, "costo", e.target.value ? parseFloat(e.target.value) : null)
+                    }
+                    placeholder="0.00"
+                    className="h-8 pl-5 text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label className="text-[11px] text-muted-foreground">Código proveedor</Label>
+                <Input
+                  value={row.codigo_proveedor || ""}
+                  onChange={(e) => updateRow(index, "codigo_proveedor", e.target.value || null)}
+                  placeholder="Código"
+                  className="mt-0.5 h-8 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => updateRow(index, "es_principal", true)}
+                className={`flex items-center gap-1.5 text-xs transition-colors ${
+                  row.es_principal
+                    ? "text-primary font-medium"
+                    : "text-muted-foreground hover:text-primary"
+                }`}
+              >
+                <Star className={`size-3 ${row.es_principal ? "fill-primary" : ""}`} />
+                {row.es_principal ? "Principal" : "Hacer principal"}
+              </button>
+            </div>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+
+      <div className="flex items-center gap-2">
+        <motion.button
+          type="button"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={addRow}
+          className="flex items-center gap-1.5 rounded-lg border border-dashed border-border/60 px-3 py-1.5 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
+        >
+          <Plus className="size-3" />
+          Agregar proveedor
+        </motion.button>
+
+        {!isLocal && proveedoresProducto.length > 0 && (
+          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleSave}
+              disabled={saving}
+              className="h-7 text-xs"
+            >
+              {saving ? <Loader2 className="size-3 animate-spin mr-1" /> : <Save className="size-3 mr-1" />}
+              Guardar proveedores
+            </Button>
+          </motion.div>
+        )}
+      </div>
+
+      {proveedoresProducto.length === 0 && (
+        <p className="text-center text-xs text-muted-foreground py-2">
+          Sin proveedores asignados
+        </p>
+      )}
+    </div>
+  );
+}
+
 // --- Main form ---
 
 export function ProductoForm({ producto }: Props) {
@@ -469,6 +727,7 @@ export function ProductoForm({ producto }: Props) {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [newProveedores, setNewProveedores] = useState<ProductoProveedor[]>([]);
 
   const {
     register,
@@ -489,6 +748,7 @@ export function ProductoForm({ producto }: Props) {
       sku: producto?.sku || "",
       stock_actual: producto?.stock_actual?.toString() || "0",
       stock_minimo: producto?.stock_minimo?.toString() || "5",
+      unidad: producto?.unidad || "un",
       activo: producto?.activo ?? true,
       destacado: producto?.destacado ?? false,
     },
@@ -500,6 +760,7 @@ export function ProductoForm({ producto }: Props) {
   const precio = watch("precio");
   const precioSocio = watch("precio_socio");
   const categoriaId = watch("categoria_id");
+  const unidad = watch("unidad");
 
   // Auto-generate slug from name (shouldDirty: false to avoid re-render cascade)
   useEffect(() => {
@@ -537,6 +798,7 @@ export function ProductoForm({ producto }: Props) {
         sku: data.sku || null,
         stock_actual: parseInt(data.stock_actual),
         stock_minimo: parseInt(data.stock_minimo),
+        unidad: data.unidad,
         activo: data.activo,
         destacado: data.destacado,
       };
@@ -558,6 +820,25 @@ export function ProductoForm({ producto }: Props) {
       }
 
       const result = await res.json();
+
+      // Save proveedores for new product
+      if (!isEdit && newProveedores.length > 0) {
+        const validProveedores = newProveedores.filter((p) => p.proveedor_id > 0);
+        if (validProveedores.length > 0) {
+          await fetch(`/api/admin/productos/${result.data.id}/proveedores`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              proveedores: validProveedores.map((p) => ({
+                proveedor_id: p.proveedor_id,
+                costo: p.costo,
+                codigo_proveedor: p.codigo_proveedor,
+                es_principal: p.es_principal,
+              })),
+            }),
+          });
+        }
+      }
 
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -872,7 +1153,7 @@ export function ProductoForm({ producto }: Props) {
 
               <Separator className="opacity-50" />
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-3">
                 <div>
                   <Label htmlFor="stock_actual">Stock actual</Label>
                   <Input
@@ -910,9 +1191,60 @@ export function ProductoForm({ producto }: Props) {
                     className="mt-1.5"
                   />
                 </div>
+
+                <div>
+                  <Label>Unidad</Label>
+                  <Select
+                    value={unidad || "un"}
+                    onValueChange={(v) =>
+                      setValue("unidad", v, { shouldDirty: true })
+                    }
+                  >
+                    <SelectTrigger className="mt-1.5">
+                      <SelectValue placeholder="Unidad" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {UNIDADES.map((u) => (
+                        <SelectItem key={u.value} value={u.value}>
+                          {u.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </FormSection>
+
+          {/* Proveedores */}
+          <FormSection
+            icon={Truck}
+            title="Proveedores"
+            description="Proveedores que suministran este producto"
+            delay={0.15}
+          >
+            <ProveedoresSection
+              productoId={isEdit ? producto.id : undefined}
+              initialProveedores={isEdit ? (producto.producto_proveedores || []) : []}
+              onChange={!isEdit ? setNewProveedores : undefined}
+            />
+          </FormSection>
+
+          {/* Variantes */}
+          {isEdit && (
+            <FormSection
+              icon={Layers}
+              title="Variantes"
+              description="Talles, colores y combinaciones con stock individual"
+              delay={0.2}
+            >
+              <VariantesSection
+                productoId={producto.id}
+                productoSku={producto.sku}
+                initialVariantes={producto.producto_variantes || []}
+              />
+            </FormSection>
+          )}
         </div>
 
         {/* RIGHT — Sidebar */}

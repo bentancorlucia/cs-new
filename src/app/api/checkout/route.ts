@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
-import { createPreference, getCheckoutUrl, APP_URL } from "@/lib/mercadopago/client";
+import {
+  createPreference,
+  getCheckoutUrl,
+  APP_URL,
+} from "@/lib/mercadopago/client";
 import { z } from "zod";
 
 const checkoutItemSchema = z.object({
@@ -18,10 +22,9 @@ const checkoutSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerClient();
-    // Cast for admin operations (typed DB causes 'never' on insert/update)
     const db = supabase as any;
 
-    // 1. Verificar autenticación
+    // 1. Auth
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -33,7 +36,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Validar body
+    // 2. Validate body
     const body = await request.json();
     const parsed = checkoutSchema.safeParse(body);
 
@@ -46,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     const { items, notas } = parsed.data;
 
-    // 3. Obtener perfil del usuario (para precio socio)
+    // 3. Get user profile (for socio pricing)
     const { data: perfil } = await db
       .from("perfiles")
       .select("es_socio, nombre, apellido, telefono")
@@ -62,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     const esSocio = perfil.es_socio === true;
 
-    // 4. Validar stock y calcular precios
+    // 4. Validate stock and calculate prices
     const itemsConPrecio: {
       productoId: number;
       varianteId?: number;
@@ -144,14 +147,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 5. Calcular totales
+    // 5. Calculate totals
     const subtotal = itemsConPrecio.reduce(
       (sum, i) => sum + i.precioUnitario * i.cantidad,
       0
     );
     const total = subtotal;
 
-    // 6. Crear pedido en DB
+    // 6. Create order
     const { data: pedido, error: pedidoError } = await db
       .from("pedidos")
       .insert({
@@ -177,7 +180,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 7. Crear items del pedido
+    // 7. Create order items
     const pedidoItems = itemsConPrecio.map((item) => ({
       pedido_id: pedido.id,
       producto_id: item.productoId,
@@ -200,31 +203,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 8. Crear preferencia de MercadoPago
-    const preference = await createPreference({
-      items: itemsConPrecio.map((item) => ({
-        id: String(item.productoId),
-        title: item.nombre,
-        quantity: item.cantidad,
-        unit_price: item.precioUnitario,
-        currency_id: "UYU",
-      })),
-      external_reference: pedido.numero_pedido,
-      payer: {
-        email: user.email || "",
-        name: perfil.nombre,
-        surname: perfil.apellido,
-      },
-      back_urls: {
-        success: `${APP_URL}/tienda/pedido/${pedido.id}?status=approved`,
-        failure: `${APP_URL}/tienda/pedido/${pedido.id}?status=failure`,
-        pending: `${APP_URL}/tienda/pedido/${pedido.id}?status=pending`,
-      },
-      notification_url: `${APP_URL}/api/webhooks/mercadopago`,
-      statement_descriptor: "Club Seminario",
-    });
+    // 8. Create MercadoPago preference
+    let preference;
+    try {
+      preference = await createPreference({
+        items: itemsConPrecio.map((item) => ({
+          id: String(item.productoId),
+          title: item.nombre,
+          quantity: item.cantidad,
+          unit_price: item.precioUnitario,
+          currency_id: "UYU",
+        })),
+        external_reference: pedido.numero_pedido,
+        payer: {
+          email: user.email || "",
+          name: perfil.nombre,
+          surname: perfil.apellido,
+        },
+        back_urls: {
+          success: `${APP_URL}/tienda/pedido/${pedido.id}?status=approved`,
+          failure: `${APP_URL}/tienda/pedido/${pedido.id}?status=failure`,
+          pending: `${APP_URL}/tienda/pedido/${pedido.id}?status=pending`,
+        },
+        notification_url: `${APP_URL}/api/webhooks/mercadopago`,
+        statement_descriptor: "CLUB SEMINARIO",
+      });
+    } catch (mpError: any) {
+      console.error("MercadoPago error:", mpError?.message);
+      // Don't delete order — it stays as pendiente, user can retry
+      return NextResponse.json(
+        { error: "Error al conectar con MercadoPago. Intentá de nuevo." },
+        { status: 502 }
+      );
+    }
 
-    // 9. Guardar preference_id en el pedido
+    // 9. Save preference_id on order
     await db
       .from("pedidos")
       .update({ mercadopago_preference_id: preference.id })

@@ -5,23 +5,14 @@ import { z } from "zod";
 
 const TIENDA_ROLES = ["super_admin", "tienda"];
 
-const productoUpdateSchema = z.object({
+const updateSchema = z.object({
   nombre: z.string().min(1).max(200).optional(),
-  slug: z.string().min(1).max(200).optional(),
   descripcion: z.string().optional().nullable(),
-  descripcion_corta: z.string().max(300).optional().nullable(),
-  categoria_id: z.number().positive().optional().nullable(),
-  precio: z.number().positive().optional(),
-  precio_socio: z.number().positive().optional().nullable(),
-  sku: z.string().max(50).optional().nullable(),
-  stock_actual: z.number().int().min(0).optional(),
-  stock_minimo: z.number().int().min(0).optional(),
+  ubicacion: z.string().max(200).optional().nullable(),
   activo: z.boolean().optional(),
-  destacado: z.boolean().optional(),
-  unidad: z.enum(["un", "kg", "lt", "mt", "par", "docena"]).optional(),
 });
 
-// GET /api/admin/productos/[id]
+// GET /api/admin/depositos/[id]
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -32,16 +23,8 @@ export async function GET(
     const supabase = await createServerClient();
 
     const { data, error } = await supabase
-      .from("productos")
-      .select(
-        `
-        *,
-        categorias_producto(id, nombre, slug),
-        producto_imagenes(id, url, alt_text, orden, es_principal),
-        producto_variantes(id, nombre, sku, precio_override, stock_actual, atributos, activo),
-        producto_proveedores(id, proveedor_id, costo, codigo_proveedor, es_principal, proveedores(id, nombre))
-      `
-      )
+      .from("depositos")
+      .select("*")
       .eq("id", parseInt(id))
       .single();
 
@@ -58,7 +41,7 @@ export async function GET(
   }
 }
 
-// PUT /api/admin/productos/[id]
+// PUT /api/admin/depositos/[id]
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -68,17 +51,16 @@ export async function PUT(
     const { id } = await params;
     const supabase = await createServerClient();
     const body = await request.json();
-    const parsed = productoUpdateSchema.parse(body);
+    const parsed = updateSchema.parse(body);
 
     const { data, error } = await (supabase as any)
-      .from("productos")
-      .update({ ...parsed, updated_at: new Date().toISOString() })
+      .from("depositos")
+      .update(parsed)
       .eq("id", parseInt(id))
       .select()
       .single();
 
     if (error) throw error;
-
     return NextResponse.json({ data });
   } catch (error: any) {
     if (error.message === "No autorizado") {
@@ -89,32 +71,6 @@ export async function PUT(
         { error: "Datos inválidos", details: error.issues },
         { status: 400 }
       );
-    }
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
-
-// DELETE /api/admin/productos/[id]
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    await requireRole(TIENDA_ROLES);
-    const { id } = await params;
-    const supabase = await createServerClient();
-
-    const { error } = await supabase
-      .from("productos")
-      .delete()
-      .eq("id", parseInt(id));
-
-    if (error) throw error;
-
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    if (error.message === "No autorizado") {
-      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

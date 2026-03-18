@@ -150,7 +150,7 @@ export default function CuentasFinancierasPage() {
       const res = await fetch("/api/tesoreria/cuentas");
       if (!res.ok) throw new Error("Error al cargar cuentas");
       const data = await res.json();
-      setCuentas(data.cuentas || []);
+      setCuentas(data.data || []);
     } catch {
       toast.error("Error al cargar las cuentas");
     } finally {
@@ -192,12 +192,11 @@ export default function CuentasFinancierasPage() {
 
     setSubmitting(true);
     try {
-      const url = editingId
-        ? `/api/tesoreria/cuentas/${editingId}`
-        : "/api/tesoreria/cuentas";
+      const url = "/api/tesoreria/cuentas";
       const method = editingId ? "PUT" : "POST";
 
       const body = {
+        ...(editingId ? { id: editingId } : {}),
         nombre: form.nombre.trim(),
         tipo: form.tipo,
         moneda: form.moneda,
@@ -235,10 +234,10 @@ export default function CuentasFinancierasPage() {
 
   async function handleToggleActiva(cuenta: CuentaFinanciera) {
     try {
-      const res = await fetch(`/api/tesoreria/cuentas/${cuenta.id}`, {
+      const res = await fetch("/api/tesoreria/cuentas", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ activa: !cuenta.activa }),
+        body: JSON.stringify({ id: cuenta.id, activa: !cuenta.activa }),
       });
 
       if (!res.ok) {

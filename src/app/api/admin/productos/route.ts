@@ -18,6 +18,7 @@ const productoSchema = z.object({
   stock_minimo: z.number().int().min(0).default(5),
   activo: z.boolean().default(true),
   destacado: z.boolean().default(false),
+  unidad: z.enum(["un", "kg", "lt", "mt", "par", "docena"]).default("un"),
 });
 
 // GET /api/admin/productos — listar todos los productos para admin

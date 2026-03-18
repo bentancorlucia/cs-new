@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
-import { createPreference, getCheckoutUrl, APP_URL } from "@/lib/mercadopago/client";
+import {
+  createPreference,
+  getCheckoutUrl,
+  APP_URL,
+} from "@/lib/mercadopago/client";
 import { z } from "zod";
 
 const compraEntradaSchema = z.object({
@@ -42,17 +46,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { evento_id, tipo_entrada_id, lote_id, cantidad, nombre_asistente, cedula_asistente, email_asistente } = parsed.data;
+    const {
+      evento_id,
+      tipo_entrada_id,
+      lote_id,
+      cantidad,
+      nombre_asistente,
+      cedula_asistente,
+      email_asistente,
+    } = parsed.data;
 
-    // 3. Validate event exists and is published
+    // 3. Validate event
     const { data: evento } = await db
       .from("eventos")
       .select("id, titulo, slug, estado, capacidad_total, es_gratuito")
       .eq("id", evento_id)
       .single();
 
-    if (!evento || evento.estado === "cancelado" || evento.estado === "finalizado") {
-      return NextResponse.json({ error: "Evento no disponible" }, { status: 400 });
+    if (
+      !evento ||
+      evento.estado === "cancelado" ||
+      evento.estado === "finalizado"
+    ) {
+      return NextResponse.json(
+        { error: "Evento no disponible" },
+        { status: 400 }
+      );
     }
 
     // 4. Validate ticket type
@@ -65,7 +84,10 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (!tipoEntrada) {
-      return NextResponse.json({ error: "Tipo de entrada no disponible" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Tipo de entrada no disponible" },
+        { status: 400 }
+      );
     }
 
     // Check socios-only restriction
@@ -93,13 +115,18 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (!lote || lote.estado !== "activo") {
-      return NextResponse.json({ error: "Lote no disponible" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Lote no disponible" },
+        { status: 400 }
+      );
     }
 
     const disponibles = lote.cantidad - lote.vendidas;
     if (cantidad > disponibles) {
       return NextResponse.json(
-        { error: `Solo quedan ${disponibles} entradas disponibles en este lote` },
+        {
+          error: `Solo quedan ${disponibles} entradas disponibles en este lote`,
+        },
         { status: 400 }
       );
     }
@@ -113,14 +140,16 @@ export async function POST(request: NextRequest) {
         .in("estado", ["pagada", "usada", "pendiente"]);
 
       if ((totalVendidas || 0) + cantidad > evento.capacidad_total) {
-        return NextResponse.json({ error: "No hay suficiente capacidad para este evento" }, { status: 400 });
+        return NextResponse.json(
+          { error: "No hay suficiente capacidad para este evento" },
+          { status: 400 }
+        );
       }
     }
 
     const precioUnitario = Number(lote.precio);
-    const totalPago = precioUnitario * cantidad;
 
-    // 7. Create entries (pending payment)
+    // 7. Create entries
     const entradasToInsert = Array.from({ length: cantidad }, () => ({
       evento_id,
       tipo_entrada_id,
@@ -129,7 +158,7 @@ export async function POST(request: NextRequest) {
       nombre_asistente,
       cedula_asistente: cedula_asistente || null,
       email_asistente,
-      precio_pagado: Number(precioUnitario),
+      precio_pagado: precioUnitario,
       estado: evento.es_gratuito ? "pagada" : "pendiente",
       metodo_pago: evento.es_gratuito ? "cortesia" : "mercadopago",
     }));
@@ -141,34 +170,39 @@ export async function POST(request: NextRequest) {
 
     if (entradasError || !entradas || entradas.length === 0) {
       console.error("Error al crear entradas:", entradasError);
-      return NextResponse.json({ error: "Error al crear las entradas" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Error al crear las entradas" },
+        { status: 500 }
+      );
     }
 
     // 8. Update lot sold count
+    const nuevasVendidas = lote.vendidas + cantidad;
     await db
       .from("lotes_entrada")
-      .update({ vendidas: lote.vendidas + cantidad })
+      .update({
+        vendidas: nuevasVendidas,
+        estado: nuevasVendidas >= lote.cantidad ? "agotado" : "activo",
+      })
       .eq("id", lote_id);
 
-    // Check if lot is now sold out
-    if (lote.vendidas + cantidad >= lote.cantidad) {
-      await db
-        .from("lotes_entrada")
-        .update({ estado: "agotado" })
-        .eq("id", lote_id);
-    }
+    const entradaIds = entradas.map((e: any) => e.id);
 
     // 9. If free event, return directly
     if (evento.es_gratuito) {
       return NextResponse.json({
-        entrada_ids: entradas.map((e: any) => e.id),
+        entrada_ids: entradaIds,
         gratuito: true,
       });
     }
 
     // 10. Create MercadoPago preference
-    const entradaIds = entradas.map((e: any) => e.id);
-    const externalReference = `EVT-${evento_id}-${entradaIds.join(",")}`;
+    const externalReference = JSON.stringify({
+      type: "entradas",
+      entradas_ids: entradaIds,
+      evento_id,
+    });
+
     let preference;
     try {
       preference = await createPreference({
@@ -183,8 +217,8 @@ export async function POST(request: NextRequest) {
         ],
         external_reference: externalReference,
         payer: {
-          name: nombre_asistente,
           email: email_asistente,
+          name: nombre_asistente,
         },
         back_urls: {
           success: `${APP_URL}/eventos/${evento.slug}?compra=exitosa`,
@@ -192,22 +226,14 @@ export async function POST(request: NextRequest) {
           pending: `${APP_URL}/eventos/${evento.slug}?compra=pendiente`,
         },
         notification_url: `${APP_URL}/api/webhooks/mercadopago`,
-        statement_descriptor: "Club Seminario",
+        statement_descriptor: "CLUB SEMINARIO",
       });
     } catch (mpError: any) {
-      console.error("MercadoPago error:", mpError?.message, mpError?.cause || "");
+      console.error("MercadoPago error:", mpError?.message);
       return NextResponse.json(
         { error: "Error al conectar con MercadoPago. Intentá de nuevo." },
         { status: 502 }
       );
-    }
-
-    // 11. Save MP preference ids on entries
-    for (const entrada of entradas) {
-      await db
-        .from("entradas")
-        .update({ mercadopago_payment_id: preference.id })
-        .eq("id", entrada.id);
     }
 
     return NextResponse.json({
@@ -217,6 +243,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Error en /api/eventos/comprar:", error);
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Error interno del servidor" },
+      { status: 500 }
+    );
   }
 }

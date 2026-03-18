@@ -5,23 +5,13 @@ import { z } from "zod";
 
 const TIENDA_ROLES = ["super_admin", "tienda"];
 
-const productoUpdateSchema = z.object({
+const updateSchema = z.object({
   nombre: z.string().min(1).max(200).optional(),
-  slug: z.string().min(1).max(200).optional(),
   descripcion: z.string().optional().nullable(),
-  descripcion_corta: z.string().max(300).optional().nullable(),
-  categoria_id: z.number().positive().optional().nullable(),
-  precio: z.number().positive().optional(),
-  precio_socio: z.number().positive().optional().nullable(),
-  sku: z.string().max(50).optional().nullable(),
-  stock_actual: z.number().int().min(0).optional(),
-  stock_minimo: z.number().int().min(0).optional(),
-  activo: z.boolean().optional(),
-  destacado: z.boolean().optional(),
-  unidad: z.enum(["un", "kg", "lt", "mt", "par", "docena"]).optional(),
+  activa: z.boolean().optional(),
 });
 
-// GET /api/admin/productos/[id]
+// GET /api/admin/listas-precio/[id]
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -32,21 +22,17 @@ export async function GET(
     const supabase = await createServerClient();
 
     const { data, error } = await supabase
-      .from("productos")
-      .select(
-        `
+      .from("listas_precio")
+      .select(`
         *,
-        categorias_producto(id, nombre, slug),
-        producto_imagenes(id, url, alt_text, orden, es_principal),
-        producto_variantes(id, nombre, sku, precio_override, stock_actual, atributos, activo),
-        producto_proveedores(id, proveedor_id, costo, codigo_proveedor, es_principal, proveedores(id, nombre))
-      `
-      )
+        lista_precio_items(id, producto_id, variante_id, precio, productos(id, nombre, sku, precio), producto_variantes(id, nombre)),
+        lista_precio_disciplinas(id, disciplina_id, disciplinas(id, nombre))
+      `)
       .eq("id", parseInt(id))
       .single();
 
     if (error || !data) {
-      return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+      return NextResponse.json({ error: "No encontrada" }, { status: 404 });
     }
 
     return NextResponse.json({ data });
@@ -58,7 +44,7 @@ export async function GET(
   }
 }
 
-// PUT /api/admin/productos/[id]
+// PUT /api/admin/listas-precio/[id]
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -68,17 +54,16 @@ export async function PUT(
     const { id } = await params;
     const supabase = await createServerClient();
     const body = await request.json();
-    const parsed = productoUpdateSchema.parse(body);
+    const parsed = updateSchema.parse(body);
 
     const { data, error } = await (supabase as any)
-      .from("productos")
+      .from("listas_precio")
       .update({ ...parsed, updated_at: new Date().toISOString() })
       .eq("id", parseInt(id))
       .select()
       .single();
 
     if (error) throw error;
-
     return NextResponse.json({ data });
   } catch (error: any) {
     if (error.message === "No autorizado") {
@@ -94,7 +79,7 @@ export async function PUT(
   }
 }
 
-// DELETE /api/admin/productos/[id]
+// DELETE /api/admin/listas-precio/[id]
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -105,12 +90,11 @@ export async function DELETE(
     const supabase = await createServerClient();
 
     const { error } = await supabase
-      .from("productos")
+      .from("listas_precio")
       .delete()
       .eq("id", parseInt(id));
 
     if (error) throw error;
-
     return NextResponse.json({ success: true });
   } catch (error: any) {
     if (error.message === "No autorizado") {

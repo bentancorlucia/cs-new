@@ -17,6 +17,8 @@ import {
   Check,
   Loader2,
   ArrowLeft,
+  Percent,
+  Lock,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -307,6 +309,15 @@ export function POSClient() {
   const [ventaExitosa, setVentaExitosa] = useState(false);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [showMobileCart, setShowMobileCart] = useState(false);
+  const [showDescuento, setShowDescuento] = useState(false);
+  const [descuentoManualTipo, setDescuentoManualTipo] = useState<"porcentaje" | "fijo">("porcentaje");
+  const [descuentoManualValor, setDescuentoManualValor] = useState("");
+  const [descuentoManualMotivo, setDescuentoManualMotivo] = useState("");
+  const [descuentoAutorizado, setDescuentoAutorizado] = useState(false);
+  const [descuentoAutorizadoPor, setDescuentoAutorizadoPor] = useState<string | null>(null);
+  const [pinInput, setPinInput] = useState("");
+  const [verificandoPin, setVerificandoPin] = useState(false);
+  const [requierePin, setRequierePin] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Computed
@@ -332,7 +343,20 @@ export function POSClient() {
     return totalSinDesc - subtotal;
   }, [cart, subtotal, usarPrecioSocio]);
 
-  const total = subtotal;
+  const descuentoManualMonto = useMemo(() => {
+    const val = parseFloat(descuentoManualValor) || 0;
+    if (val <= 0) return 0;
+    if (descuentoManualTipo === "porcentaje") {
+      return Math.round(subtotal * (val / 100));
+    }
+    return Math.min(val, subtotal);
+  }, [subtotal, descuentoManualTipo, descuentoManualValor]);
+
+  const descuentoManualPct = descuentoManualTipo === "porcentaje"
+    ? (parseFloat(descuentoManualValor) || 0)
+    : 0;
+
+  const total = subtotal - descuentoManualMonto;
 
   // ─── Data fetching ─────────────────────────────────────────
 
@@ -489,7 +513,11 @@ export function POSClient() {
             metodo_pago: metodo,
             nombre_cliente: nombreCliente || null,
             perfil_socio_id: socio?.id || null,
-            descuento: descuentoSocio,
+            descuento: descuentoSocio + descuentoManualMonto,
+            descuento_tipo: descuentoManualMonto > 0 ? descuentoManualTipo : (descuentoSocio > 0 ? "socio" : null),
+            descuento_porcentaje: descuentoManualPct > 0 ? descuentoManualPct : null,
+            descuento_motivo: descuentoManualMotivo || null,
+            descuento_autorizado_por: descuentoAutorizadoPor || null,
             notas: null,
           }),
         });
@@ -538,7 +566,7 @@ export function POSClient() {
         setProcesando(false);
       }
     },
-    [cart, nombreCliente, socio, usarPrecioSocio, descuentoSocio, clearCart, fetchProductos]
+    [cart, nombreCliente, socio, usarPrecioSocio, descuentoSocio, descuentoManualMonto, descuentoManualTipo, descuentoManualPct, descuentoManualMotivo, descuentoAutorizadoPor, clearCart, fetchProductos]
   );
 
   // ─── Keyboard shortcut: focus search ──────────────────────
@@ -801,6 +829,198 @@ export function POSClient() {
             </Button>
           )}
 
+          {/* Descuento manual */}
+          <AnimatePresence>
+            {showDescuento ? (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/50 p-3"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-amber-800">Descuento manual</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDescuento(false);
+                      setDescuentoManualValor("");
+                      setDescuentoManualMotivo("");
+                      setDescuentoAutorizado(false);
+                      setDescuentoAutorizadoPor(null);
+                      setRequierePin(false);
+                    }}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setDescuentoManualTipo("porcentaje")}
+                    className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                      descuentoManualTipo === "porcentaje"
+                        ? "bg-primary text-white"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    %
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDescuentoManualTipo("fijo")}
+                    className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                      descuentoManualTipo === "fijo"
+                        ? "bg-primary text-white"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    $ Fijo
+                  </button>
+                </div>
+
+                <Input
+                  type="number"
+                  min="0"
+                  max={descuentoManualTipo === "porcentaje" ? "100" : undefined}
+                  value={descuentoManualValor}
+                  onChange={(e) => {
+                    setDescuentoManualValor(e.target.value);
+                    const val = parseFloat(e.target.value) || 0;
+                    // Require PIN for discounts > 15%
+                    if (descuentoManualTipo === "porcentaje" && val > 15) {
+                      setRequierePin(true);
+                      setDescuentoAutorizado(false);
+                    } else if (descuentoManualTipo === "fijo" && subtotal > 0 && (val / subtotal) * 100 > 15) {
+                      setRequierePin(true);
+                      setDescuentoAutorizado(false);
+                    } else {
+                      setRequierePin(false);
+                      setDescuentoAutorizado(true);
+                    }
+                  }}
+                  placeholder={descuentoManualTipo === "porcentaje" ? "Ej: 10" : "Ej: 500"}
+                  className="h-8 text-sm"
+                />
+
+                <Input
+                  value={descuentoManualMotivo}
+                  onChange={(e) => setDescuentoManualMotivo(e.target.value)}
+                  placeholder="Motivo (opcional)"
+                  className="h-8 text-xs"
+                />
+
+                {/* PIN authorization */}
+                <AnimatePresence>
+                  {requierePin && !descuentoAutorizado && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="space-y-1.5"
+                    >
+                      <p className="text-[11px] text-amber-700 flex items-center gap-1">
+                        <Lock className="size-3" />
+                        Descuento &gt;15% requiere PIN de supervisor
+                      </p>
+                      <div className="flex gap-1.5">
+                        <Input
+                          type="password"
+                          maxLength={6}
+                          value={pinInput}
+                          onChange={(e) => setPinInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              // Verify PIN
+                              setVerificandoPin(true);
+                              fetch("/api/admin/pos/verificar-pin", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ pin: pinInput }),
+                              })
+                                .then((r) => r.json())
+                                .then((data) => {
+                                  if (data.valid) {
+                                    setDescuentoAutorizado(true);
+                                    setDescuentoAutorizadoPor(data.perfil_id);
+                                    toast.success(`Autorizado por ${data.nombre}`);
+                                  } else {
+                                    toast.error(data.error || "PIN inválido");
+                                  }
+                                })
+                                .catch(() => toast.error("Error al verificar PIN"))
+                                .finally(() => {
+                                  setVerificandoPin(false);
+                                  setPinInput("");
+                                });
+                            }
+                          }}
+                          placeholder="PIN"
+                          className="h-7 text-xs flex-1"
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs px-2"
+                          disabled={verificandoPin || pinInput.length < 4}
+                          onClick={() => {
+                            setVerificandoPin(true);
+                            fetch("/api/admin/pos/verificar-pin", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ pin: pinInput }),
+                            })
+                              .then((r) => r.json())
+                              .then((data) => {
+                                if (data.valid) {
+                                  setDescuentoAutorizado(true);
+                                  setDescuentoAutorizadoPor(data.perfil_id);
+                                  toast.success(`Autorizado por ${data.nombre}`);
+                                } else {
+                                  toast.error(data.error || "PIN inválido");
+                                }
+                              })
+                              .catch(() => toast.error("Error al verificar PIN"))
+                              .finally(() => {
+                                setVerificandoPin(false);
+                                setPinInput("");
+                              });
+                          }}
+                        >
+                          {verificandoPin ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+                        </Button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {descuentoAutorizado && descuentoManualMonto > 0 && (
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="text-xs text-green-600 flex items-center gap-1"
+                  >
+                    <Check className="size-3" />
+                    -${descuentoManualMonto.toLocaleString("es-UY")}
+                  </motion.p>
+                )}
+              </motion.div>
+            ) : (
+              <motion.button
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                type="button"
+                onClick={() => setShowDescuento(true)}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+              >
+                <Percent className="size-3" />
+                Aplicar descuento manual
+              </motion.button>
+            )}
+          </AnimatePresence>
+
           {/* Totals */}
           <div className="space-y-1 pt-1">
             <div className="flex justify-between text-sm text-muted-foreground font-body">
@@ -817,6 +1037,19 @@ export function POSClient() {
                 <span>-${descuentoSocio.toLocaleString("es-UY")}</span>
               </motion.div>
             )}
+            {descuentoManualMonto > 0 && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                className="flex justify-between text-sm text-amber-600 font-body"
+              >
+                <span>
+                  Desc. manual
+                  {descuentoManualTipo === "porcentaje" && ` (${descuentoManualValor}%)`}
+                </span>
+                <span>-${descuentoManualMonto.toLocaleString("es-UY")}</span>
+              </motion.div>
+            )}
             <Separator />
             <div className="flex justify-between font-heading font-bold text-xl">
               <span>Total</span>
@@ -829,7 +1062,7 @@ export function POSClient() {
             <motion.div whileTap={{ scale: 0.97 }}>
               <Button
                 onClick={() => setShowEfectivoModal(true)}
-                disabled={cart.length === 0 || procesando}
+                disabled={cart.length === 0 || procesando || (requierePin && !descuentoAutorizado)}
                 className="w-full h-14 bg-green-600 hover:bg-green-700 text-white rounded-xl font-heading font-bold text-base gap-2"
               >
                 <Banknote className="size-5" />
@@ -839,7 +1072,7 @@ export function POSClient() {
             <motion.div whileTap={{ scale: 0.97 }}>
               <Button
                 onClick={() => procesarVenta("mercadopago_qr")}
-                disabled={cart.length === 0 || procesando}
+                disabled={cart.length === 0 || procesando || (requierePin && !descuentoAutorizado)}
                 className="w-full h-14 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-heading font-bold text-base gap-2"
               >
                 {procesando ? (
