@@ -596,25 +596,73 @@ export function EventoDetalleClient({ slug }: { slug: string }) {
         onConfirmar={handleConfirmarCompra}
       />
 
-      {/* Success banner */}
+      {/* Success fullscreen overlay */}
       <AnimatePresence>
         {compraStatus === "exitosa" && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-xl bg-green-50 border border-green-200 px-6 py-4 shadow-lg"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
           >
-            <CheckCircle2 className="size-5 text-green-600" />
-            <div>
-              <p className="font-medium text-green-800">¡Compra exitosa!</p>
-              <Link
-                href="/mi-cuenta/entradas"
-                className="text-sm text-green-600 underline"
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0, y: 40 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: "spring", damping: 20, stiffness: 300, delay: 0.1 }}
+              className="mx-4 flex w-full max-w-md flex-col items-center gap-6 rounded-3xl bg-white px-8 py-12 shadow-2xl"
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", damping: 12, stiffness: 200, delay: 0.3 }}
+                className="flex size-20 items-center justify-center rounded-full bg-green-100"
               >
-                Ver mis entradas
-              </Link>
-            </div>
+                <motion.div
+                  initial={{ pathLength: 0 }}
+                  animate={{ pathLength: 1 }}
+                  transition={{ delay: 0.5, duration: 0.4 }}
+                >
+                  <CheckCircle2 className="size-10 text-green-600" />
+                </motion.div>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.45, duration: 0.3 }}
+                className="text-center"
+              >
+                <h2 className="text-2xl font-bold text-gray-900">
+                  ¡Compra exitosa!
+                </h2>
+                <p className="mt-2 text-gray-500">
+                  Tus entradas ya están disponibles
+                </p>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6, duration: 0.3 }}
+                className="flex w-full flex-col gap-3"
+              >
+                <Link href="/mi-cuenta/entradas" className="w-full">
+                  <Button className="w-full bg-green-600 hover:bg-green-700 text-white rounded-xl py-6 text-base font-medium">
+                    Ver mis entradas
+                  </Button>
+                </Link>
+                <Link href={`/eventos/${slug}`} className="w-full">
+                  <Button
+                    variant="ghost"
+                    className="w-full text-gray-500 hover:text-gray-700 rounded-xl py-6 text-base"
+                  >
+                    Volver al evento
+                  </Button>
+                </Link>
+              </motion.div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

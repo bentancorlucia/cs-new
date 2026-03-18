@@ -119,12 +119,22 @@ export function EventosClient() {
 
       {/* Events list */}
       {loading ? (
-        <div className="grid gap-6 md:grid-cols-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="space-y-3">
-              <Skeleton className="aspect-[16/9] w-full rounded-2xl" />
-              <Skeleton className="h-5 w-3/4" />
-              <Skeleton className="h-4 w-1/2" />
+        <div className="space-y-6">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="flex flex-col sm:flex-row overflow-hidden rounded-3xl border border-linea">
+              <Skeleton className="h-40 w-full sm:h-auto sm:w-[160px]" />
+              <div className="flex-1 space-y-4 p-6 sm:p-8">
+                <Skeleton className="h-8 w-3/4" />
+                <Skeleton className="h-4 w-full" />
+                <div className="flex gap-4">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-28" />
+                </div>
+                <div className="flex items-center justify-between border-t border-linea/50 pt-5">
+                  <Skeleton className="h-5 w-36" />
+                  <Skeleton className="h-10 w-32 rounded-full" />
+                </div>
+              </div>
             </div>
           ))}
         </div>
@@ -150,7 +160,7 @@ export function EventosClient() {
             initial="hidden"
             animate="visible"
             exit={{ opacity: 0 }}
-            className="grid gap-6 md:grid-cols-2"
+            className="space-y-6"
           >
             {eventosFiltrados.map((evento) => (
               <EventCard
