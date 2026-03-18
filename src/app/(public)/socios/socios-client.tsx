@@ -7,7 +7,6 @@ import {
 import { motion } from "framer-motion";
 import { fadeInUp, springBouncy } from "@/lib/motion";
 import { CreditCard, Users, ArrowRight } from "lucide-react";
-import Link from "next/link";
 
 export function SociosClient() {
   return (
@@ -73,7 +72,7 @@ export function SociosClient() {
                 ))}
               </ul>
 
-              <Link href="/registro">
+              <a href="https://forms.gle/S672snEbvEPWgfHm9" target="_blank" rel="noopener noreferrer">
                 <motion.span
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
@@ -83,7 +82,7 @@ export function SociosClient() {
                   Quiero ser socio
                   <ArrowRight className="size-4" />
                 </motion.span>
-              </Link>
+              </a>
             </motion.div>
 
             {/* Socio Deportivo */}

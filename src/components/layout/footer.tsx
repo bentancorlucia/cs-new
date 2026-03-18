@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Instagram, Facebook, Twitter } from "lucide-react";
 
 const CLUB_LINKS = [
@@ -23,6 +24,18 @@ const SOCIOS_LINKS = [
   { href: "/socios", label: "Hacete socio" },
   { href: "/beneficios", label: "Beneficios" },
   { href: "/tienda", label: "Tienda" },
+];
+
+const SPONSORS_PRINCIPALES = [
+  { nombre: "Renato Conti", logo: "/images/sponsors/logo-rc.png" },
+  { nombre: "Itaú", logo: "/images/sponsors/logo-itau.png" },
+  { nombre: "UCU", logo: "/images/sponsors/logo-ucu.png" },
+  { nombre: "Summum", logo: "/images/sponsors/logo-summum.png" },
+];
+const SPONSORS_SECUNDARIOS = [
+  { nombre: "Zillertal", logo: "/images/sponsors/logo-zillertal.png" },
+  { nombre: "SUAT", logo: "/images/sponsors/logo-suat.png" },
+  { nombre: "Gatorade", logo: "/images/sponsors/logo-gatorade.png" },
 ];
 
 const SOCIAL_LINKS = [
@@ -143,8 +156,55 @@ export function Footer() {
           </FooterColumn>
         </div>
 
+        {/* Sponsors */}
+        <div className="mt-16 mb-2">
+          <div className="flex items-center gap-4 mb-8">
+            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-dorado-400/20 to-transparent" />
+            <span className="font-heading uppercase tracking-[0.25em] text-[10px] text-dorado-300/40">
+              Nos acompañan
+            </span>
+            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-dorado-400/20 to-transparent" />
+          </div>
+          {/* Principales — más grandes y visibles */}
+          <div className="flex flex-wrap items-center justify-center gap-x-12 gap-y-6 sm:gap-x-16 mb-6">
+            {SPONSORS_PRINCIPALES.map((sponsor) => (
+              <div
+                key={sponsor.nombre}
+                className="sponsor-logo h-8 w-24 sm:h-10 sm:w-32 opacity-40 hover:opacity-70 transition-opacity duration-300"
+                style={
+                  {
+                    "--logo-src": `url(${sponsor.logo})`,
+                    backgroundColor: "rgba(247, 182, 67, 0.9)",
+                  } as React.CSSProperties
+                }
+                title={sponsor.nombre}
+                role="img"
+                aria-label={sponsor.nombre}
+              />
+            ))}
+          </div>
+          {/* Secundarios — más chicos y sutiles */}
+          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 sm:gap-x-12">
+            {SPONSORS_SECUNDARIOS.map((sponsor) => (
+              <div
+                key={sponsor.nombre}
+                className="sponsor-logo h-5 w-16 sm:h-6 sm:w-20 opacity-25 hover:opacity-50 transition-opacity duration-300"
+                style={
+                  {
+                    "--logo-src": `url(${sponsor.logo})`,
+                    backgroundColor: "rgba(247, 182, 67, 0.9)",
+                  } as React.CSSProperties
+                }
+                title={sponsor.nombre}
+                role="img"
+                aria-label={sponsor.nombre}
+              />
+            ))}
+          </div>
+        </div>
+
         {/* Bottom divider */}
-        <div className="h-px bg-bordo-800/30 mt-12 mb-6" />
+        <div className="h-px bg-gradient-to-r from-transparent via-dorado-400/10 to-transparent mt-10 mb-6" />
 
         {/* Bottom section */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
