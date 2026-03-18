@@ -91,7 +91,7 @@ export async function sendTicketConfirmation(
       from: EMAIL_FROM,
       to,
       subject: `Tus entradas para ${data.eventoTitulo}`,
-      html: ticketConfirmationHtml({ ...data, qrDataUrls }),
+      html: ticketConfirmationHtml(data),
       attachments: [
         {
           filename: `entradas-${data.eventoTitulo.toLowerCase().replace(/\s+/g, "-")}.pdf`,

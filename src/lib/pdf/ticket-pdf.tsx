@@ -11,35 +11,38 @@ import {
 
 const COLORS = {
   bordo: "#730d32",
+  bordoOscuro: "#5a0a27",
   dorado: "#f7b643",
+  doradoClaro: "#fdf3e0",
   fondoClaro: "#faf8f5",
   texto: "#1f1f1f",
   textoSecundario: "#6b7280",
   blanco: "#ffffff",
+  grisClaro: "#f0eded",
 };
 
 const styles = StyleSheet.create({
   page: {
-    backgroundColor: COLORS.fondoClaro,
+    backgroundColor: COLORS.blanco,
     padding: 0,
     fontFamily: "Helvetica",
     position: "relative",
   },
-  // Header bar
+  // Header
   header: {
     backgroundColor: COLORS.bordo,
-    paddingVertical: 28,
-    paddingHorizontal: 40,
-    flexDirection: "row",
-    justifyContent: "space-between",
+    paddingTop: 36,
+    paddingBottom: 28,
+    paddingHorizontal: 48,
     alignItems: "center",
   },
   headerTitle: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: "bold",
     color: COLORS.blanco,
     fontFamily: "Helvetica-Bold",
     letterSpacing: -0.5,
+    marginBottom: 6,
   },
   headerAccent: {
     color: COLORS.dorado,
@@ -47,100 +50,130 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 10,
     color: COLORS.dorado,
-    letterSpacing: 2,
+    letterSpacing: 3,
     textTransform: "uppercase",
     fontFamily: "Helvetica-Bold",
   },
-  // Content area
+  // Gold accent bar
+  accentBar: {
+    height: 4,
+    backgroundColor: COLORS.dorado,
+  },
+  // Main content
   content: {
     flex: 1,
-    paddingHorizontal: 40,
-    paddingTop: 32,
+    paddingHorizontal: 48,
+    paddingTop: 36,
     alignItems: "center",
-    justifyContent: "center",
   },
-  // Event name
+  // Event title
   eventoTitulo: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: "bold",
     color: COLORS.bordo,
     textAlign: "center",
     fontFamily: "Helvetica-Bold",
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  // Ticket type
   tipoEntrada: {
-    fontSize: 13,
+    fontSize: 12,
     color: COLORS.textoSecundario,
     textAlign: "center",
-    marginBottom: 24,
     textTransform: "uppercase",
-    letterSpacing: 1.5,
+    letterSpacing: 2,
+    marginBottom: 28,
   },
-  // QR container
-  qrContainer: {
-    backgroundColor: COLORS.blanco,
-    borderRadius: 16,
-    padding: 24,
-    alignItems: "center",
-    marginBottom: 24,
-    border: `2 solid ${COLORS.bordo}`,
-  },
-  qrLabel: {
-    fontSize: 10,
-    color: COLORS.textoSecundario,
-    marginBottom: 12,
-    textTransform: "uppercase",
-    letterSpacing: 1.5,
-  },
-  qrImage: {
-    width: 220,
-    height: 220,
-    marginBottom: 16,
-  },
-  qrCodigo: {
-    fontSize: 11,
-    color: COLORS.bordo,
-    fontFamily: "Courier-Bold",
-    letterSpacing: 0.5,
-  },
-  // Info section
+  // Info pills row
   infoRow: {
     flexDirection: "row",
     justifyContent: "center",
-    gap: 32,
-    marginBottom: 8,
+    gap: 16,
+    marginBottom: 32,
   },
-  infoItem: {
+  infoPill: {
+    backgroundColor: COLORS.fondoClaro,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     alignItems: "center",
+    minWidth: 120,
   },
-  infoLabel: {
-    fontSize: 9,
+  infoPillLabel: {
+    fontSize: 8,
     color: COLORS.textoSecundario,
     textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 2,
+    letterSpacing: 1.5,
+    marginBottom: 3,
+    fontFamily: "Helvetica-Bold",
   },
-  infoValue: {
+  infoPillValue: {
     fontSize: 13,
     color: COLORS.texto,
     fontFamily: "Helvetica-Bold",
   },
-  // Attendee
-  attendee: {
-    fontSize: 14,
-    color: COLORS.texto,
-    textAlign: "center",
+  // QR section
+  qrWrapper: {
+    alignItems: "center",
+    marginBottom: 28,
+  },
+  qrBox: {
+    backgroundColor: COLORS.blanco,
+    borderRadius: 20,
+    padding: 28,
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: COLORS.grisClaro,
+  },
+  qrImage: {
+    width: 200,
+    height: 200,
+    marginBottom: 16,
+  },
+  qrInstruction: {
+    fontSize: 11,
+    color: COLORS.textoSecundario,
+    letterSpacing: 0.5,
+  },
+  // Attendee section
+  attendeeSection: {
+    backgroundColor: COLORS.fondoClaro,
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    alignItems: "center",
     marginBottom: 20,
   },
+  attendeeLabel: {
+    fontSize: 8,
+    color: COLORS.textoSecundario,
+    textTransform: "uppercase",
+    letterSpacing: 1.5,
+    marginBottom: 3,
+    fontFamily: "Helvetica-Bold",
+  },
   attendeeName: {
+    fontSize: 15,
+    color: COLORS.texto,
+    fontFamily: "Helvetica-Bold",
+  },
+  // Counter badge
+  counterBadge: {
+    backgroundColor: COLORS.dorado,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    marginTop: 8,
+  },
+  counterText: {
+    fontSize: 11,
+    color: COLORS.bordo,
     fontFamily: "Helvetica-Bold",
   },
   // Footer
   footer: {
     backgroundColor: COLORS.bordo,
-    paddingVertical: 16,
-    paddingHorizontal: 40,
+    paddingVertical: 18,
+    paddingHorizontal: 48,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -148,29 +181,13 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 9,
     color: COLORS.dorado,
-    opacity: 0.8,
+    fontFamily: "Helvetica-Bold",
+    letterSpacing: 0.5,
   },
   footerInstruction: {
     fontSize: 9,
     color: COLORS.blanco,
-    opacity: 0.7,
-  },
-  // Decorative line
-  decorLine: {
-    height: 3,
-    backgroundColor: COLORS.dorado,
-  },
-  // Ticket counter badge
-  counterBadge: {
-    backgroundColor: COLORS.dorado,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  counterText: {
-    fontSize: 11,
-    color: COLORS.bordo,
-    fontFamily: "Helvetica-Bold",
+    opacity: 0.75,
   },
 });
 
@@ -186,13 +203,11 @@ interface TicketPDFData {
 
 function TicketPage({
   data,
-  codigo,
   qrDataUrl,
   index,
   total,
 }: {
   data: TicketPDFData;
-  codigo: string;
   qrDataUrl: string;
   index: number;
   total: number;
@@ -201,61 +216,61 @@ function TicketPage({
     <Page size="A4" style={styles.page}>
       {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>
-            Club <Text style={styles.headerAccent}>Seminario</Text>
-          </Text>
-        </View>
-        <View style={{ alignItems: "flex-end" }}>
-          <Text style={styles.headerSubtitle}>Entrada</Text>
-          {total > 1 && (
-            <View style={[styles.counterBadge, { marginTop: 4 }]}>
-              <Text style={styles.counterText}>
-                {index + 1} de {total}
-              </Text>
-            </View>
-          )}
-        </View>
+        <Text style={styles.headerTitle}>
+          Club <Text style={styles.headerAccent}>Seminario</Text>
+        </Text>
+        <Text style={styles.headerSubtitle}>Entrada</Text>
       </View>
 
-      {/* Gold accent line */}
-      <View style={styles.decorLine} />
+      {/* Gold accent bar */}
+      <View style={styles.accentBar} />
 
       {/* Content */}
       <View style={styles.content}>
+        {/* Event title + type */}
         <Text style={styles.eventoTitulo}>{data.eventoTitulo}</Text>
         <Text style={styles.tipoEntrada}>{data.tipoEntrada}</Text>
 
-        {/* Event info */}
+        {/* Info pills: fecha, lugar */}
         {(data.eventoFecha || data.eventoLugar) && (
-          <View style={[styles.infoRow, { marginBottom: 24 }]}>
+          <View style={styles.infoRow}>
             {data.eventoFecha && (
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Fecha</Text>
-                <Text style={styles.infoValue}>{data.eventoFecha}</Text>
+              <View style={styles.infoPill}>
+                <Text style={styles.infoPillLabel}>Fecha</Text>
+                <Text style={styles.infoPillValue}>{data.eventoFecha}</Text>
               </View>
             )}
             {data.eventoLugar && (
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Lugar</Text>
-                <Text style={styles.infoValue}>{data.eventoLugar}</Text>
+              <View style={styles.infoPill}>
+                <Text style={styles.infoPillLabel}>Lugar</Text>
+                <Text style={styles.infoPillValue}>{data.eventoLugar}</Text>
               </View>
             )}
           </View>
         )}
 
         {/* QR Code */}
-        <View style={styles.qrContainer}>
-          <Text style={styles.qrLabel}>Escaneá para ingresar</Text>
-          <Image style={styles.qrImage} src={qrDataUrl} />
-          <Text style={styles.qrCodigo}>{codigo}</Text>
+        <View style={styles.qrWrapper}>
+          <View style={styles.qrBox}>
+            <Image style={styles.qrImage} src={qrDataUrl} />
+            <Text style={styles.qrInstruction}>Escaneá este QR para ingresar</Text>
+          </View>
         </View>
 
         {/* Attendee */}
-        <Text style={styles.attendee}>
-          Asistente:{" "}
+        <View style={styles.attendeeSection}>
+          <Text style={styles.attendeeLabel}>Asistente</Text>
           <Text style={styles.attendeeName}>{data.nombreAsistente}</Text>
-        </Text>
+        </View>
+
+        {/* Counter badge */}
+        {total > 1 && (
+          <View style={styles.counterBadge}>
+            <Text style={styles.counterText}>
+              Entrada {index + 1} de {total}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Footer */}
@@ -280,7 +295,6 @@ function TicketDocument({ data }: { data: TicketPDFData }) {
         <TicketPage
           key={codigo}
           data={data}
-          codigo={codigo}
           qrDataUrl={data.qrDataUrls[i]}
           index={i}
           total={data.codigos.length}

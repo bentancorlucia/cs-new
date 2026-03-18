@@ -150,40 +150,19 @@ export interface TicketConfirmationData {
   cantidad: number;
   total: number;
   codigos: string[];
-  /** Base64 data URLs de los QR generados, en el mismo orden que codigos */
-  qrDataUrls?: string[];
   eventoUrl: string;
 }
 
 export function ticketConfirmationHtml(data: TicketConfirmationData) {
-  const qrSection = data.codigos
-    .map(
-      (codigo, i) => `
-      <div style="background:${COLORS.fondoClaro};border-radius:8px;padding:16px;margin-bottom:8px;text-align:center;">
-        <p style="margin:0 0 8px;font-size:13px;color:${COLORS.textoSecundario};">
-          Entrada${data.codigos.length > 1 ? ` ${i + 1} de ${data.codigos.length}` : ""}
-        </p>
-        ${
-          data.qrDataUrls?.[i]
-            ? `<img src="${data.qrDataUrls[i]}" width="200" height="200" alt="QR entrada" style="display:block;margin:0 auto 8px;" />`
-            : ""
-        }
-        <p style="margin:0;font-size:12px;font-weight:600;letter-spacing:0.03em;color:${COLORS.bordo};">
-          ${codigo}
-        </p>
-        <p style="margin:4px 0 0;font-size:11px;color:${COLORS.textoSecundario};">
-          Presentá este código en la entrada del evento
-        </p>
-      </div>`
-    )
-    .join("");
+  const cantidadLabel =
+    data.cantidad === 1 ? "1 entrada" : `${data.cantidad} entradas`;
 
   return layout(`
     <h2 style="margin:0 0 8px;font-size:20px;color:${COLORS.bordo};">Tus entradas están confirmadas</h2>
     <p style="margin:0 0 24px;font-size:14px;color:${COLORS.textoSecundario};">
       ¡Hola, ${data.nombreAsistente}! Ya tenés tus entradas para el evento.
     </p>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
       <tr>
         <td style="padding:4px 0;font-size:14px;color:${COLORS.texto};">
           <strong>Evento:</strong> ${data.eventoTitulo}
@@ -204,7 +183,14 @@ export function ticketConfirmationHtml(data: TicketConfirmationData) {
           : ""
       }
     </table>
-    ${qrSection}
+    <div style="background:${COLORS.fondoClaro};border-radius:8px;padding:20px;margin-bottom:24px;text-align:center;">
+      <p style="margin:0 0 4px;font-size:14px;color:${COLORS.texto};">
+        📎 Adjuntamos <strong>${cantidadLabel}</strong> en PDF con tu código QR.
+      </p>
+      <p style="margin:0;font-size:13px;color:${COLORS.textoSecundario};">
+        Presentá el QR en la entrada del evento.
+      </p>
+    </div>
     ${button("Ver evento", data.eventoUrl)}
   `);
 }
