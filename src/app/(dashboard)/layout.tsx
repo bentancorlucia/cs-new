@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { ArrowLeft } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { PageTransition } from "@/components/layout/page-transition";
 import { useRoles } from "@/hooks/use-roles";
@@ -26,8 +26,17 @@ export default function DashboardLayout({
 
   const isStaff = roles.some((r) => STAFF_ROLES.includes(r));
 
+  // Loading: pantalla mínima sin sidebar ni contenido visible
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-fondo flex items-center justify-center">
+        <Loader2 className="size-7 animate-spin text-bordo-700" />
+      </div>
+    );
+  }
+
   // Socios y no-socios: layout simple sin sidebar
-  if (!isStaff && !isLoading) {
+  if (!isStaff) {
     return (
       <div className="min-h-screen bg-fondo">
         {/* Top bar simple */}

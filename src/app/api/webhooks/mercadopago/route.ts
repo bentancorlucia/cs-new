@@ -104,7 +104,7 @@ async function handleEntradaPayment(
     try {
       const { data: entradaDetails } = await supabaseAdmin
         .from("entradas")
-        .select("codigo, email_asistente, nombre_asistente, precio_pagado, tipo_entradas(nombre), eventos(titulo, slug)")
+        .select("codigo, email_asistente, nombre_asistente, precio_pagado, tipo_entradas(nombre), eventos(titulo, slug, fecha_inicio, lugar)")
         .in("id", entradaIds);
 
       if (entradaDetails && entradaDetails.length > 0) {
@@ -120,6 +120,17 @@ async function handleEntradaPayment(
             total: entradaDetails.reduce((sum: number, e: any) => sum + Number(e.precio_pagado || 0), 0),
             codigos: entradaDetails.map((e: any) => e.codigo).filter(Boolean),
             eventoUrl: `${APP_URL}/eventos/${first.eventos?.slug || ""}`,
+            eventoFecha: first.eventos?.fecha_inicio
+              ? new Date(first.eventos.fecha_inicio).toLocaleDateString("es-UY", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : undefined,
+            eventoLugar: first.eventos?.lugar || undefined,
           });
         }
       }

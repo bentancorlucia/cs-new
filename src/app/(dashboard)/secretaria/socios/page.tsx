@@ -3,21 +3,27 @@
 import { Suspense, useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
   UserPlus,
   Download,
+  Upload,
   ChevronLeft,
   ChevronRight,
   Filter,
   Users,
   Link2,
   Unlink,
+  X,
+  Dumbbell,
+  Loader2,
+  CheckSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -35,6 +41,8 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createBrowserClient } from "@/lib/supabase/client";
+import { ImportarSociosDialog } from "./_components/importar-excel-dialog";
+import { toast } from "sonner";
 
 interface PadronSocio {
   id: number;
@@ -74,6 +82,11 @@ function SociosListContent() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDisciplina, setBulkDisciplina] = useState("");
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  const [importOpen, setImportOpen] = useState(false);
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [activo, setActivo] = useState(searchParams.get("activo") || "todos");
   const [disciplina, setDisciplina] = useState(
@@ -129,17 +142,80 @@ function SociosListContent() {
     loadDisciplinas();
   }, []);
 
+  // Reset to page 1 when filters change (debounced for search)
   useEffect(() => {
     const timer = setTimeout(() => {
       setPage(1);
-      fetchSocios();
     }, 300);
     return () => clearTimeout(timer);
-  }, [search, activo, disciplina, vinculado, fetchSocios]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, activo, disciplina, vinculado]);
 
+  // Fetch when page or filters change
   useEffect(() => {
     fetchSocios();
-  }, [page, fetchSocios]);
+  }, [fetchSocios]);
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === socios.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(socios.map((s) => s.id)));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+    setBulkDisciplina("");
+  };
+
+  // Clear selection when data changes
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [search, activo, disciplina, vinculado, page]);
+
+  const handleBulkDisciplina = async () => {
+    if (!bulkDisciplina || selectedIds.size === 0) return;
+    setBulkLoading(true);
+    try {
+      const res = await fetch("/api/padron/bulk/disciplinas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          socio_ids: Array.from(selectedIds),
+          disciplina_id: parseInt(bulkDisciplina),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Error al asignar disciplina");
+        return;
+      }
+      if (data.agregados > 0) {
+        toast.success(data.message);
+      }
+      if (data.ya_asignados > 0 && data.agregados > 0) {
+        toast.info(`${data.ya_asignados} ya tenían la disciplina asignada`);
+      } else if (data.ya_asignados > 0 && data.agregados === 0) {
+        toast.info(data.message);
+      }
+      clearSelection();
+      fetchSocios();
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
 
   const exportCSV = () => {
     if (!socios.length) return;
@@ -191,6 +267,15 @@ function SociosListContent() {
           >
             <Download className="size-4" />
             <span className="hidden sm:inline">Exportar</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setImportOpen(true)}
+            className="flex-1 sm:flex-none"
+          >
+            <Upload className="size-4" />
+            <span className="hidden sm:inline">Importar</span>
           </Button>
           <Link href="/secretaria/socios/nuevo" className="flex-1 sm:flex-none">
             <Button className="w-full">
@@ -255,6 +340,63 @@ function SociosListContent() {
         </div>
       </motion.div>
 
+      {/* Bulk action bar */}
+      <AnimatePresence>
+        {selectedIds.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: -8, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="rounded-xl border border-bordo-200 bg-bordo-50/60 p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <CheckSquare className="size-4 text-bordo-700" />
+                <span className="font-body text-sm font-medium text-bordo-800">
+                  {selectedIds.size} socio{selectedIds.size > 1 ? "s" : ""} seleccionado{selectedIds.size > 1 ? "s" : ""}
+                </span>
+                <button
+                  onClick={clearSelection}
+                  className="ml-1 p-0.5 rounded hover:bg-bordo-100 transition-colors"
+                >
+                  <X className="size-3.5 text-bordo-600" />
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Dumbbell className="size-4 text-muted-foreground shrink-0" />
+                <Select value={bulkDisciplina} onValueChange={setBulkDisciplina}>
+                  <SelectTrigger className="w-[180px] h-8 font-body text-sm">
+                    <SelectValue placeholder="Elegir disciplina">
+                      {disciplinas.find((d) => String(d.id) === bulkDisciplina)?.nombre || "Elegir disciplina"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {disciplinas.map((d) => (
+                      <SelectItem key={d.id} value={String(d.id)}>
+                        {d.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  size="sm"
+                  onClick={handleBulkDisciplina}
+                  disabled={!bulkDisciplina || bulkLoading}
+                  className="h-8"
+                >
+                  {bulkLoading ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Dumbbell className="size-3.5" />
+                  )}
+                  Asignar
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Table */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -266,6 +408,15 @@ function SociosListContent() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={
+                        socios.length > 0 && selectedIds.size === socios.length
+                      }
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Seleccionar todos"
+                    />
+                  </TableHead>
                   <TableHead className="font-heading uppercase tracking-editorial text-xs min-w-[180px]">
                     Nombre
                   </TableHead>
@@ -284,6 +435,9 @@ function SociosListContent() {
                 {loading ? (
                   Array.from({ length: 8 }).map((_, i) => (
                     <TableRow key={i}>
+                      <TableCell className="w-10">
+                        <Skeleton className="h-4 w-4" />
+                      </TableCell>
                       <TableCell>
                         <Skeleton className="h-5 w-32" />
                       </TableCell>
@@ -301,7 +455,7 @@ function SociosListContent() {
                 ) : socios.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={4}
+                      colSpan={5}
                       className="text-center py-16 text-muted-foreground font-body"
                     >
                       <Users className="mx-auto mb-3 size-12 opacity-15" />
@@ -314,6 +468,7 @@ function SociosListContent() {
                       socio.padron_disciplinas
                         ?.map((pd) => pd.disciplinas?.nombre)
                         .filter(Boolean) || [];
+                    const isSelected = selectedIds.has(socio.id);
 
                     return (
                       <motion.tr
@@ -324,8 +479,20 @@ function SociosListContent() {
                         onClick={() =>
                           router.push(`/secretaria/socios/${socio.id}`)
                         }
-                        className="cursor-pointer border-b border-linea last:border-0 hover:bg-superficie/50 transition-colors"
+                        className={`cursor-pointer border-b border-linea last:border-0 hover:bg-superficie/50 transition-colors ${
+                          isSelected ? "bg-bordo-50/50" : ""
+                        }`}
                       >
+                        <TableCell
+                          className="w-10 py-3"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleSelect(socio.id)}
+                            aria-label={`Seleccionar ${socio.nombre}`}
+                          />
+                        </TableCell>
                         <TableCell className="py-3">
                           <div>
                             <p className="font-body text-sm font-medium text-foreground">
@@ -460,6 +627,12 @@ function SociosListContent() {
           </motion.div>
         )}
       </motion.div>
+
+      <ImportarSociosDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onSuccess={fetchSocios}
+      />
     </div>
   );
 }

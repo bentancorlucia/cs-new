@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     // 3. Validate event
     const { data: evento } = await db
       .from("eventos")
-      .select("id, titulo, slug, estado, capacidad_total, es_gratuito")
+      .select("id, titulo, slug, estado, capacidad_total, es_gratuito, fecha_inicio, lugar")
       .eq("id", evento_id)
       .single();
 
@@ -200,6 +200,17 @@ export async function POST(request: NextRequest) {
           total: 0,
           codigos: entradas.map((e: any) => e.codigo).filter(Boolean),
           eventoUrl: `${APP_URL}/eventos/${evento.slug}`,
+          eventoFecha: evento.fecha_inicio
+            ? new Date(evento.fecha_inicio).toLocaleDateString("es-UY", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : undefined,
+          eventoLugar: evento.lugar || undefined,
         });
       } catch (emailError) {
         console.error("Error sending free ticket email:", emailError);
