@@ -26,6 +26,8 @@ export interface Database {
           fecha_nacimiento: string | null;
           avatar_url: string | null;
           es_socio: boolean;
+          socio_verificado: boolean;
+          padron_socio_id: number | null;
           numero_socio: string | null;
           estado_socio: "activo" | "inactivo" | "moroso" | "suspendido";
           fecha_alta_socio: string | null;
@@ -42,6 +44,8 @@ export interface Database {
           fecha_nacimiento?: string | null;
           avatar_url?: string | null;
           es_socio?: boolean;
+          socio_verificado?: boolean;
+          padron_socio_id?: number | null;
           numero_socio?: string | null;
           estado_socio?: "activo" | "inactivo" | "moroso" | "suspendido";
           fecha_alta_socio?: string | null;
@@ -58,6 +62,8 @@ export interface Database {
           fecha_nacimiento?: string | null;
           avatar_url?: string | null;
           es_socio?: boolean;
+          socio_verificado?: boolean;
+          padron_socio_id?: number | null;
           numero_socio?: string | null;
           estado_socio?: "activo" | "inactivo" | "moroso" | "suspendido";
           fecha_alta_socio?: string | null;
