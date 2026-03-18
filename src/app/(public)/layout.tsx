@@ -2,6 +2,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageTransition } from "@/components/layout/page-transition";
 import { HaceteSocioCTA } from "@/components/shared/hacete-socio-cta";
+import { CartProviderWrapper } from "@/components/tienda/cart-provider-wrapper";
 
 export default function PublicLayout({
   children,
@@ -9,7 +10,7 @@ export default function PublicLayout({
   children: React.ReactNode;
 }) {
   return (
-    <>
+    <CartProviderWrapper>
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:rounded-lg focus:bg-bordo-800 focus:px-4 focus:py-2 focus:text-white focus:text-sm focus:font-medium focus:shadow-elevated"
@@ -22,6 +23,6 @@ export default function PublicLayout({
       </PageTransition>
       <HaceteSocioCTA />
       <Footer />
-    </>
+    </CartProviderWrapper>
   );
 }

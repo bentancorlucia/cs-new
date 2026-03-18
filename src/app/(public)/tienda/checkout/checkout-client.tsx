@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   MapPin,
   AlertCircle,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -141,39 +142,40 @@ export function CheckoutClient() {
   }
 
   return (
-    <motion.div {...pageTransition} className="mx-auto max-w-4xl px-4 py-8">
+    <motion.div {...pageTransition} className="mx-auto max-w-4xl px-4 py-6 pb-36 md:pb-8">
       {/* Header */}
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between md:mb-8">
         <div>
-          <h1 className="font-display text-2xl font-bold md:text-3xl">
+          <h1 className="font-display text-xl font-bold md:text-3xl">
             Checkout
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-0.5 text-sm text-muted-foreground">
             Revisá tu pedido y completá la compra
           </p>
         </div>
         <Link href="/tienda/carrito">
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" className="gap-1.5">
             <ArrowLeft className="size-4" />
-            Volver al carrito
+            <span className="hidden sm:inline">Volver al carrito</span>
+            <span className="sm:hidden">Carrito</span>
           </Button>
         </Link>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
+      <div className="grid gap-6 lg:grid-cols-[1fr_380px] lg:gap-8">
         {/* Left column — Order details */}
         <motion.div
           variants={staggerContainer}
           initial="hidden"
           animate="visible"
-          className="space-y-6"
+          className="space-y-4 md:space-y-6"
         >
           {/* Datos de contacto */}
           <motion.div
             variants={fadeInUp}
-            className="rounded-xl border bg-card p-5"
+            className="rounded-2xl border bg-card p-4 md:p-5"
           >
-            <h2 className="mb-3 font-heading text-sm font-bold uppercase tracking-wider text-muted-foreground">
+            <h2 className="mb-3 font-heading text-xs font-bold uppercase tracking-wider text-muted-foreground">
               Datos de contacto
             </h2>
             {profile && (
@@ -185,10 +187,14 @@ export function CheckoutClient() {
                   <p className="text-muted-foreground">{profile.telefono}</p>
                 )}
                 {esSocio && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-bordo-50 px-2.5 py-0.5 text-xs font-medium text-bordo-800">
-                    <ShieldCheck className="size-3" />
+                  <motion.span
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-bordo-50 px-3 py-1 text-xs font-medium text-bordo-800"
+                  >
+                    <ShieldCheck className="size-3.5" />
                     Socio — precios especiales aplicados
-                  </span>
+                  </motion.span>
                 )}
               </div>
             )}
@@ -197,13 +203,15 @@ export function CheckoutClient() {
           {/* Método de retiro */}
           <motion.div
             variants={fadeInUp}
-            className="rounded-xl border bg-card p-5"
+            className="rounded-2xl border bg-card p-4 md:p-5"
           >
-            <h2 className="mb-3 font-heading text-sm font-bold uppercase tracking-wider text-muted-foreground">
+            <h2 className="mb-3 font-heading text-xs font-bold uppercase tracking-wider text-muted-foreground">
               Retiro
             </h2>
             <div className="flex items-start gap-3">
-              <MapPin className="mt-0.5 size-5 text-bordo-800" />
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-bordo-50">
+                <MapPin className="size-5 text-bordo-800" />
+              </div>
               <div className="text-sm">
                 <p className="font-medium">Retiro en el club</p>
                 <p className="text-muted-foreground">
@@ -216,13 +224,13 @@ export function CheckoutClient() {
           {/* Items del pedido */}
           <motion.div
             variants={fadeInUp}
-            className="rounded-xl border bg-card p-5"
+            className="rounded-2xl border bg-card p-4 md:p-5"
           >
-            <h2 className="mb-4 font-heading text-sm font-bold uppercase tracking-wider text-muted-foreground">
+            <h2 className="mb-3 font-heading text-xs font-bold uppercase tracking-wider text-muted-foreground">
               Tu pedido ({itemCount} {itemCount === 1 ? "producto" : "productos"})
             </h2>
 
-            <div className="divide-y">
+            <div className="divide-y divide-linea/50">
               {items.map((item) => {
                 const key = `${item.productoId}-${item.varianteId ?? ""}`;
                 const precioItem = esSocio && item.precioSocio
@@ -230,14 +238,14 @@ export function CheckoutClient() {
                   : item.precio;
                 return (
                   <div key={key} className="flex gap-3 py-3 first:pt-0 last:pb-0">
-                    <div className="relative size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
+                    <div className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-muted sm:size-18">
                       {item.imagenUrl ? (
                         <Image
                           src={item.imagenUrl}
                           alt={item.nombre}
                           fill
                           className="object-cover"
-                          sizes="64px"
+                          sizes="72px"
                         />
                       ) : (
                         <div className="flex h-full items-center justify-center">
@@ -250,7 +258,7 @@ export function CheckoutClient() {
                       <div>
                         <p className="text-sm font-medium">{item.nombre}</p>
                         <p className="text-xs text-muted-foreground">
-                          Cant: {item.cantidad} &times; $
+                          {item.cantidad} &times; $
                           {precioItem.toLocaleString("es-UY")}
                         </p>
                       </div>
@@ -267,11 +275,11 @@ export function CheckoutClient() {
           {/* Notas */}
           <motion.div
             variants={fadeInUp}
-            className="rounded-xl border bg-card p-5"
+            className="rounded-2xl border bg-card p-4 md:p-5"
           >
             <Label
               htmlFor="notas"
-              className="mb-2 block font-heading text-sm font-bold uppercase tracking-wider text-muted-foreground"
+              className="mb-2 block font-heading text-xs font-bold uppercase tracking-wider text-muted-foreground"
             >
               Nota (opcional)
             </Label>
@@ -287,14 +295,14 @@ export function CheckoutClient() {
           </motion.div>
         </motion.div>
 
-        {/* Right column — Summary + pay button */}
+        {/* Right column — Summary + pay button — desktop */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="h-fit space-y-4 lg:sticky lg:top-24"
+          className="hidden h-fit space-y-4 lg:sticky lg:top-24 lg:block"
         >
-          <div className="rounded-xl border bg-card p-5">
+          <div className="rounded-2xl border bg-card p-5">
             <h2 className="mb-4 text-lg font-bold">Resumen del pedido</h2>
 
             <div className="space-y-2 text-sm">
@@ -334,7 +342,7 @@ export function CheckoutClient() {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="mt-4 flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
+                  className="mt-4 flex items-start gap-2 rounded-xl bg-destructive/10 p-3 text-sm text-destructive"
                 >
                   <AlertCircle className="mt-0.5 size-4 shrink-0" />
                   {error}
@@ -342,24 +350,26 @@ export function CheckoutClient() {
               )}
             </AnimatePresence>
 
-            <Button
-              size="lg"
-              className="mt-5 w-full gap-2"
-              onClick={handleCheckout}
-              disabled={submitting}
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Procesando...
-                </>
-              ) : (
-                <>
-                  <ShieldCheck className="size-4" />
-                  Pagar con MercadoPago
-                </>
-              )}
-            </Button>
+            <motion.div whileTap={{ scale: 0.97 }}>
+              <Button
+                size="lg"
+                className="mt-5 w-full gap-2"
+                onClick={handleCheckout}
+                disabled={submitting}
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Procesando...
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="size-4" />
+                    Pagar con MercadoPago
+                  </>
+                )}
+              </Button>
+            </motion.div>
 
             <p className="mt-3 text-center text-xs text-muted-foreground">
               Serás redirigido a MercadoPago para completar el pago de forma
@@ -368,7 +378,7 @@ export function CheckoutClient() {
           </div>
 
           {/* Trust badges */}
-          <div className="rounded-xl border bg-card p-4">
+          <div className="rounded-2xl border bg-card p-4">
             <div className="flex flex-col gap-3 text-xs text-muted-foreground">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="size-4 text-green-600" />
@@ -382,6 +392,68 @@ export function CheckoutClient() {
           </div>
         </motion.div>
       </div>
+
+      {/* Mobile sticky pay bar */}
+      <motion.div
+        initial={{ y: 100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={springSmooth}
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-linea bg-white/95 backdrop-blur-lg lg:hidden"
+      >
+        <div className="px-4 py-3 pb-[max(12px,env(safe-area-inset-bottom))]">
+          {/* Error inline */}
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-2 flex items-start gap-2 rounded-xl bg-destructive/10 p-2.5 text-xs text-destructive"
+              >
+                <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+                {error}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="mb-2 flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Lock className="size-3" />
+              Pago seguro
+            </div>
+            <motion.span
+              key={totalFinal}
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={springSmooth}
+              className="text-xl font-bold"
+            >
+              ${totalFinal.toLocaleString("es-UY")}
+            </motion.span>
+          </div>
+
+          <motion.div whileTap={{ scale: 0.97 }}>
+            <Button
+              size="lg"
+              className="w-full gap-2 text-base"
+              onClick={handleCheckout}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="size-5 animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="size-5" />
+                  Pagar con MercadoPago
+                </>
+              )}
+            </Button>
+          </motion.div>
+        </div>
+      </motion.div>
     </motion.div>
   );
 }

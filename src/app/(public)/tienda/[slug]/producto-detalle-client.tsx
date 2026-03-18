@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -91,6 +91,10 @@ export function ProductoDetalleClient({ producto, relacionados }: Props) {
   const [added, setAdded] = useState(false);
   const { addItem } = useCart();
 
+  // Swipe gesture for mobile gallery
+  const dragX = useMotionValue(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const varianteActual = tieneVariantes
     ? variantes.find((v) => v.id === varianteSeleccionada)
     : null;
@@ -133,13 +137,25 @@ export function ProductoDetalleClient({ producto, relacionados }: Props) {
     setImagenActiva((prev) => (prev - 1 + imagenes.length) % imagenes.length);
   }
 
+  function handleDragEnd(_: unknown, info: { offset: { x: number }; velocity: { x: number } }) {
+    const threshold = 50;
+    const velocity = info.velocity.x;
+    const offset = info.offset.x;
+
+    if (offset < -threshold || velocity < -500) {
+      nextImage();
+    } else if (offset > threshold || velocity > 500) {
+      prevImage();
+    }
+  }
+
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8">
+    <div className="mx-auto max-w-7xl px-4 py-6 pb-32 md:pb-8">
       {/* Breadcrumb */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="mb-6 flex items-center gap-2 text-sm text-muted-foreground"
+        className="mb-4 flex items-center gap-2 text-sm text-muted-foreground md:mb-6"
       >
         <Link href="/tienda" className="flex items-center gap-1 hover:text-foreground">
           <ArrowLeft className="size-3.5" />
@@ -153,25 +169,33 @@ export function ProductoDetalleClient({ producto, relacionados }: Props) {
         )}
       </motion.div>
 
-      <div className="grid gap-8 lg:grid-cols-2">
-        {/* Image gallery */}
+      <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
+        {/* Image gallery with swipe support */}
         <motion.div variants={fadeInLeft} initial="hidden" animate="visible" transition={springSmooth}>
-          <div className="relative aspect-square overflow-hidden rounded-2xl bg-muted">
-            <AnimatePresence mode="wait">
+          <div
+            ref={containerRef}
+            className="relative aspect-square overflow-hidden rounded-2xl bg-muted"
+          >
+            <AnimatePresence mode="wait" initial={false}>
               {imagenes.length > 0 ? (
                 <motion.div
                   key={imagenActiva}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="relative h-full w-full"
+                  transition={{ duration: 0.2 }}
+                  drag={imagenes.length > 1 ? "x" : false}
+                  dragConstraints={{ left: 0, right: 0 }}
+                  dragElastic={0.15}
+                  onDragEnd={handleDragEnd}
+                  style={{ x: dragX }}
+                  className="relative h-full w-full cursor-grab active:cursor-grabbing touch-pan-y"
                 >
                   <Image
                     src={imagenes[imagenActiva].url}
                     alt={imagenes[imagenActiva].alt_text || producto.nombre}
                     fill
-                    className="object-cover"
+                    className="pointer-events-none object-cover"
                     sizes="(max-width: 1024px) 100vw, 50vw"
                     priority
                   />
@@ -183,27 +207,46 @@ export function ProductoDetalleClient({ producto, relacionados }: Props) {
               )}
             </AnimatePresence>
 
+            {/* Nav arrows — desktop only */}
             {imagenes.length > 1 && (
               <>
                 <button
                   onClick={prevImage}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/80 p-2 shadow-md backdrop-blur-sm transition hover:bg-white"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/80 p-2 shadow-md backdrop-blur-sm transition hover:bg-white hidden md:flex"
                 >
                   <ChevronLeft className="size-5" />
                 </button>
                 <button
                   onClick={nextImage}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/80 p-2 shadow-md backdrop-blur-sm transition hover:bg-white"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/80 p-2 shadow-md backdrop-blur-sm transition hover:bg-white hidden md:flex"
                 >
                   <ChevronRight className="size-5" />
                 </button>
               </>
             )}
+
+            {/* Dot indicators for mobile */}
+            {imagenes.length > 1 && (
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                {imagenes.map((_, i) => (
+                  <motion.button
+                    key={i}
+                    onClick={() => setImagenActiva(i)}
+                    animate={{
+                      width: i === imagenActiva ? 20 : 8,
+                      backgroundColor: i === imagenActiva ? "#730d32" : "rgba(255,255,255,0.7)",
+                    }}
+                    transition={springSmooth}
+                    className="h-2 rounded-full shadow-sm"
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Thumbnails */}
+          {/* Thumbnails — desktop */}
           {imagenes.length > 1 && (
-            <div className="mt-3 flex gap-2 overflow-x-auto">
+            <div className="mt-3 hidden gap-2 overflow-x-auto md:flex">
               {imagenes.map((img, i) => (
                 <button
                   key={img.id}
@@ -211,7 +254,7 @@ export function ProductoDetalleClient({ producto, relacionados }: Props) {
                   className={cn(
                     "relative size-16 shrink-0 overflow-hidden rounded-lg border-2 transition",
                     i === imagenActiva
-                      ? "border-bordo"
+                      ? "border-bordo ring-2 ring-bordo/20"
                       : "border-transparent opacity-60 hover:opacity-100"
                   )}
                 >
@@ -247,7 +290,7 @@ export function ProductoDetalleClient({ producto, relacionados }: Props) {
           </h1>
 
           {/* Precio */}
-          <div className="mt-4 flex items-end gap-3">
+          <div className="mt-3 flex items-end gap-3 md:mt-4">
             <span className={cn("text-2xl font-bold", tieneDescuento && "text-lg text-muted-foreground line-through")}>
               ${precioActual.toLocaleString("es-UY")}
             </span>
@@ -264,7 +307,7 @@ export function ProductoDetalleClient({ producto, relacionados }: Props) {
           </div>
 
           {/* Stock indicator */}
-          <div className="mt-3">
+          <div className="mt-2">
             {agotado ? (
               <Badge variant="destructive">Agotado</Badge>
             ) : stockActual <= 5 ? (
@@ -295,48 +338,57 @@ export function ProductoDetalleClient({ producto, relacionados }: Props) {
               </label>
               <div className="flex flex-wrap gap-2">
                 {variantes.map((v) => (
-                  <button
+                  <motion.button
                     key={v.id}
+                    whileTap={{ scale: 0.95 }}
                     onClick={() => {
                       setVarianteSeleccionada(v.id);
                       setCantidad(1);
                     }}
                     disabled={v.stock_actual <= 0}
                     className={cn(
-                      "rounded-lg border px-4 py-2 text-sm font-medium transition-all",
+                      "rounded-xl border px-4 py-2.5 text-sm font-medium transition-all min-h-[44px]",
                       varianteSeleccionada === v.id
-                        ? "border-bordo bg-bordo/5 text-bordo"
-                        : "border-border hover:border-foreground/30",
+                        ? "border-bordo bg-bordo/5 text-bordo ring-2 ring-bordo/20"
+                        : "border-border hover:border-foreground/30 active:bg-muted",
                       v.stock_actual <= 0 && "opacity-40 line-through"
                     )}
                   >
                     {v.nombre}
-                  </button>
+                  </motion.button>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Quantity + add to cart */}
-          <div className="mt-auto flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="flex items-center rounded-lg border">
-              <button
+          {/* Quantity + add to cart — desktop */}
+          <div className="mt-auto hidden flex-col gap-3 sm:flex sm:flex-row sm:items-center md:flex">
+            <div className="flex items-center rounded-xl border">
+              <motion.button
+                whileTap={{ scale: 0.85 }}
                 onClick={() => setCantidad((q) => Math.max(1, q - 1))}
                 disabled={cantidad <= 1}
-                className="flex size-10 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
+                className="flex size-12 items-center justify-center text-muted-foreground transition-colors active:bg-muted active:text-foreground disabled:opacity-30"
               >
                 <Minus className="size-4" />
-              </button>
-              <span className="min-w-[3ch] text-center font-medium">
+              </motion.button>
+              <motion.span
+                key={cantidad}
+                initial={{ scale: 0.7 }}
+                animate={{ scale: 1 }}
+                transition={springBouncy}
+                className="min-w-[3ch] text-center text-base font-semibold"
+              >
                 {cantidad}
-              </span>
-              <button
+              </motion.span>
+              <motion.button
+                whileTap={{ scale: 0.85 }}
                 onClick={() => setCantidad((q) => Math.min(stockActual, q + 1))}
                 disabled={cantidad >= stockActual}
-                className="flex size-10 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
+                className="flex size-12 items-center justify-center text-muted-foreground transition-colors active:bg-muted active:text-foreground disabled:opacity-30"
               >
                 <Plus className="size-4" />
-              </button>
+              </motion.button>
             </div>
 
             <motion.div whileTap={{ scale: 0.97 }} className="flex-1">
@@ -377,23 +429,143 @@ export function ProductoDetalleClient({ producto, relacionados }: Props) {
         </motion.div>
       </div>
 
+      {/* Mobile sticky add-to-cart bar */}
+      <motion.div
+        initial={{ y: 100 }}
+        animate={{ y: 0 }}
+        transition={springSmooth}
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-linea bg-white/95 backdrop-blur-lg md:hidden"
+      >
+        <div className="px-4 py-3 pb-[max(12px,env(safe-area-inset-bottom))]">
+          {/* Price row */}
+          <div className="mb-2.5 flex items-center justify-between">
+            <div className="flex items-baseline gap-2">
+              {tieneDescuento ? (
+                <>
+                  <span className="text-xs text-muted-foreground line-through">
+                    ${precioActual.toLocaleString("es-UY")}
+                  </span>
+                  <span className="text-lg font-bold text-bordo">
+                    ${producto.precio_socio!.toLocaleString("es-UY")}
+                  </span>
+                </>
+              ) : (
+                <span className="text-lg font-bold">
+                  ${precioActual.toLocaleString("es-UY")}
+                </span>
+              )}
+            </div>
+
+            {/* Quantity selector */}
+            <div className="flex items-center rounded-xl border border-linea">
+              <motion.button
+                whileTap={{ scale: 0.85 }}
+                onClick={() => setCantidad((q) => Math.max(1, q - 1))}
+                disabled={cantidad <= 1}
+                className="flex size-10 items-center justify-center text-muted-foreground active:bg-muted disabled:opacity-30"
+              >
+                <Minus className="size-4" />
+              </motion.button>
+              <motion.span
+                key={cantidad}
+                initial={{ scale: 0.7 }}
+                animate={{ scale: 1 }}
+                transition={springBouncy}
+                className="min-w-[2.5ch] text-center text-sm font-semibold"
+              >
+                {cantidad}
+              </motion.span>
+              <motion.button
+                whileTap={{ scale: 0.85 }}
+                onClick={() => setCantidad((q) => Math.min(stockActual, q + 1))}
+                disabled={cantidad >= stockActual}
+                className="flex size-10 items-center justify-center text-muted-foreground active:bg-muted disabled:opacity-30"
+              >
+                <Plus className="size-4" />
+              </motion.button>
+            </div>
+          </div>
+
+          {/* Add to cart button */}
+          <motion.div whileTap={{ scale: 0.97 }}>
+            <Button
+              size="lg"
+              className="w-full gap-2 text-base"
+              disabled={agotado}
+              onClick={handleAddToCart}
+            >
+              <AnimatePresence mode="wait">
+                {added ? (
+                  <motion.span
+                    key="added"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    className="flex items-center gap-2"
+                  >
+                    <Check className="size-5" />
+                    Agregado al carrito
+                  </motion.span>
+                ) : agotado ? (
+                  <span>Sin stock</span>
+                ) : (
+                  <motion.span
+                    key="add"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    className="flex items-center gap-2"
+                  >
+                    <ShoppingCart className="size-5" />
+                    Agregar al carrito
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </Button>
+          </motion.div>
+        </div>
+      </motion.div>
+
       {/* Related products */}
       {relacionados.length > 0 && (
         <motion.section
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
-          className="mt-16"
+          className="mt-12 md:mt-16"
         >
-          <h2 className="mb-6 font-display text-xl font-bold">
+          <h2 className="mb-4 font-display text-xl font-bold md:mb-6">
             Productos relacionados
           </h2>
+          {/* Horizontal scroll on mobile, grid on desktop */}
+          <div className="md:hidden">
+            <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4">
+              {relacionados.map((rel) => {
+                const img = rel.producto_imagenes?.find((i) => i.es_principal)
+                  ?? rel.producto_imagenes?.[0];
+                return (
+                  <div key={rel.id} className="w-[160px] shrink-0">
+                    <ProductCard
+                      id={rel.id}
+                      nombre={rel.nombre}
+                      slug={rel.slug}
+                      precio={rel.precio}
+                      precioSocio={rel.precio_socio}
+                      imagenUrl={img?.url}
+                      stock={rel.stock_actual}
+                      destacado={rel.destacado}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
           <motion.div
             variants={staggerContainer}
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true }}
-            className="grid grid-cols-2 gap-4 md:grid-cols-4"
+            className="hidden grid-cols-2 gap-4 md:grid md:grid-cols-4"
           >
             {relacionados.map((rel) => {
               const img = rel.producto_imagenes?.find((i) => i.es_principal)

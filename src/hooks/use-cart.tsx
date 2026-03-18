@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import type { ReactNode } from "react";
 
 export interface CartItem {
   productoId: number;
@@ -13,6 +14,20 @@ export interface CartItem {
   maxStock: number;
   slug: string;
 }
+
+interface CartContextValue {
+  items: CartItem[];
+  loaded: boolean;
+  addItem: (item: Omit<CartItem, "cantidad">, cantidad?: number) => void;
+  updateQuantity: (productoId: number, varianteId: number | undefined, cantidad: number) => void;
+  removeItem: (productoId: number, varianteId?: number) => void;
+  clearCart: () => void;
+  itemCount: number;
+  total: number;
+  totalSocio: number;
+}
+
+const CartContext = createContext<CartContextValue | null>(null);
 
 const CART_KEY = "cs-carrito";
 
@@ -31,7 +46,7 @@ function saveCart(items: CartItem[]) {
   localStorage.setItem(CART_KEY, JSON.stringify(items));
 }
 
-export function useCart() {
+export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -99,15 +114,28 @@ export function useCart() {
     [items]
   );
 
-  return {
-    items,
-    loaded,
-    addItem,
-    updateQuantity,
-    removeItem,
-    clearCart,
-    itemCount,
-    total,
-    totalSocio,
-  };
+  const value = useMemo<CartContextValue>(
+    () => ({
+      items,
+      loaded,
+      addItem,
+      updateQuantity,
+      removeItem,
+      clearCart,
+      itemCount,
+      total,
+      totalSocio,
+    }),
+    [items, loaded, addItem, updateQuantity, removeItem, clearCart, itemCount, total, totalSocio]
+  );
+
+  return <CartContext value={value}>{children}</CartContext>;
+}
+
+export function useCart(): CartContextValue {
+  const ctx = useContext(CartContext);
+  if (!ctx) {
+    throw new Error("useCart must be used within a CartProvider");
+  }
+  return ctx;
 }

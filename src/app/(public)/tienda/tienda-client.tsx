@@ -17,6 +17,7 @@ import {
 import { ProductCard } from "@/components/tienda/product-card";
 import { useCart } from "@/hooks/use-cart";
 import { CartSheet } from "@/components/tienda/cart-sheet";
+import { MobileCartBar } from "@/components/tienda/mobile-cart-bar";
 import { HeroSection } from "@/components/shared/hero-section";
 import { createBrowserClient } from "@/lib/supabase/client";
 import {
@@ -313,6 +314,9 @@ export function TiendaClient() {
         </>
       )}
     </div>
+
+      {/* Mobile sticky cart bar */}
+      <MobileCartBar />
     </>
   );
 }

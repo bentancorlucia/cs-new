@@ -18,6 +18,7 @@ import {
   fadeInUp,
   staggerContainer,
   springSmooth,
+  springBouncy,
 } from "@/lib/motion";
 
 export function CarritoClient() {
@@ -37,24 +38,25 @@ export function CarritoClient() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <div className="mx-auto max-w-3xl px-4 py-6 pb-36 md:pb-8">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-6 flex items-center justify-between"
+        className="mb-5 flex items-center justify-between md:mb-6"
       >
         <div>
-          <h1 className="font-display text-2xl font-bold md:text-3xl">
-            Carrito de compras
+          <h1 className="font-display text-xl font-bold md:text-3xl">
+            Carrito
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-0.5 text-sm text-muted-foreground">
             {itemCount} {itemCount === 1 ? "producto" : "productos"}
           </p>
         </div>
         <Link href="/tienda">
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" className="gap-1.5">
             <ArrowLeft className="size-4" />
-            Seguir comprando
+            <span className="hidden sm:inline">Seguir comprando</span>
+            <span className="sm:hidden">Tienda</span>
           </Button>
         </Link>
       </motion.div>
@@ -68,11 +70,11 @@ export function CarritoClient() {
           <ShoppingCart className="size-20 opacity-20" />
           <p className="text-lg font-medium">Tu carrito está vacío</p>
           <Link href="/tienda">
-            <Button>Explorar tienda</Button>
+            <Button size="lg">Explorar tienda</Button>
           </Link>
         </motion.div>
       ) : (
-        <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
+        <div className="grid gap-6 lg:grid-cols-[1fr_320px] lg:gap-8">
           {/* Items list */}
           <motion.div
             variants={staggerContainer}
@@ -89,11 +91,11 @@ export function CarritoClient() {
                     exit={{ opacity: 0, x: -50, transition: { duration: 0.2 } }}
                     layout
                     transition={springSmooth}
-                    className="flex gap-4 border-b py-4"
+                    className="flex gap-3 border-b border-linea/50 py-4 sm:gap-4"
                   >
                     <Link
                       href={`/tienda/${item.slug}`}
-                      className="relative size-24 shrink-0 overflow-hidden rounded-xl bg-muted"
+                      className="relative size-20 shrink-0 overflow-hidden rounded-xl bg-muted sm:size-24"
                     >
                       {item.imagenUrl ? (
                         <Image
@@ -113,7 +115,7 @@ export function CarritoClient() {
                     <div className="flex flex-1 flex-col gap-1">
                       <Link
                         href={`/tienda/${item.slug}`}
-                        className="font-medium hover:text-bordo"
+                        className="text-sm font-medium leading-tight hover:text-bordo sm:text-base"
                       >
                         {item.nombre}
                       </Link>
@@ -130,8 +132,10 @@ export function CarritoClient() {
                       </div>
 
                       <div className="mt-auto flex items-center justify-between pt-2">
-                        <div className="flex items-center rounded-lg border">
-                          <button
+                        {/* Quantity — mobile-friendly size */}
+                        <div className="flex items-center rounded-xl border border-linea">
+                          <motion.button
+                            whileTap={{ scale: 0.85 }}
                             onClick={() =>
                               updateQuantity(
                                 item.productoId,
@@ -139,14 +143,21 @@ export function CarritoClient() {
                                 item.cantidad - 1
                               )
                             }
-                            className="flex size-8 items-center justify-center text-muted-foreground hover:text-foreground"
+                            className="flex size-10 items-center justify-center text-muted-foreground transition-colors active:bg-muted active:text-foreground"
                           >
-                            <Minus className="size-3.5" />
-                          </button>
-                          <span className="min-w-[2.5ch] text-center text-sm font-medium">
+                            <Minus className="size-4" />
+                          </motion.button>
+                          <motion.span
+                            key={item.cantidad}
+                            initial={{ scale: 0.7 }}
+                            animate={{ scale: 1 }}
+                            transition={springBouncy}
+                            className="min-w-[2.5ch] text-center text-sm font-semibold"
+                          >
                             {item.cantidad}
-                          </span>
-                          <button
+                          </motion.span>
+                          <motion.button
+                            whileTap={{ scale: 0.85 }}
                             onClick={() =>
                               updateQuantity(
                                 item.productoId,
@@ -155,24 +166,25 @@ export function CarritoClient() {
                               )
                             }
                             disabled={item.cantidad >= item.maxStock}
-                            className="flex size-8 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
+                            className="flex size-10 items-center justify-center text-muted-foreground transition-colors active:bg-muted active:text-foreground disabled:opacity-30"
                           >
-                            <Plus className="size-3.5" />
-                          </button>
+                            <Plus className="size-4" />
+                          </motion.button>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3">
                           <span className="text-sm font-bold">
                             ${(item.precio * item.cantidad).toLocaleString("es-UY")}
                           </span>
-                          <button
+                          <motion.button
+                            whileTap={{ scale: 0.8 }}
                             onClick={() =>
                               removeItem(item.productoId, item.varianteId)
                             }
-                            className="text-muted-foreground hover:text-destructive"
+                            className="flex size-10 items-center justify-center rounded-xl text-muted-foreground transition-colors active:bg-destructive/10 active:text-destructive"
                           >
                             <Trash2 className="size-4" />
-                          </button>
+                          </motion.button>
                         </div>
                       </div>
                     </div>
@@ -194,12 +206,12 @@ export function CarritoClient() {
             </motion.div>
           </motion.div>
 
-          {/* Order summary */}
+          {/* Order summary — desktop */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="h-fit rounded-xl border bg-card p-5"
+            className="hidden h-fit rounded-xl border bg-card p-5 lg:block"
           >
             <h2 className="mb-4 text-lg font-bold">Resumen</h2>
 
@@ -245,11 +257,13 @@ export function CarritoClient() {
               </motion.span>
             </div>
 
-            <Link href="/tienda/checkout" className="block">
-              <Button className="w-full" size="lg">
-                Ir al checkout
-                <ArrowRight className="ml-1 size-4" />
-              </Button>
+            <Link href="/tienda/checkout" className="mt-4 block">
+              <motion.div whileTap={{ scale: 0.97 }}>
+                <Button className="w-full gap-2" size="lg">
+                  Ir al checkout
+                  <ArrowRight className="size-4" />
+                </Button>
+              </motion.div>
             </Link>
 
             <p className="mt-3 text-center text-xs text-muted-foreground">
@@ -257,6 +271,41 @@ export function CarritoClient() {
             </p>
           </motion.div>
         </div>
+      )}
+
+      {/* Mobile sticky checkout bar */}
+      {items.length > 0 && (
+        <motion.div
+          initial={{ y: 100, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={springSmooth}
+          className="fixed inset-x-0 bottom-0 z-50 border-t border-linea bg-white/95 backdrop-blur-lg lg:hidden"
+        >
+          <div className="px-4 py-3 pb-[max(12px,env(safe-area-inset-bottom))]">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">
+                {itemCount} {itemCount === 1 ? "producto" : "productos"}
+              </span>
+              <motion.span
+                key={total}
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={springSmooth}
+                className="text-xl font-bold"
+              >
+                ${total.toLocaleString("es-UY")}
+              </motion.span>
+            </div>
+            <Link href="/tienda/checkout">
+              <motion.div whileTap={{ scale: 0.97 }}>
+                <Button className="w-full gap-2 text-base" size="lg">
+                  Ir al checkout
+                  <ArrowRight className="size-4" />
+                </Button>
+              </motion.div>
+            </Link>
+          </div>
+        </motion.div>
       )}
     </div>
   );

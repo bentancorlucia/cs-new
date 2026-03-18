@@ -14,6 +14,7 @@ import {
   ChevronRight,
   AlertTriangle,
   MoreHorizontal,
+  FileSpreadsheet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +50,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { staggerContainerFast, fadeInUp } from "@/lib/motion";
 import { toast } from "sonner";
+import { ImportarExcelDialog } from "./_components/importar-excel-dialog";
 
 interface Producto {
   id: number;
@@ -75,6 +77,7 @@ export default function AdminProductosPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const fetchProductos = useCallback(async () => {
     setLoading(true);
@@ -144,12 +147,18 @@ export default function AdminProductosPage() {
             {total > 0 && `${total} productos · `}Gestión del catálogo de la tienda
           </p>
         </div>
-        <Link href="/admin/productos/nuevo">
-          <Button className="w-full sm:w-auto">
-            <Plus className="size-4" />
-            Nuevo producto
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button variant="outline" onClick={() => setImportOpen(true)} className="flex-1 sm:flex-none">
+            <FileSpreadsheet className="size-4" />
+            Importar
           </Button>
-        </Link>
+          <Link href="/admin/productos/nuevo" className="flex-1 sm:flex-none">
+            <Button className="w-full">
+              <Plus className="size-4" />
+              Nuevo producto
+            </Button>
+          </Link>
+        </div>
       </motion.div>
 
       {/* Filters */}
@@ -379,6 +388,13 @@ export default function AdminProductosPage() {
           </div>
         </div>
       )}
+
+      {/* Import dialog */}
+      <ImportarExcelDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onSuccess={fetchProductos}
+      />
 
       {/* Delete dialog */}
       <Dialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>

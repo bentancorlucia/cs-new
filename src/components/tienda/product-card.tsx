@@ -1,12 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { ShoppingCart, Eye } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ShoppingCart, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { fadeInUp, springBouncy } from "@/lib/motion";
+import { fadeInUp, springBouncy, springSmooth } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 export interface ProductCardProps {
@@ -38,14 +38,24 @@ export function ProductCard({
   const porcentajeDescuento = tieneDescuento
     ? Math.round(((precio - precioSocio!) / precio) * 100)
     : 0;
+  const [added, setAdded] = useState(false);
+
+  function handleAdd(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (agotado || added) return;
+    onAddToCart?.();
+    setAdded(true);
+    setTimeout(() => setAdded(false), 1500);
+  }
 
   return (
     <motion.div
       variants={fadeInUp}
-      className="group relative flex flex-col overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 transition-shadow hover:shadow-lg hover:ring-foreground/20"
+      className="group relative flex flex-col overflow-hidden rounded-2xl bg-card ring-1 ring-foreground/[0.06] transition-shadow hover:shadow-lg hover:ring-foreground/15 active:scale-[0.98]"
     >
       {/* Image */}
-      <Link href={`/tienda/${slug}`} className="relative aspect-square overflow-hidden bg-muted">
+      <Link href={`/tienda/${slug}`} className="relative aspect-[4/5] overflow-hidden bg-muted">
         {imagenUrl ? (
           <Image
             src={imagenUrl}
@@ -61,80 +71,94 @@ export function ProductCard({
         )}
 
         {/* Badges */}
-        <div className="absolute left-2 top-2 flex flex-col gap-1">
+        <div className="absolute left-2 top-2 flex flex-col gap-1.5">
           {agotado && (
-            <Badge variant="destructive" className="text-[10px]">
+            <Badge variant="destructive" className="text-[10px] shadow-sm">
               Agotado
             </Badge>
           )}
           {tieneDescuento && !agotado && (
-            <Badge className="bg-amarillo text-texto text-[10px]">
-              Socio -{porcentajeDescuento}%
+            <Badge className="bg-amarillo text-texto text-[10px] shadow-sm">
+              -{porcentajeDescuento}%
             </Badge>
           )}
           {destacado && !agotado && (
-            <Badge variant="secondary" className="text-[10px]">
+            <Badge variant="secondary" className="text-[10px] shadow-sm">
               Destacado
             </Badge>
           )}
         </div>
 
-        {/* Quick view overlay */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          whileHover={{ opacity: 1 }}
-          className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity group-hover:opacity-100"
-        >
-          <div className="flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-texto">
-            <Eye className="size-3.5" />
-            Ver producto
-          </div>
-        </motion.div>
+        {/* Quick-add floating button (mobile: always visible, desktop: on hover) */}
+        {!agotado && (
+          <motion.button
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            whileTap={{ scale: 0.85 }}
+            transition={springBouncy}
+            onClick={handleAdd}
+            className={cn(
+              "absolute bottom-2.5 right-2.5 flex size-10 items-center justify-center rounded-full shadow-lg transition-colors",
+              "md:opacity-0 md:group-hover:opacity-100",
+              added
+                ? "bg-emerald-500 text-white"
+                : "bg-white text-bordo active:bg-bordo active:text-white"
+            )}
+          >
+            <AnimatePresence mode="wait">
+              {added ? (
+                <motion.span
+                  key="check"
+                  initial={{ scale: 0, rotate: -90 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  exit={{ scale: 0 }}
+                  transition={springBouncy}
+                >
+                  <Check className="size-5" strokeWidth={2.5} />
+                </motion.span>
+              ) : (
+                <motion.span
+                  key="cart"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0 }}
+                >
+                  <ShoppingCart className="size-[18px]" />
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </motion.button>
+        )}
       </Link>
 
       {/* Info */}
-      <div className="flex flex-1 flex-col gap-1.5 p-3">
+      <Link href={`/tienda/${slug}`} className="flex flex-1 flex-col gap-1 p-3 pb-3.5">
         {categoria && (
-          <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
             {categoria}
           </span>
         )}
-        <Link
-          href={`/tienda/${slug}`}
-          className="line-clamp-2 text-sm font-medium leading-tight text-foreground transition-colors hover:text-bordo"
-        >
+        <span className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground transition-colors group-hover:text-bordo sm:text-sm">
           {nombre}
-        </Link>
+        </span>
 
-        <div className="mt-auto flex items-end gap-2 pt-1">
-          <span className={cn("text-base font-bold", tieneDescuento && "text-muted-foreground line-through text-sm")}>
-            ${precio.toLocaleString("es-UY")}
-          </span>
-          {tieneDescuento && (
-            <span className="text-base font-bold text-bordo">
-              ${precioSocio!.toLocaleString("es-UY")}
+        <div className="mt-auto flex items-baseline gap-1.5 pt-1.5">
+          {tieneDescuento ? (
+            <>
+              <span className="text-[13px] font-medium text-muted-foreground line-through sm:text-sm">
+                ${precio.toLocaleString("es-UY")}
+              </span>
+              <span className="text-base font-bold text-bordo sm:text-lg">
+                ${precioSocio!.toLocaleString("es-UY")}
+              </span>
+            </>
+          ) : (
+            <span className="text-base font-bold text-foreground sm:text-lg">
+              ${precio.toLocaleString("es-UY")}
             </span>
           )}
         </div>
-      </div>
-
-      {/* Add to cart */}
-      <div className="px-3 pb-3">
-        <motion.div whileTap={{ scale: 0.95 }} transition={springBouncy}>
-          <Button
-            className="w-full"
-            size="sm"
-            disabled={agotado}
-            onClick={(e) => {
-              e.preventDefault();
-              onAddToCart?.();
-            }}
-          >
-            <ShoppingCart className="size-3.5" />
-            {agotado ? "Sin stock" : "Agregar"}
-          </Button>
-        </motion.div>
-      </div>
+      </Link>
     </motion.div>
   );
 }
