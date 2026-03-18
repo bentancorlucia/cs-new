@@ -59,19 +59,22 @@ export async function GET(
     }
   }
 
-  // Fetch active disciplines
-  const { data: disciplinas } = await supabase
-    .from("perfil_disciplinas")
-    .select("disciplinas(nombre)")
-    .eq("perfil_id", id)
-    .eq("activa", true);
+  // Fetch active disciplines from padron_disciplinas
+  let disciplinaNames: string[] = [];
+  if (perfil.padron_socio_id) {
+    const { data: disciplinas } = await supabase
+      .from("padron_disciplinas")
+      .select("disciplinas(nombre)")
+      .eq("padron_socio_id", perfil.padron_socio_id)
+      .eq("activa", true);
 
-  const disciplinaNames = disciplinas
-    ?.map((d: Record<string, unknown>) => {
-      const disc = d.disciplinas as { nombre: string } | null;
-      return disc?.nombre;
-    })
-    .filter(Boolean) ?? [];
+    disciplinaNames = disciplinas
+      ?.map((d: Record<string, unknown>) => {
+        const disc = d.disciplinas as { nombre: string } | null;
+        return disc?.nombre;
+      })
+      .filter((n): n is string => !!n) ?? [];
+  }
 
   return NextResponse.json({
     nombre: perfil.nombre,

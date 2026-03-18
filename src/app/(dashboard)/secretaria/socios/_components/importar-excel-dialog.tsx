@@ -62,10 +62,12 @@ export function ImportarSociosDialog({
   open,
   onOpenChange,
   onSuccess,
+  disciplinasDisponibles = [],
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  disciplinasDisponibles?: { id: number; nombre: string }[];
 }) {
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
@@ -345,7 +347,7 @@ export function ImportarSociosDialog({
                     {[
                       { name: "nombre", required: true },
                       { name: "apellido", required: true },
-                      { name: "cedula", required: false },
+                      { name: "cedula", required: true },
                       { name: "fecha_nacimiento", required: false },
                       { name: "telefono", required: false },
                       { name: "notas", required: false },
@@ -362,9 +364,29 @@ export function ImportarSociosDialog({
                     ))}
                   </div>
                   <p className="text-[10px] text-muted-foreground">
-                    * Obligatorios. Disciplinas separadas por punto y coma (ej:
-                    &quot;Rugby; Hockey&quot;). Se saltean cédulas ya registradas.
+                    * Obligatorios. Se saltean cédulas ya registradas.
                   </p>
+                  {disciplinasDisponibles.length > 0 && (
+                    <div className="pt-2 border-t border-linea/50 mt-2 space-y-1.5">
+                      <p className="font-body text-xs font-medium text-foreground">
+                        Disciplinas disponibles (usar estos nombres en la columna &quot;disciplinas&quot;, separados por punto y coma):
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {disciplinasDisponibles.map((d) => (
+                          <Badge
+                            key={d.id}
+                            variant="outline"
+                            className="text-[10px] font-body"
+                          >
+                            {d.nombre}
+                          </Badge>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        Ej: &quot;{disciplinasDisponibles.slice(0, 2).map((d) => d.nombre).join("; ")}&quot;
+                      </p>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}

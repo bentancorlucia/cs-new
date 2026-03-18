@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { createBrowserClient } from "@/lib/supabase/client";
+
 import { staggerContainer, fadeInUp, springSmooth } from "@/lib/motion";
 
 interface DisciplinaData {
@@ -50,28 +50,20 @@ export default function DisciplinasPage() {
   const [editId, setEditId] = useState<number | null>(null);
 
   const fetchDisciplinas = async () => {
-    const supabase = createBrowserClient();
-    const { data } = await supabase
-      .from("disciplinas")
-      .select("*, perfil_disciplinas(id)")
-      .order("nombre");
-
-    if (!data) {
+    try {
+      const res = await fetch("/api/disciplinas");
+      if (!res.ok) {
+        setDisciplinas([]);
+        setLoading(false);
+        return;
+      }
+      const json = await res.json();
+      setDisciplinas(json.disciplinas || []);
+    } catch {
       setDisciplinas([]);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const result = (data as unknown as (DisciplinaData & { perfil_disciplinas: unknown[] })[]).map(
-      (d) => ({
-        ...d,
-        socios_count: d.perfil_disciplinas?.length || 0,
-        perfil_disciplinas: undefined,
-      })
-    );
-
-    setDisciplinas(result);
-    setLoading(false);
   };
 
   useEffect(() => {

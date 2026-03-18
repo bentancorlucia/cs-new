@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     if (!padronSocio) {
       return NextResponse.json(
-        { error: "No encontramos un socio con esa cédula. Si creés que es un error, contactá a secretaría." },
+        { error: "No encontramos un socio con esa cédula. Si creés que es un error, contactá a secretaría al email cssecretaria2017@gmail.com." },
         { status: 404 }
       );
     }
@@ -91,41 +91,47 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Actualizar perfiles
+    // Obtener datos del padrón para sincronizar cedula/telefono
+    const { data: padronFullData } = await supabase
+      .from("padron_socios")
+      .select("cedula, telefono, fecha_nacimiento")
+      .eq("id", padronSocio.id)
+      .single();
+
+    const padronFull = padronFullData as unknown as {
+      cedula: string | null;
+      telefono: string | null;
+      fecha_nacimiento: string | null;
+    } | null;
+
+    // Actualizar perfiles — sincronizar datos del padrón
+    const perfilUpdate: Record<string, unknown> = {
+      es_socio: true,
+      socio_verificado: true,
+      padron_socio_id: padronSocio.id,
+    };
+
+    // Sincronizar cedula, telefono y fecha_nacimiento si el perfil no los tiene
+    if (padronFull) {
+      if (padronFull.cedula) perfilUpdate.cedula = padronFull.cedula;
+      if (padronFull.telefono) perfilUpdate.telefono = padronFull.telefono;
+      if (padronFull.fecha_nacimiento) perfilUpdate.fecha_nacimiento = padronFull.fecha_nacimiento;
+    }
+
     const { error: perfilUpdateError } = await supabase
       .from("perfiles")
-      .update({
-        es_socio: true,
-        socio_verificado: true,
-        padron_socio_id: padronSocio.id,
-      } as never)
+      .update(perfilUpdate as never)
       .eq("id", currentUser.id);
 
     if (perfilUpdateError) {
       return NextResponse.json(
-        { error: "Error al actualizar tu perfil. Contactá a secretaría." },
+        { error: "Error al actualizar tu perfil. Contactá a secretaría al email cssecretaria2017@gmail.com." },
         { status: 500 }
       );
     }
 
-    // Copiar disciplinas del padrón a perfil_disciplinas
-    const disciplinas = padronSocio.padron_disciplinas;
-
-    if (disciplinas && disciplinas.length > 0) {
-      const perfilDisciplinas = disciplinas.map((d) => ({
-        perfil_id: currentUser.id,
-        disciplina_id: d.disciplina_id,
-        categoria: d.categoria,
-        activa: d.activa,
-        fecha_ingreso: d.fecha_ingreso,
-      }));
-
-      await supabase
-        .from("perfil_disciplinas")
-        .upsert(perfilDisciplinas as never, {
-          onConflict: "perfil_id,disciplina_id,categoria",
-        });
-    }
+    // Las disciplinas ya viven en padron_disciplinas (vinculadas por padron_socio_id)
+    // No es necesario copiarlas al perfil
 
     // Asignar rol socio
     const { data: rolSocio } = await supabase

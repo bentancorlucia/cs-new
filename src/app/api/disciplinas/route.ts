@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/roles";
 import { z } from "zod";
 
@@ -9,14 +9,14 @@ const SOCIOS_ROLES = ["super_admin", "secretaria"];
 export async function GET() {
   try {
     await requireRole(SOCIOS_ROLES);
-    const supabase = await createServerClient();
+    const supabase = createAdminClient();
 
     const { data: disciplinas, error } = await supabase
       .from("disciplinas")
       .select(
         `
         *,
-        perfil_disciplinas (id)
+        padron_disciplinas (id)
       `
       )
       .order("nombre");
@@ -26,10 +26,10 @@ export async function GET() {
     }
 
     // Add socios count
-    const typed = disciplinas as unknown as (Record<string, unknown> & { perfil_disciplinas?: unknown[] })[];
-    const result = typed?.map(({ perfil_disciplinas, ...rest }) => ({
+    const typed = disciplinas as unknown as (Record<string, unknown> & { padron_disciplinas?: unknown[] })[];
+    const result = typed?.map(({ padron_disciplinas, ...rest }) => ({
       ...rest,
-      socios_count: perfil_disciplinas?.length || 0,
+      socios_count: padron_disciplinas?.length || 0,
     }));
 
     return NextResponse.json({ disciplinas: result });
@@ -59,7 +59,7 @@ const crearDisciplinaSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     await requireRole(SOCIOS_ROLES);
-    const supabase = await createServerClient();
+    const supabase = createAdminClient();
 
     const body = await request.json();
     const parsed = crearDisciplinaSchema.parse(body);
@@ -118,7 +118,7 @@ const updateDisciplinaSchema = z.object({
 export async function PUT(request: NextRequest) {
   try {
     await requireRole(SOCIOS_ROLES);
-    const supabase = await createServerClient();
+    const supabase = createAdminClient();
 
     const body = await request.json();
     const parsed = updateDisciplinaSchema.parse(body);

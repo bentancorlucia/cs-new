@@ -364,7 +364,7 @@ function SociosListContent() {
               </div>
               <div className="flex items-center gap-2">
                 <Dumbbell className="size-4 text-muted-foreground shrink-0" />
-                <Select value={bulkDisciplina} onValueChange={setBulkDisciplina}>
+                <Select value={bulkDisciplina} onValueChange={(v) => setBulkDisciplina(v ?? "")}>
                   <SelectTrigger className="w-[180px] h-8 font-body text-sm">
                     <SelectValue placeholder="Elegir disciplina">
                       {disciplinas.find((d) => String(d.id) === bulkDisciplina)?.nombre || "Elegir disciplina"}
@@ -632,6 +632,7 @@ function SociosListContent() {
         open={importOpen}
         onOpenChange={setImportOpen}
         onSuccess={fetchSocios}
+        disciplinasDisponibles={disciplinas}
       />
     </div>
   );

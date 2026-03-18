@@ -20,13 +20,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const parsed = bulkDisciplinaSchema.parse(body);
 
-    // Verify all socios exist and get their perfil_id for sync
+    // Verify all socios exist
     const { data: sociosData } = await supabase
       .from("padron_socios")
-      .select("id, perfil_id")
+      .select("id")
       .in("id", parsed.socio_ids as never);
 
-    const socios = (sociosData as { id: number; perfil_id: string | null }[] | null) || [];
+    const socios = (sociosData as { id: number }[] | null) || [];
 
     if (socios.length === 0) {
       return NextResponse.json(
@@ -73,24 +73,6 @@ export async function POST(request: NextRequest) {
         { error: insertError.message },
         { status: 500 }
       );
-    }
-
-    // Sync with perfil_disciplinas for linked socios
-    const linkedSocios = socios.filter(
-      (s) => s.perfil_id && !alreadyAssigned.has(s.id)
-    );
-    if (linkedSocios.length > 0) {
-      const perfilInserts = linkedSocios.map((s) => ({
-        perfil_id: s.perfil_id!,
-        disciplina_id: parsed.disciplina_id,
-        categoria: parsed.categoria || null,
-      }));
-
-      await supabase
-        .from("perfil_disciplinas")
-        .upsert(perfilInserts as never, {
-          onConflict: "perfil_id,disciplina_id,categoria",
-        });
     }
 
     return NextResponse.json({

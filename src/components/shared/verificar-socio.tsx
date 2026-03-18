@@ -46,7 +46,10 @@ export function VerificarSocio({ onVerified }: VerificarSocioProps) {
 
       setVerified(true);
       toast.success(data.message || "Verificación exitosa");
-      onVerified?.();
+      // Refresh perfil data automatically after short delay for visual feedback
+      setTimeout(() => {
+        onVerified?.();
+      }, 1500);
     } catch {
       setError("Error de conexión. Intentá de nuevo.");
     } finally {
@@ -74,7 +77,7 @@ export function VerificarSocio({ onVerified }: VerificarSocioProps) {
               Tu cuenta fue vinculada como socio del club
             </p>
             <p className="font-body text-xs text-emerald-600">
-              Recargá la página para ver tus beneficios
+              Actualizando tu perfil...
             </p>
           </CardContent>
         </Card>
@@ -124,7 +127,22 @@ export function VerificarSocio({ onVerified }: VerificarSocioProps) {
             className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 p-3"
           >
             <AlertCircle className="size-4 text-red-500 mt-0.5 shrink-0" />
-            <p className="font-body text-xs text-red-700">{error}</p>
+            <p className="font-body text-xs text-red-700">
+              {error.includes("cssecretaria2017@gmail.com") ? (
+                <>
+                  No encontramos un socio con esa cédula. Si creés que es un error, contactá a secretaría al email{" "}
+                  <a
+                    href="mailto:cssecretaria2017@gmail.com"
+                    className="font-medium underline hover:text-red-900"
+                  >
+                    cssecretaria2017@gmail.com
+                  </a>
+                  .
+                </>
+              ) : (
+                error
+              )}
+            </p>
           </motion.div>
         )}
 

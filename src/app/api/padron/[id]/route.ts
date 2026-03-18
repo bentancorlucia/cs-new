@@ -3,10 +3,113 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/roles";
 import { normalizeCedula } from "@/lib/utils";
 import { z } from "zod";
+import { SupabaseClient } from "@supabase/supabase-js";
 
 const PADRON_ROLES = ["super_admin", "secretaria"];
 
-// GET /api/padron/[id] — detalle de un socio del padrón
+// ── Helpers de vinculación ──────────────────────────────
+
+/** Desvincula un perfil de su estado de socio: flags, rol, disciplinas */
+async function desvincularPerfil(
+  supabase: SupabaseClient,
+  perfilId: string
+) {
+  // Flags
+  await supabase
+    .from("perfiles")
+    .update({
+      es_socio: false,
+      socio_verificado: false,
+      padron_socio_id: null,
+    } as never)
+    .eq("id", perfilId);
+
+  // Remover rol socio
+  const { data: rolSocio } = await supabase
+    .from("roles")
+    .select("id")
+    .eq("nombre", "socio")
+    .single();
+
+  if (rolSocio) {
+    await supabase
+      .from("perfil_roles")
+      .delete()
+      .eq("perfil_id", perfilId)
+      .eq("rol_id", rolSocio.id);
+  }
+
+  // Reasignar rol no_socio
+  const { data: rolNoSocio } = await supabase
+    .from("roles")
+    .select("id")
+    .eq("nombre", "no_socio")
+    .single();
+
+  if (rolNoSocio) {
+    await supabase.from("perfil_roles").upsert(
+      { perfil_id: perfilId, rol_id: rolNoSocio.id } as never,
+      { onConflict: "perfil_id,rol_id" }
+    );
+  }
+
+  // Limpiar vínculo en padron_socios
+  await supabase
+    .from("padron_socios")
+    .update({ perfil_id: null, vinculado_at: null } as never)
+    .eq("perfil_id", perfilId);
+}
+
+/** Re-vincula un perfil como socio activo: flags, rol, disciplinas */
+async function revincularPerfil(
+  supabase: SupabaseClient,
+  perfilId: string,
+  padronSocioId: number
+) {
+  // Flags
+  await supabase
+    .from("perfiles")
+    .update({
+      es_socio: true,
+      socio_verificado: true,
+      padron_socio_id: padronSocioId,
+    } as never)
+    .eq("id", perfilId);
+
+  // Asignar rol socio
+  const { data: rolSocio } = await supabase
+    .from("roles")
+    .select("id")
+    .eq("nombre", "socio")
+    .single();
+
+  if (rolSocio) {
+    await supabase.from("perfil_roles").upsert(
+      { perfil_id: perfilId, rol_id: rolSocio.id } as never,
+      { onConflict: "perfil_id,rol_id" }
+    );
+  }
+
+  // Remover rol no_socio
+  const { data: rolNoSocio } = await supabase
+    .from("roles")
+    .select("id")
+    .eq("nombre", "no_socio")
+    .single();
+
+  if (rolNoSocio) {
+    await supabase
+      .from("perfil_roles")
+      .delete()
+      .eq("perfil_id", perfilId)
+      .eq("rol_id", rolNoSocio.id);
+  }
+
+  // Las disciplinas ya viven en padron_disciplinas, no hace falta sincronizar
+}
+
+// ── GET /api/padron/[id] ────────────────────────────────
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -51,7 +154,8 @@ export async function GET(
   }
 }
 
-// PUT /api/padron/[id] — actualizar socio del padrón
+// ── PUT /api/padron/[id] ────────────────────────────────
+
 const actualizarPadronSchema = z.object({
   nombre: z.string().min(1).max(100).optional(),
   apellido: z.string().min(1).max(100).optional(),
@@ -69,6 +173,7 @@ export async function PUT(
   try {
     await requireRole(PADRON_ROLES);
     const { id } = await params;
+    const padronId = parseInt(id);
     const supabase = createAdminClient();
 
     const body = await request.json();
@@ -84,7 +189,7 @@ export async function PUT(
     const { data: actualData } = await supabase
       .from("padron_socios")
       .select("perfil_id, activo")
-      .eq("id", parseInt(id))
+      .eq("id", padronId)
       .single();
 
     const actual = actualData as unknown as { perfil_id: string | null; activo: boolean } | null;
@@ -97,7 +202,7 @@ export async function PUT(
     const { data, error } = await supabase
       .from("padron_socios")
       .update(updateData as never)
-      .eq("id", parseInt(id))
+      .eq("id", padronId)
       .select()
       .single();
 
@@ -106,59 +211,13 @@ export async function PUT(
     }
 
     // Sincronizar con perfiles si está vinculado
-    if (actual!.perfil_id) {
-      // Si se desactiva el socio, actualizar perfiles
+    if (actual.perfil_id) {
       if (parsed.activo === false && actual.activo === true) {
-        await supabase
-          .from("perfiles")
-          .update({
-            es_socio: false,
-            socio_verificado: false,
-          } as never)
-          .eq("id", actual!.perfil_id);
-
-        // Remover rol socio
-        const { data: rolSocio } = await supabase
-          .from("roles")
-          .select("id")
-          .eq("nombre", "socio")
-          .single();
-
-        if (rolSocio) {
-          await supabase
-            .from("perfil_roles")
-            .delete()
-            .eq("perfil_id", actual!.perfil_id)
-            .eq("rol_id", rolSocio.id);
-        }
+        await desvincularPerfil(supabase, actual.perfil_id);
       }
 
-      // Si se reactiva el socio
       if (parsed.activo === true && actual.activo === false) {
-        await supabase
-          .from("perfiles")
-          .update({
-            es_socio: true,
-            socio_verificado: true,
-          } as never)
-          .eq("id", actual!.perfil_id);
-
-        // Re-asignar rol socio
-        const { data: rolSocio } = await supabase
-          .from("roles")
-          .select("id")
-          .eq("nombre", "socio")
-          .single();
-
-        if (rolSocio) {
-          await supabase.from("perfil_roles").upsert(
-            {
-              perfil_id: actual!.perfil_id,
-              rol_id: rolSocio.id,
-            } as never,
-            { onConflict: "perfil_id,rol_id" }
-          );
-        }
+        await revincularPerfil(supabase, actual.perfil_id, padronId);
       }
     }
 
@@ -180,7 +239,8 @@ export async function PUT(
   }
 }
 
-// DELETE /api/padron/[id] — desactivar socio (soft delete)
+// ── DELETE /api/padron/[id] — desactivar socio (soft delete) ──
+
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -208,29 +268,9 @@ export async function DELETE(
       .update({ activo: false } as never)
       .eq("id", parseInt(id));
 
-    // Si está vinculado, desactivar en perfiles
+    // Si está vinculado, desvincular completamente
     if (actualDel.perfil_id) {
-      await supabase
-        .from("perfiles")
-        .update({
-          es_socio: false,
-          socio_verificado: false,
-        } as never)
-        .eq("id", actualDel.perfil_id);
-
-      const { data: rolSocio } = await supabase
-        .from("roles")
-        .select("id")
-        .eq("nombre", "socio")
-        .single();
-
-      if (rolSocio) {
-        await supabase
-          .from("perfil_roles")
-          .delete()
-          .eq("perfil_id", actualDel.perfil_id)
-          .eq("rol_id", rolSocio.id);
-      }
+      await desvincularPerfil(supabase, actualDel.perfil_id);
     }
 
     return NextResponse.json({ ok: true });

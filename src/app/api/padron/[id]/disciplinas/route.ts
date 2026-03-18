@@ -27,13 +27,11 @@ export async function POST(
     // Verificar que el socio existe
     const { data: socioData } = await supabase
       .from("padron_socios")
-      .select("id, perfil_id")
+      .select("id")
       .eq("id", padronSocioId)
       .single();
 
-    const socio = socioData as unknown as { id: number; perfil_id: string | null } | null;
-
-    if (!socio) {
+    if (!socioData) {
       return NextResponse.json({ error: "Socio no encontrado" }, { status: 404 });
     }
 
@@ -56,18 +54,6 @@ export async function POST(
         );
       }
       return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    // Si está vinculado, sincronizar con perfil_disciplinas
-    if (socio.perfil_id) {
-      await supabase.from("perfil_disciplinas").upsert(
-        {
-          perfil_id: socio.perfil_id,
-          disciplina_id: parsed.disciplina_id,
-          categoria: parsed.categoria || null,
-        } as never,
-        { onConflict: "perfil_id,disciplina_id,categoria" }
-      );
     }
 
     return NextResponse.json({ disciplina: data }, { status: 201 });
@@ -109,15 +95,6 @@ export async function DELETE(
       );
     }
 
-    // Obtener el socio para sincronización
-    const { data: socioDelData } = await supabase
-      .from("padron_socios")
-      .select("perfil_id")
-      .eq("id", padronSocioId)
-      .single();
-
-    const socioDel = socioDelData as unknown as { perfil_id: string | null } | null;
-
     // Eliminar de padron_disciplinas
     const { error } = await supabase
       .from("padron_disciplinas")
@@ -127,15 +104,6 @@ export async function DELETE(
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    // Si está vinculado, sincronizar eliminación en perfil_disciplinas
-    if (socioDel?.perfil_id) {
-      await supabase
-        .from("perfil_disciplinas")
-        .delete()
-        .eq("perfil_id", socioDel.perfil_id)
-        .eq("disciplina_id", parseInt(disciplinaId));
     }
 
     return NextResponse.json({ ok: true });

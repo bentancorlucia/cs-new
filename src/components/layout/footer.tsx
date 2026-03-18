@@ -115,10 +115,10 @@ export function Footer() {
 
           <FooterColumn title="Contacto">
             <a
-              href="tel:099613671"
+              href="tel:+59891965438"
               className="font-body text-sm text-white/50 hover:text-white transition-colors duration-200"
             >
-              099 613 671
+              +598 91 965 438
             </a>
             <a
               href="mailto:secretaria@clubseminario.com.uy"

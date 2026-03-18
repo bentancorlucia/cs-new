@@ -208,6 +208,9 @@ export default function RegistroPage() {
                     className="focus-visible:ring-bordo-700/30 focus-visible:border-bordo-300"
                     {...register("cedula")}
                   />
+                  <p className="text-[10px] text-muted-foreground">
+                    Si sos socio, ingresá tu cédula para vincular tu cuenta automáticamente
+                  </p>
                 </div>
               </div>
 

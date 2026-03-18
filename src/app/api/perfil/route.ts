@@ -21,13 +21,13 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Get disciplinas if socio
+  // Get disciplinas if socio (from padron_disciplinas via padron_socio_id)
   let disciplinas: { nombre: string; categoria: string | null }[] = [];
-  if (perfil.es_socio) {
+  if (perfil.es_socio && perfil.padron_socio_id) {
     const { data } = await supabase
-      .from("perfil_disciplinas")
+      .from("padron_disciplinas")
       .select("categoria, disciplinas(nombre)")
-      .eq("perfil_id", user.id)
+      .eq("padron_socio_id", perfil.padron_socio_id)
       .eq("activa", true);
 
     disciplinas =

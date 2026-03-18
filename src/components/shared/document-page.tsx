@@ -168,11 +168,11 @@ export function DocumentPageClient({
               </p>
               <div className="flex flex-col items-center gap-2">
                 <a
-                  href="tel:099613671"
+                  href="tel:+59891965438"
                   className="inline-flex items-center gap-2 font-body text-sm text-muted-foreground hover:text-bordo-800 transition-colors"
                 >
                   <Phone className="size-4" />
-                  099 613 671
+                  +598 91 965 438
                 </a>
                 <a
                   href="mailto:secretaria@clubseminario.com.uy"
