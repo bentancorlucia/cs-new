@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
         .eq("variante_id", item.variante_id ?? null as any)
         .maybeSingle();
 
-      const disponible = stockOrigen?.cantidad || 0;
+      const disponible = (stockOrigen as any)?.cantidad || 0;
       if (disponible < item.cantidad) {
         return NextResponse.json(
           {
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
         deposito_origen_id: parsed.deposito_origen_id,
         deposito_destino_id: parsed.deposito_destino_id,
         notas: parsed.notas || null,
-        registrado_por: user.id,
+        registrado_por: user!.id,
         estado: "completada",
         completada_at: new Date().toISOString(),
       } as any)
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
 
     // Insert items
     const itemRows = parsed.items.map((item) => ({
-      transferencia_id: transferencia.id,
+      transferencia_id: (transferencia as any).id,
       producto_id: item.producto_id,
       variante_id: item.variante_id || null,
       cantidad: item.cantidad,
@@ -151,10 +151,10 @@ export async function POST(request: NextRequest) {
             await (supabase as any)
               .from("stock_deposito")
               .update({
-                cantidad: origenStock.cantidad - item.cantidad,
+                cantidad: (origenStock as any).cantidad - item.cantidad,
                 updated_at: new Date().toISOString(),
               })
-              .eq("id", origenStock.id);
+              .eq("id", (origenStock as any).id);
           }
 
           // Increase in destination (upsert)
@@ -170,10 +170,10 @@ export async function POST(request: NextRequest) {
             await (supabase as any)
               .from("stock_deposito")
               .update({
-                cantidad: destinoStock.cantidad + item.cantidad,
+                cantidad: (destinoStock as any).cantidad + item.cantidad,
                 updated_at: new Date().toISOString(),
               })
-              .eq("id", destinoStock.id);
+              .eq("id", (destinoStock as any).id);
           } else {
             await supabase
               .from("stock_deposito")
@@ -186,7 +186,7 @@ export async function POST(request: NextRequest) {
           }
 
           // Log stock movements
-          const stockAnteriorOrigen = origenStock?.cantidad || 0;
+          const stockAnteriorOrigen = (origenStock as any)?.cantidad || 0;
           await supabase.from("stock_movimientos").insert([
             {
               producto_id: item.producto_id,
@@ -196,9 +196,9 @@ export async function POST(request: NextRequest) {
               stock_anterior: stockAnteriorOrigen,
               stock_nuevo: stockAnteriorOrigen - item.cantidad,
               referencia_tipo: "transferencia",
-              referencia_id: transferencia.id,
+              referencia_id: (transferencia as any).id,
               motivo: `Transferencia a depósito destino`,
-              registrado_por: user.id,
+              registrado_por: user!.id,
               deposito_id: parsed.deposito_origen_id,
             },
             {
@@ -206,12 +206,12 @@ export async function POST(request: NextRequest) {
               variante_id: item.variante_id || null,
               tipo: "transferencia",
               cantidad: item.cantidad,
-              stock_anterior: destinoStock?.cantidad || 0,
-              stock_nuevo: (destinoStock?.cantidad || 0) + item.cantidad,
+              stock_anterior: (destinoStock as any)?.cantidad || 0,
+              stock_nuevo: ((destinoStock as any)?.cantidad || 0) + item.cantidad,
               referencia_tipo: "transferencia",
-              referencia_id: transferencia.id,
+              referencia_id: (transferencia as any).id,
               motivo: `Transferencia desde depósito origen`,
-              registrado_por: user.id,
+              registrado_por: user!.id,
               deposito_id: parsed.deposito_destino_id,
             },
           ] as any);

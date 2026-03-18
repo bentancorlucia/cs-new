@@ -370,7 +370,7 @@ export default function TransferenciasPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Origen</Label>
-                <Select value={origenId} onValueChange={setOrigenId}>
+                <Select value={origenId} onValueChange={(v) => setOrigenId(v || "")}>
                   <SelectTrigger className="mt-1.5">
                     <SelectValue placeholder="Depósito origen" />
                   </SelectTrigger>
@@ -386,7 +386,7 @@ export default function TransferenciasPage() {
 
               <div>
                 <Label>Destino</Label>
-                <Select value={destinoId} onValueChange={setDestinoId}>
+                <Select value={destinoId} onValueChange={(v) => setDestinoId(v || "")}>
                   <SelectTrigger className="mt-1.5">
                     <SelectValue placeholder="Depósito destino" />
                   </SelectTrigger>

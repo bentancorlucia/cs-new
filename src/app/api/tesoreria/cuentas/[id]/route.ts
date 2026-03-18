@@ -16,7 +16,7 @@ export async function GET(
     const { data, error } = await supabase
       .from("cuentas_financieras")
       .select("*")
-      .eq("id", id)
+      .eq("id", parseInt(id))
       .single();
 
     if (error || !data) {

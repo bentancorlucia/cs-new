@@ -152,7 +152,7 @@ export default function PedidosDisciplinasPage() {
         animate="visible"
         transition={{ ...springSmooth, delay: 0.1 }}
       >
-        <Select value={filtroDisc} onValueChange={setFiltroDisc}>
+        <Select value={filtroDisc} onValueChange={(v) => setFiltroDisc(v || "all")}>
           <SelectTrigger className="w-60">
             <SelectValue placeholder="Filtrar por disciplina" />
           </SelectTrigger>

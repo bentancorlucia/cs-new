@@ -607,7 +607,7 @@ function ProveedoresSection({
               <div className="flex-1">
                 <Select
                   value={row.proveedor_id > 0 ? row.proveedor_id.toString() : ""}
-                  onValueChange={(v) => updateRow(index, "proveedor_id", parseInt(v))}
+                  onValueChange={(v) => updateRow(index, "proveedor_id", parseInt(v || "0"))}
                 >
                   <SelectTrigger className="h-8 text-sm">
                     <SelectValue placeholder="Seleccionar proveedor" />
@@ -736,7 +736,7 @@ export function ProductoForm({ producto }: Props) {
     watch,
     formState: { errors, isDirty },
   } = useForm<FormData>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema) as any,
     defaultValues: {
       nombre: producto?.nombre || "",
       slug: producto?.slug || "",
@@ -866,7 +866,7 @@ export function ProductoForm({ producto }: Props) {
       : null;
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="pb-8">
+    <form onSubmit={handleSubmit(onSubmit as any)} className="pb-8">
       {/* Top bar */}
       <motion.div
         variants={fadeInUp}
@@ -1197,7 +1197,7 @@ export function ProductoForm({ producto }: Props) {
                   <Select
                     value={unidad || "un"}
                     onValueChange={(v) =>
-                      setValue("unidad", v, { shouldDirty: true })
+                      setValue("unidad", v || "un", { shouldDirty: true })
                     }
                   >
                     <SelectTrigger className="mt-1.5">

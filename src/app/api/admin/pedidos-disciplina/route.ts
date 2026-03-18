@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
         perfiles!vendedor_id(nombre_completo),
         pedido_items(id, producto_id, cantidad, precio_unitario, subtotal, productos(id, nombre), producto_variantes(id, nombre))
       `)
-      .eq("tipo", "disciplina")
+      .eq("tipo", "disciplina" as any)
       .order("created_at", { ascending: false })
       .limit(50);
 
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
         moneda: "UYU",
         metodo_pago: "cuenta_corriente",
         disciplina_id: parsed.disciplina_id,
-        vendedor_id: user.id,
+        vendedor_id: user!.id,
         notas: parsed.notas || null,
       } as any)
       .select()
@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
         referencia_tipo: "pedido",
         referencia_id: pedido.id,
         motivo: `Pedido mayorista disciplina`,
-        registrado_por: user.id,
+        registrado_por: user!.id,
       } as any);
     }
 

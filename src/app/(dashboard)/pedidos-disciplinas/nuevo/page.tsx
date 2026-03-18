@@ -101,7 +101,7 @@ export default function NuevoPedidoDisciplinaPage() {
           return;
         }
 
-        const listaIds = listaLinks.map((l) => l.lista_precio_id);
+        const listaIds = listaLinks.map((l: any) => l.lista_precio_id);
 
         // Get items from those lists
         const { data: items } = await supabase
@@ -264,7 +264,7 @@ export default function NuevoPedidoDisciplinaPage() {
         transition={{ ...springSmooth, delay: 0.05 }}
       >
         <Label>Disciplina</Label>
-        <Select value={disciplinaId} onValueChange={setDisciplinaId}>
+        <Select value={disciplinaId} onValueChange={(v) => setDisciplinaId(v || "")}>
           <SelectTrigger className="mt-1.5 w-80">
             <SelectValue placeholder="Seleccionar disciplina" />
           </SelectTrigger>

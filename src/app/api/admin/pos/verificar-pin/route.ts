@@ -18,12 +18,12 @@ export async function POST(request: NextRequest) {
     const { pin } = pinSchema.parse(body);
 
     // Find user with matching PIN who has super_admin or tienda role
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("perfiles")
       .select("id, nombre_completo, perfil_roles(rol)")
       .eq("pin_autorizacion", pin)
       .limit(1)
-      .maybeSingle();
+      .maybeSingle() as { data: any; error: any };
 
     if (error) throw error;
 

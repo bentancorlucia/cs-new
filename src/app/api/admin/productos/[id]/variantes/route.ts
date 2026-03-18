@@ -11,7 +11,7 @@ const varianteSchema = z.object({
   sku: z.string().max(50).optional().nullable(),
   precio_override: z.number().positive().optional().nullable(),
   stock_actual: z.number().int().min(0).default(0),
-  atributos: z.record(z.string()), // e.g. { talle: "M", color: "Rojo" }
+  atributos: z.record(z.string(), z.string()), // e.g. { talle: "M", color: "Rojo" }
   activo: z.boolean().default(true),
 });
 
@@ -26,7 +26,7 @@ export async function PUT(
 ) {
   try {
     await requireRole(TIENDA_ROLES);
-    const { id } = await params;
+    const { id } = await (params as any);
     const productoId = parseInt(id);
     const supabase = await createServerClient();
 
