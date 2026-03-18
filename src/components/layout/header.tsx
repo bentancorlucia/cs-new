@@ -363,7 +363,7 @@ function MobileNav({
 export function Header() {
   const pathname = usePathname();
   const { scrollY } = useScroll();
-  const [user, setUser] = useState<{ email?: string } | null>(null);
+  const [user, setUser] = useState<{ email?: string; initials?: string; avatar_url?: string | null } | null>(null);
 
   // Solid navbar only for tienda and eventos (and their subpages)
   const solidNavbarPrefixes = ["/tienda", "/eventos"];
@@ -399,14 +399,38 @@ export function Header() {
 
   useEffect(() => {
     const supabase = createBrowserClient();
-    supabase.auth.getUser().then(({ data: { user: u } }) => {
-      if (u) setUser({ email: u.email ?? undefined });
-    });
+
+    async function loadUser() {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      if (!u) return;
+
+      const { data: perfil } = await supabase
+        .from("perfiles")
+        .select("nombre, apellido, avatar_url")
+        .eq("id", u.id)
+        .single();
+
+      const initials = perfil
+        ? `${perfil.nombre?.charAt(0) ?? ""}${perfil.apellido?.charAt(0) ?? ""}`.toUpperCase()
+        : u.email?.charAt(0).toUpperCase() ?? "U";
+
+      setUser({
+        email: u.email ?? undefined,
+        initials,
+        avatar_url: perfil?.avatar_url,
+      });
+    }
+
+    loadUser();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ? { email: session.user.email ?? undefined } : null);
+      if (session?.user) {
+        loadUser();
+      } else {
+        setUser(null);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -502,9 +526,14 @@ export function Header() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 transition={springBouncy}
-                className="size-8 rounded-full bg-dorado-400 flex items-center justify-center text-bordo-950 text-xs font-heading uppercase font-bold"
+                className="size-8 rounded-full bg-dorado-400 flex items-center justify-center text-bordo-950 text-xs font-heading uppercase font-bold overflow-hidden"
               >
-                {user.email?.charAt(0).toUpperCase() ?? "U"}
+                {user.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={user.avatar_url} alt="" className="size-full object-cover" />
+                ) : (
+                  user.initials ?? user.email?.charAt(0).toUpperCase() ?? "U"
+                )}
               </motion.div>
             </Link>
           ) : (

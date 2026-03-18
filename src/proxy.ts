@@ -43,7 +43,9 @@ const PROTECTED_ROUTES: Record<string, string[]> = {
     "eventos",
     "scanner",
     "socio",
+    "no_socio",
   ],
+  "/tesoreria": ["super_admin", "tesorero"],
 };
 
 function isPublicRoute(pathname: string): boolean {

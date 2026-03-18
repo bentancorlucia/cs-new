@@ -207,9 +207,8 @@ function SidebarContent({
       {/* Logo */}
       <div className={`px-4 py-5 ${collapsed ? "text-center" : ""}`}>
         <Link href="/" onClick={onNavigate} className="inline-block">
-          <span className="font-display text-xl font-bold text-bordo-800 uppercase tracking-tightest">
-            {collapsed ? "CS" : "CS"}
-          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/images/escudo/logo-cs.png" alt="Club Seminario" className={collapsed ? "size-8 mx-auto" : "size-9"} />
         </Link>
       </div>
 
@@ -312,8 +311,9 @@ export function Sidebar() {
           <span className="sr-only">Menú</span>
         </button>
         <div className="flex items-center gap-2 min-w-0">
-          <Link href="/" className="font-display text-lg font-bold text-bordo-800 uppercase tracking-tightest shrink-0">
-            CS
+          <Link href="/" className="shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/images/escudo/logo-cs.png" alt="Club Seminario" className="size-7" />
           </Link>
           <span className="text-linea select-none">/</span>
           <span className="font-heading text-sm text-muted-foreground truncate">

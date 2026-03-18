@@ -20,6 +20,9 @@ const DASHBOARD_ROLES = [
   "secretaria",
   "eventos",
   "scanner",
+  "tesorero",
+  "socio",
+  "no_socio",
 ];
 
 export function useRoles(): UseRolesReturn {

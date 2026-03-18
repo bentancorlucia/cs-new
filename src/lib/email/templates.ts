@@ -150,6 +150,8 @@ export interface TicketConfirmationData {
   cantidad: number;
   total: number;
   codigos: string[];
+  /** Base64 data URLs de los QR generados, en el mismo orden que codigos */
+  qrDataUrls?: string[];
   eventoUrl: string;
 }
 
@@ -159,9 +161,14 @@ export function ticketConfirmationHtml(data: TicketConfirmationData) {
       (codigo, i) => `
       <div style="background:${COLORS.fondoClaro};border-radius:8px;padding:16px;margin-bottom:8px;text-align:center;">
         <p style="margin:0 0 8px;font-size:13px;color:${COLORS.textoSecundario};">
-          Entrada ${data.codigos.length > 1 ? `${i + 1} de ${data.codigos.length}` : ""}
+          Entrada${data.codigos.length > 1 ? ` ${i + 1} de ${data.codigos.length}` : ""}
         </p>
-        <p style="margin:0;font-size:18px;font-weight:700;letter-spacing:0.05em;color:${COLORS.bordo};">
+        ${
+          data.qrDataUrls?.[i]
+            ? `<img src="${data.qrDataUrls[i]}" width="200" height="200" alt="QR entrada" style="display:block;margin:0 auto 8px;" />`
+            : ""
+        }
+        <p style="margin:0;font-size:12px;font-weight:600;letter-spacing:0.03em;color:${COLORS.bordo};">
           ${codigo}
         </p>
         <p style="margin:4px 0 0;font-size:11px;color:${COLORS.textoSecundario};">

@@ -21,6 +21,7 @@ import {
   X,
   Camera,
   QrCode,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -498,8 +499,8 @@ export default function MiCuentaPage() {
                         </>
                       )}
 
-                      {/* Roles */}
-                      {perfil.roles.length > 0 && (
+                      {/* Roles — solo mostrar si tiene roles de staff */}
+                      {perfil.roles.filter((r) => r !== "socio" && r !== "no_socio").length > 0 && (
                         <>
                           <Separator />
                           <div className="space-y-2">
@@ -508,15 +509,17 @@ export default function MiCuentaPage() {
                               <span className="font-body">Roles</span>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                              {perfil.roles.map((role) => (
-                                <Badge
-                                  key={role}
-                                  variant="outline"
-                                  className="font-body text-xs"
-                                >
-                                  {role}
-                                </Badge>
-                              ))}
+                              {perfil.roles
+                                .filter((r) => r !== "socio" && r !== "no_socio")
+                                .map((role) => (
+                                  <Badge
+                                    key={role}
+                                    variant="outline"
+                                    className="font-body text-xs"
+                                  >
+                                    {role}
+                                  </Badge>
+                                ))}
                             </div>
                           </div>
                         </>
@@ -527,7 +530,7 @@ export default function MiCuentaPage() {
 
                 {/* Sidebar */}
                 <div className="space-y-4">
-                  {/* Carnet Digital */}
+                  {/* Carnet Digital — solo socios */}
                   {perfil.es_socio && (
                     <motion.div variants={scaleIn} transition={springSmooth}>
                       <Card className="border-bordo-200 bg-gradient-to-br from-bordo-800 to-bordo-950 text-white overflow-hidden">
@@ -570,10 +573,62 @@ export default function MiCuentaPage() {
                     </motion.div>
                   )}
 
-                  {/* Verificar socio */}
-                  {!perfil.es_socio && !perfil.socio_verificado && (
+                  {/* Hacete socio — solo no socios */}
+                  {!perfil.es_socio && (
                     <motion.div variants={fadeInUp} transition={springSmooth}>
-                      <VerificarSocio onVerified={fetchPerfil} />
+                      <Card className="border-dorado-300/50 bg-gradient-to-br from-dorado-50 to-dorado-100/50 overflow-hidden">
+                        <CardContent className="p-5 space-y-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex size-10 items-center justify-center rounded-full bg-dorado-200">
+                              <Users className="size-5 text-bordo-800" />
+                            </div>
+                            <div>
+                              <p className="font-heading font-bold text-sm text-bordo-800">
+                                ¡Hacete socio!
+                              </p>
+                              <p className="font-body text-xs text-muted-foreground">
+                                Accedé a beneficios exclusivos
+                              </p>
+                            </div>
+                          </div>
+
+                          <ul className="space-y-1.5 text-xs font-body text-bordo-900/80">
+                            <li className="flex items-center gap-2">
+                              <span className="size-1.5 rounded-full bg-dorado-400 shrink-0" />
+                              Descuentos en la tienda
+                            </li>
+                            <li className="flex items-center gap-2">
+                              <span className="size-1.5 rounded-full bg-dorado-400 shrink-0" />
+                              Precios preferenciales en eventos
+                            </li>
+                            <li className="flex items-center gap-2">
+                              <span className="size-1.5 rounded-full bg-dorado-400 shrink-0" />
+                              Acceso a disciplinas deportivas
+                            </li>
+                            <li className="flex items-center gap-2">
+                              <span className="size-1.5 rounded-full bg-dorado-400 shrink-0" />
+                              Carnet digital con QR
+                            </li>
+                          </ul>
+
+                          <Link href="/socios">
+                            <Button
+                              className="w-full bg-gradient-to-r from-bordo-800 to-bordo-700 hover:from-bordo-900 hover:to-bordo-800 text-white gap-1.5 text-xs"
+                              size="sm"
+                            >
+                              <Users className="size-3.5" />
+                              Conocé cómo asociarte
+                            </Button>
+                          </Link>
+                        </CardContent>
+                      </Card>
+
+                      {/* Verificar socio — si ya es socio pero no verificó */}
+                      {!perfil.socio_verificado && (
+                        <div className="mt-4">
+                          <VerificarSocio onVerified={fetchPerfil} />
+                        </div>
+                      )}
                     </motion.div>
                   )}
 

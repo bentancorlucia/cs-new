@@ -1,4 +1,5 @@
 import { resend, EMAIL_FROM } from "./resend";
+import { generarQREntrada } from "../qr/generate";
 import {
   orderConfirmationHtml,
   orderReadyHtml,
@@ -63,11 +64,16 @@ export async function sendTicketConfirmation(
   data: TicketConfirmationData
 ) {
   try {
+    // Generar QR codes como data URLs para embeber en el email
+    const qrDataUrls = await Promise.all(
+      data.codigos.map((codigo) => generarQREntrada(codigo))
+    );
+
     await resend.emails.send({
       from: EMAIL_FROM,
       to,
       subject: `Tus entradas para ${data.eventoTitulo}`,
-      html: ticketConfirmationHtml(data),
+      html: ticketConfirmationHtml({ ...data, qrDataUrls }),
     });
   } catch (error) {
     console.error("[Email] Error sending ticket confirmation:", error);
