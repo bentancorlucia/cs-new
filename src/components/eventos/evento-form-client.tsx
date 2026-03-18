@@ -719,8 +719,8 @@ export function EventoFormClient({ eventoId }: { eventoId?: number }) {
       return;
     }
 
-    // Validate lotes if not free event
-    if (!form.es_gratuito && lotes.length > 0) {
+    // Validate lotes
+    if (lotes.length > 0) {
       for (const lote of lotes) {
         if (!lote.nombre) {
           toast.error("Todos los lotes necesitan un nombre");
@@ -740,6 +740,12 @@ export function EventoFormClient({ eventoId }: { eventoId?: number }) {
           if (!tipo.nombre) {
             toast.error(
               `Todos los tipos de entrada en "${lote.nombre}" necesitan nombre`
+            );
+            return;
+          }
+          if (!tipo.cantidad || tipo.cantidad <= 0) {
+            toast.error(
+              `El tipo "${tipo.nombre}" en "${lote.nombre}" necesita una cantidad mayor a 0`
             );
             return;
           }
@@ -787,77 +793,87 @@ export function EventoFormClient({ eventoId }: { eventoId?: number }) {
 
       // 2. If editing, delete existing tipos first (they'll be recreated)
       if (isEditing) {
-        await fetch(`/api/admin/eventos/${savedEventoId}/tipos-entrada`, {
+        const delRes = await fetch(`/api/admin/eventos/${savedEventoId}/tipos-entrada`, {
           method: "DELETE",
         });
+        if (!delRes.ok) {
+          const delErr = await delRes.json().catch(() => ({}));
+          throw new Error(delErr.error || "Error al eliminar tipos de entrada existentes");
+        }
       }
 
       // 3. Convert lotes→tipos back to tipos→lotes for the API
       // Collect unique tipo names and build their lotes
-      const tiposMap = new Map<
-        string,
-        {
-          nombre: string;
-          solo_socios: boolean;
-          precio: number; // base price from first lote
-          lotes: {
+      if (lotes.length > 0) {
+        const tiposMap = new Map<
+          string,
+          {
             nombre: string;
+            solo_socios: boolean;
             precio: number;
-            cantidad: number;
-            fecha_inicio: string;
-            fecha_fin: string | null;
-            estado: string;
-            orden: number;
-          }[];
-        }
-      >();
+            lotes: {
+              nombre: string;
+              precio: number;
+              cantidad: number;
+              fecha_inicio: string;
+              fecha_fin: string | null;
+              estado: string;
+              orden: number;
+            }[];
+          }
+        >();
 
-      for (const [loteOrder, lote] of lotes.entries()) {
-        for (const tipo of lote.tipos) {
-          if (!tiposMap.has(tipo.nombre)) {
-            tiposMap.set(tipo.nombre, {
-              nombre: tipo.nombre,
-              solo_socios: tipo.solo_socios,
+        for (const [loteOrder, lote] of lotes.entries()) {
+          for (const tipo of lote.tipos) {
+            if (!tiposMap.has(tipo.nombre)) {
+              tiposMap.set(tipo.nombre, {
+                nombre: tipo.nombre,
+                solo_socios: tipo.solo_socios,
+                precio: tipo.precio,
+                lotes: [],
+              });
+            }
+            tiposMap.get(tipo.nombre)!.lotes.push({
+              nombre: lote.nombre,
               precio: tipo.precio,
-              lotes: [],
+              cantidad: tipo.cantidad,
+              fecha_inicio: lote.fecha_inicio
+                ? new Date(lote.fecha_inicio).toISOString()
+                : "",
+              fecha_fin: lote.fecha_fin
+                ? new Date(lote.fecha_fin).toISOString()
+                : null,
+              estado:
+                new Date(lote.fecha_inicio) <= new Date() &&
+                new Date(lote.fecha_fin) >= new Date()
+                  ? "activo"
+                  : new Date(lote.fecha_inicio) > new Date()
+                    ? "pendiente"
+                    : "cerrado",
+              orden: loteOrder,
             });
           }
-          tiposMap.get(tipo.nombre)!.lotes.push({
-            nombre: lote.nombre,
-            precio: tipo.precio,
-            cantidad: tipo.cantidad,
-            fecha_inicio: lote.fecha_inicio
-              ? new Date(lote.fecha_inicio).toISOString()
-              : "",
-            fecha_fin: lote.fecha_fin
-              ? new Date(lote.fecha_fin).toISOString()
-              : null,
-            estado:
-              new Date(lote.fecha_inicio) <= new Date() &&
-              new Date(lote.fecha_fin) >= new Date()
-                ? "activo"
-                : new Date(lote.fecha_inicio) > new Date()
-                  ? "pendiente"
-                  : "cerrado",
-            orden: loteOrder,
-          });
         }
-      }
 
-      // Save each tipo with its lotes
-      let tipoOrden = 0;
-      for (const tipo of tiposMap.values()) {
-        await fetch(`/api/admin/eventos/${savedEventoId}/tipos-entrada`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            nombre: tipo.nombre,
-            precio: tipo.precio,
-            solo_socios: tipo.solo_socios,
-            orden: tipoOrden++,
-            lotes: tipo.lotes,
-          }),
-        });
+        // Save each tipo with its lotes
+        let tipoOrden = 0;
+        for (const tipo of tiposMap.values()) {
+          const tipoRes = await fetch(`/api/admin/eventos/${savedEventoId}/tipos-entrada`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              nombre: tipo.nombre,
+              precio: tipo.precio,
+              solo_socios: tipo.solo_socios,
+              orden: tipoOrden++,
+              lotes: tipo.lotes,
+            }),
+          });
+          if (!tipoRes.ok) {
+            const tipoErr = await tipoRes.json().catch(() => ({}));
+            throw new Error(tipoErr.error || `Error al guardar tipo "${tipo.nombre}"`);
+          }
+        }
       }
 
       toast.success(isEditing ? "Evento actualizado" : "Evento creado");

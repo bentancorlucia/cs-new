@@ -47,7 +47,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { createBrowserClient } from "@/lib/supabase/client";
 import { staggerContainerFast, fadeInUp } from "@/lib/motion";
 import { toast } from "sonner";
 
@@ -79,31 +78,27 @@ export default function AdminProductosPage() {
 
   const fetchProductos = useCallback(async () => {
     setLoading(true);
-    const supabase = createBrowserClient();
-    const limit = 20;
-    const offset = (page - 1) * limit;
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("limit", "20");
+      if (search) params.set("search", search);
+      if (estado) params.set("estado", estado);
 
-    let query = supabase
-      .from("productos")
-      .select(
-        "*, categorias_producto(id, nombre), producto_imagenes(url, es_principal)",
-        { count: "exact" }
-      )
-      .order("created_at", { ascending: false })
-      .range(offset, offset + limit - 1);
+      const res = await fetch(`/api/admin/productos?${params.toString()}`);
+      if (!res.ok) throw new Error("Error al cargar productos");
 
-    if (search) {
-      query = query.or(`nombre.ilike.%${search}%,sku.ilike.%${search}%`);
+      const json = await res.json();
+      setProductos(json.data || []);
+      setTotal(json.pagination?.total || 0);
+      setTotalPages(json.pagination?.totalPages || 1);
+    } catch {
+      setProductos([]);
+      setTotal(0);
+      setTotalPages(1);
+    } finally {
+      setLoading(false);
     }
-    if (estado === "activo") query = query.eq("activo", true);
-    if (estado === "inactivo") query = query.eq("activo", false);
-    if (estado === "agotado") query = query.eq("stock_actual", 0);
-
-    const { data, count } = await query;
-    setProductos((data as unknown as Producto[]) || []);
-    setTotal(count || 0);
-    setTotalPages(Math.ceil((count || 0) / limit));
-    setLoading(false);
   }, [search, estado, page]);
 
   useEffect(() => {

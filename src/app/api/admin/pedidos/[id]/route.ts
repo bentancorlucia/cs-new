@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole, getCurrentUser } from "@/lib/supabase/roles";
 import { z } from "zod";
 
@@ -25,14 +25,14 @@ export async function GET(
   try {
     await requireRole(TIENDA_ROLES);
     const { id } = await params;
-    const supabase = await createServerClient();
+    const supabase = createAdminClient();
 
     const { data, error } = await supabase
       .from("pedidos")
       .select(
         `
         *,
-        perfiles(id, nombre, apellido, telefono, cedula, es_socio),
+        perfiles!perfil_id(id, nombre, apellido, telefono, cedula, es_socio),
         pedido_items(
           id, cantidad, precio_unitario, subtotal,
           productos(id, nombre, slug),
@@ -64,11 +64,11 @@ export async function PUT(
   try {
     await requireRole(TIENDA_ROLES);
     const { id } = await params;
-    const supabase = await createServerClient();
+    const supabase = createAdminClient();
     const body = await request.json();
     const parsed = estadoSchema.parse(body);
 
-    // Cast supabase for admin operations (type narrowing causes 'never' with select columns)
+    // Use admin client directly (bypasses RLS for admin operations)
     const db = supabase as any;
 
     // Si se cancela, devolver stock

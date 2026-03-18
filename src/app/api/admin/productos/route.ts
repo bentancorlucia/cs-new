@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/roles";
 import { z } from "zod";
 
@@ -25,7 +25,7 @@ const productoSchema = z.object({
 export async function GET(request: NextRequest) {
   try {
     await requireRole(TIENDA_ROLES);
-    const supabase = await createServerClient();
+    const supabase = createAdminClient();
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await requireRole(TIENDA_ROLES);
-    const supabase = await createServerClient();
+    const supabase = createAdminClient();
     const body = await request.json();
     const parsed = productoSchema.parse(body);
 

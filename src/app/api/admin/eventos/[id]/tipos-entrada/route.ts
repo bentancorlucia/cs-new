@@ -128,17 +128,41 @@ export async function DELETE(
     if (tipos && tipos.length > 0) {
       const tipoIds = tipos.map((t: any) => t.id);
 
+      // Check if there are entradas referencing these tipos
+      const { data: entradasExistentes } = await db
+        .from("entradas")
+        .select("id")
+        .in("tipo_entrada_id", tipoIds)
+        .limit(1);
+
+      if (entradasExistentes && entradasExistentes.length > 0) {
+        return NextResponse.json(
+          { error: "No se pueden eliminar tipos de entrada que tienen entradas vendidas. Editá los tipos existentes en su lugar." },
+          { status: 409 }
+        );
+      }
+
       // Delete lotes first (FK constraint)
-      await db
+      const { error: lotesDelError } = await db
         .from("lotes_entrada")
         .delete()
         .in("tipo_entrada_id", tipoIds);
 
+      if (lotesDelError) {
+        console.error("Error deleting lotes:", lotesDelError);
+        return NextResponse.json({ error: "Error al eliminar lotes existentes" }, { status: 500 });
+      }
+
       // Delete tipos
-      await db
+      const { error: tiposDelError } = await db
         .from("tipo_entradas")
         .delete()
         .eq("evento_id", Number(eventoId));
+
+      if (tiposDelError) {
+        console.error("Error deleting tipos:", tiposDelError);
+        return NextResponse.json({ error: "Error al eliminar tipos de entrada" }, { status: 500 });
+      }
     }
 
     return NextResponse.json({ success: true });

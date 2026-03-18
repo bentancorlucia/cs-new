@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/roles";
 
 const TIENDA_ROLES = ["super_admin", "tienda"];
@@ -8,7 +8,7 @@ const TIENDA_ROLES = ["super_admin", "tienda"];
 export async function GET(request: NextRequest) {
   try {
     await requireRole(TIENDA_ROLES);
-    const supabase = await createServerClient();
+    const supabase = createAdminClient();
 
     const { searchParams } = new URL(request.url);
     const estado = searchParams.get("estado") || "";
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
       .select(
         `
         *,
-        perfiles(nombre, apellido, telefono)
+        perfiles!perfil_id(nombre, apellido, telefono)
       `,
         { count: "exact" }
       )
@@ -42,8 +42,28 @@ export async function GET(request: NextRequest) {
     const { data, error, count } = await query;
     if (error) throw error;
 
+    // Fetch counts per estado for tab badges
+    const estados = ["pagado", "preparando", "listo_retiro", "retirado", "cancelado", "pendiente"] as const;
+    const counts: Record<string, number> = {};
+
+    const countPromises = estados.map(async (est) => {
+      let q = supabase
+        .from("pedidos")
+        .select("id", { count: "exact", head: true })
+        .eq("estado", est);
+      if (tipo) q = q.eq("tipo", tipo as "online" | "pos");
+      if (search) {
+        q = q.or(`numero_pedido.ilike.%${search}%,nombre_cliente.ilike.%${search}%`);
+      }
+      const { count: c } = await q;
+      counts[est] = c || 0;
+    });
+
+    await Promise.all(countPromises);
+
     return NextResponse.json({
       data,
+      counts,
       pagination: {
         page,
         limit,

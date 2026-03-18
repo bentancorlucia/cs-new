@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   createPreference,
   getCheckoutUrl,
@@ -22,7 +23,7 @@ const checkoutSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerClient();
-    const db = supabase as any;
+    const db = createAdminClient() as any;
 
     // 1. Auth
     const {
