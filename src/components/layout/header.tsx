@@ -365,9 +365,9 @@ export function Header() {
   const { scrollY } = useScroll();
   const [user, setUser] = useState<{ email?: string; initials?: string; avatar_url?: string | null } | null>(null);
 
-  // Solid navbar only for tienda and eventos (and their subpages)
-  const solidNavbarPrefixes = ["/tienda", "/eventos"];
-  const isTransparentHero = !solidNavbarPrefixes.some((prefix) => pathname.startsWith(prefix));
+  // Transparent navbar on home and tienda home; solid on tienda subpages, eventos, etc.
+  const transparentPaths = ["/", "/tienda"];
+  const isTransparentHero = transparentPaths.includes(pathname);
 
   // Scroll-driven transforms
   const navPaddingY = useTransform(

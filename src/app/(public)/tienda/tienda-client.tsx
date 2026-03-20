@@ -87,6 +87,10 @@ export function TiendaClient({
   const heroOpacity = useTransform(scrollYProgress, [0, 0.6], [1, 0]);
 
   useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  useEffect(() => {
     // Skip client fetch if we already have server-rendered data
     if (hasInitialData) return;
 
@@ -230,7 +234,7 @@ export function TiendaClient({
       {/* ============================================ */}
       <section
         ref={heroRef}
-        className="relative -mt-20 min-h-[70vh] sm:min-h-[80vh] flex items-center overflow-hidden bg-bordo-950 noise-overlay"
+        className="relative -mt-20 min-h-[45vh] sm:h-[105vh] flex items-center overflow-hidden bg-bordo-950 noise-overlay"
       >
         {/* Animated gradient background */}
         <div className="absolute inset-0">
@@ -262,9 +266,9 @@ export function TiendaClient({
         {/* Content */}
         <motion.div
           style={{ y: heroContentY, opacity: heroOpacity }}
-          className="relative z-10 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 pt-32 sm:pt-40 pb-16 sm:pb-24"
+          className="relative z-10 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 pt-32 sm:pt-28 pb-16 sm:pb-16"
         >
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-12 items-center">
             {/* Left — Text */}
             <div>
               <motion.span
@@ -365,7 +369,7 @@ export function TiendaClient({
                         delay: 0.5 + i * 0.12,
                         ease: [0.16, 1, 0.3, 1],
                       }}
-                      className={`relative aspect-[3/4] rounded-2xl overflow-hidden bg-bordo-800/30 ${
+                      className={`relative aspect-[4/5] rounded-2xl overflow-hidden bg-bordo-800/30 ${
                         i % 2 === 1 ? "mt-6" : ""
                       }`}
                     >
