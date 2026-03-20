@@ -216,6 +216,52 @@ export interface Database {
         };
         Relationships: [];
       };
+      comprobantes: {
+        Row: {
+          id: number;
+          pedido_id: number;
+          url: string;
+          nombre_archivo: string;
+          tipo: "imagen" | "pdf";
+          tamano_bytes: number | null;
+          datos_extraidos: Json | null;
+          estado: "pendiente" | "verificado" | "rechazado";
+          verificado_por: string | null;
+          verificado_at: string | null;
+          motivo_rechazo: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: number;
+          pedido_id: number;
+          url: string;
+          nombre_archivo: string;
+          tipo: "imagen" | "pdf";
+          tamano_bytes?: number | null;
+          datos_extraidos?: Json | null;
+          estado?: "pendiente" | "verificado" | "rechazado";
+          verificado_por?: string | null;
+          verificado_at?: string | null;
+          motivo_rechazo?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          pedido_id?: number;
+          url?: string;
+          nombre_archivo?: string;
+          tipo?: "imagen" | "pdf";
+          tamano_bytes?: number | null;
+          datos_extraidos?: Json | null;
+          estado?: "pendiente" | "verificado" | "rechazado";
+          verificado_por?: string | null;
+          verificado_at?: string | null;
+          motivo_rechazo?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       categorias_producto: {
         Row: {
           id: number;
@@ -347,6 +393,7 @@ export interface Database {
           alt_text: string | null;
           orden: number;
           es_principal: boolean;
+          focal_point: string;
           created_at: string;
         };
         Insert: {
@@ -356,6 +403,7 @@ export interface Database {
           alt_text?: string | null;
           orden?: number;
           es_principal?: boolean;
+          focal_point?: string;
           created_at?: string;
         };
         Update: {
@@ -364,6 +412,7 @@ export interface Database {
           alt_text?: string | null;
           orden?: number;
           es_principal?: boolean;
+          focal_point?: string;
         };
         Relationships: [];
       };
@@ -373,18 +422,20 @@ export interface Database {
           numero_pedido: string;
           perfil_id: string | null;
           tipo: "online" | "pos";
-          estado: "pendiente" | "pagado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
+          estado: "pendiente" | "pendiente_verificacion" | "pagado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
           subtotal: number;
           descuento: number;
           total: number;
           moneda: string;
-          metodo_pago: "mercadopago" | "efectivo" | "mercadopago_qr" | null;
+          metodo_pago: "mercadopago" | "efectivo" | "mercadopago_qr" | "transferencia" | null;
           mercadopago_preference_id: string | null;
           mercadopago_payment_id: string | null;
           nombre_cliente: string | null;
           telefono_cliente: string | null;
           notas: string | null;
           vendedor_id: string | null;
+          stock_reservado: boolean;
+          stock_reservado_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -393,18 +444,20 @@ export interface Database {
           numero_pedido?: string;
           perfil_id?: string | null;
           tipo: "online" | "pos";
-          estado?: "pendiente" | "pagado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
+          estado?: "pendiente" | "pendiente_verificacion" | "pagado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
           subtotal: number;
           descuento?: number;
           total: number;
           moneda?: string;
-          metodo_pago?: "mercadopago" | "efectivo" | "mercadopago_qr" | null;
+          metodo_pago?: "mercadopago" | "efectivo" | "mercadopago_qr" | "transferencia" | null;
           mercadopago_preference_id?: string | null;
           mercadopago_payment_id?: string | null;
           nombre_cliente?: string | null;
           telefono_cliente?: string | null;
           notas?: string | null;
           vendedor_id?: string | null;
+          stock_reservado?: boolean;
+          stock_reservado_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -412,18 +465,20 @@ export interface Database {
           numero_pedido?: string;
           perfil_id?: string | null;
           tipo?: "online" | "pos";
-          estado?: "pendiente" | "pagado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
+          estado?: "pendiente" | "pendiente_verificacion" | "pagado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
           subtotal?: number;
           descuento?: number;
           total?: number;
           moneda?: string;
-          metodo_pago?: "mercadopago" | "efectivo" | "mercadopago_qr" | null;
+          metodo_pago?: "mercadopago" | "efectivo" | "mercadopago_qr" | "transferencia" | null;
           mercadopago_preference_id?: string | null;
           mercadopago_payment_id?: string | null;
           nombre_cliente?: string | null;
           telefono_cliente?: string | null;
           notas?: string | null;
           vendedor_id?: string | null;
+          stock_reservado?: boolean;
+          stock_reservado_at?: string | null;
           updated_at?: string;
         };
         Relationships: [];

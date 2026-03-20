@@ -36,6 +36,7 @@ interface ProductoImagen {
   alt_text: string | null;
   orden: number;
   es_principal: boolean;
+  focal_point: string;
 }
 
 interface ProductoVariante {
@@ -70,7 +71,7 @@ interface RelacionadoSimple {
   precio_socio: number | null;
   stock_actual: number;
   destacado: boolean;
-  producto_imagenes: { url: string; es_principal: boolean }[];
+  producto_imagenes: { url: string; es_principal: boolean; focal_point: string }[];
 }
 
 interface Props {
@@ -89,6 +90,7 @@ export function ProductoDetalleClient({ producto, relacionados }: Props) {
   );
   const [cantidad, setCantidad] = useState(1);
   const [added, setAdded] = useState(false);
+  const [failedImgs, setFailedImgs] = useState<Set<number>>(new Set());
   const { addItem } = useCart();
 
   // Swipe gesture for mobile gallery
@@ -191,14 +193,22 @@ export function ProductoDetalleClient({ producto, relacionados }: Props) {
                   style={{ x: dragX }}
                   className="relative h-full w-full cursor-grab active:cursor-grabbing touch-pan-y"
                 >
-                  <Image
-                    src={imagenes[imagenActiva].url}
-                    alt={imagenes[imagenActiva].alt_text || producto.nombre}
-                    fill
-                    className="pointer-events-none object-cover"
-                    sizes="(max-width: 1024px) 100vw, 50vw"
-                    priority
-                  />
+                  {failedImgs.has(imagenActiva) ? (
+                    <div className="flex h-full items-center justify-center">
+                      <Package className="size-16 text-muted-foreground/20" />
+                    </div>
+                  ) : (
+                    <Image
+                      src={imagenes[imagenActiva].url}
+                      alt={imagenes[imagenActiva].alt_text || producto.nombre}
+                      fill
+                      className="pointer-events-none object-cover"
+                      style={{ objectPosition: imagenes[imagenActiva].focal_point || "50% 50%" }}
+                      sizes="(max-width: 1024px) 100vw, 50vw"
+                      priority
+                      onError={() => setFailedImgs((prev) => new Set(prev).add(imagenActiva))}
+                    />
+                  )}
                 </motion.div>
               ) : (
                 <div className="flex h-full items-center justify-center">
@@ -252,19 +262,27 @@ export function ProductoDetalleClient({ producto, relacionados }: Props) {
                   key={img.id}
                   onClick={() => setImagenActiva(i)}
                   className={cn(
-                    "relative size-16 shrink-0 overflow-hidden rounded-lg border-2 transition",
+                    "relative size-16 shrink-0 overflow-hidden rounded-xl border-2 transition-all duration-200",
                     i === imagenActiva
-                      ? "border-bordo ring-2 ring-bordo/20"
-                      : "border-transparent opacity-60 hover:opacity-100"
+                      ? "border-bordo opacity-100"
+                      : "border-transparent opacity-50 hover:opacity-80"
                   )}
                 >
-                  <Image
-                    src={img.url}
-                    alt={img.alt_text || ""}
-                    fill
-                    className="object-cover"
-                    sizes="64px"
-                  />
+                  {failedImgs.has(i) ? (
+                    <div className="flex h-full items-center justify-center bg-muted">
+                      <Package className="size-4 text-muted-foreground/30" />
+                    </div>
+                  ) : (
+                    <Image
+                      src={img.url}
+                      alt={img.alt_text || ""}
+                      fill
+                      className="object-cover"
+                      style={{ objectPosition: img.focal_point || "50% 50%" }}
+                      sizes="64px"
+                      onError={() => setFailedImgs((prev) => new Set(prev).add(i))}
+                    />
+                  )}
                 </button>
               ))}
             </div>
@@ -552,6 +570,7 @@ export function ProductoDetalleClient({ producto, relacionados }: Props) {
                       precio={rel.precio}
                       precioSocio={rel.precio_socio}
                       imagenUrl={img?.url}
+                      imagenFocalPoint={img?.focal_point}
                       stock={rel.stock_actual}
                       destacado={rel.destacado}
                     />
@@ -579,6 +598,7 @@ export function ProductoDetalleClient({ producto, relacionados }: Props) {
                   precio={rel.precio}
                   precioSocio={rel.precio_socio}
                   imagenUrl={img?.url}
+                  imagenFocalPoint={img?.focal_point}
                   stock={rel.stock_actual}
                   destacado={rel.destacado}
                 />

@@ -16,6 +16,7 @@ export interface ProductCardProps {
   precio: number;
   precioSocio?: number | null;
   imagenUrl?: string | null;
+  imagenFocalPoint?: string | null;
   stock: number;
   destacado?: boolean;
   categoria?: string | null;
@@ -28,6 +29,7 @@ export function ProductCard({
   precio,
   precioSocio,
   imagenUrl,
+  imagenFocalPoint,
   stock,
   destacado,
   categoria,
@@ -39,6 +41,7 @@ export function ProductCard({
     ? Math.round(((precio - precioSocio!) / precio) * 100)
     : 0;
   const [added, setAdded] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
   function handleAdd(e: React.MouseEvent) {
     e.preventDefault();
@@ -56,13 +59,15 @@ export function ProductCard({
     >
       {/* Image */}
       <Link href={`/tienda/${slug}`} className="relative aspect-[4/5] overflow-hidden bg-muted">
-        {imagenUrl ? (
+        {imagenUrl && !imgError ? (
           <Image
             src={imagenUrl}
             alt={nombre}
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-105"
+            style={{ objectPosition: imagenFocalPoint || "50% 50%" }}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            onError={() => setImgError(true)}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-muted-foreground">

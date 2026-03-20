@@ -104,6 +104,7 @@ export function CarritoClient() {
                           fill
                           className="object-cover"
                           sizes="96px"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                         />
                       ) : (
                         <div className="flex h-full items-center justify-center">

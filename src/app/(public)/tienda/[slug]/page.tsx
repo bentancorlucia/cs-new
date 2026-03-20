@@ -33,7 +33,7 @@ export default async function ProductoDetallePage({ params }: Props) {
   const { data: rawProducto } = await supabase
     .from("productos")
     .select(
-      "*, categorias_producto(id, nombre, slug), producto_imagenes(id, url, alt_text, orden, es_principal), producto_variantes(id, nombre, sku, precio_override, stock_actual, atributos, activo)"
+      "*, categorias_producto(id, nombre, slug), producto_imagenes(id, url, alt_text, orden, es_principal, focal_point), producto_variantes(id, nombre, sku, precio_override, stock_actual, atributos, activo)"
     )
     .eq("slug", slug)
     .eq("activo", true)
@@ -47,7 +47,7 @@ export default async function ProductoDetallePage({ params }: Props) {
   if (producto.categoria_id) {
     const { data } = await supabase
       .from("productos")
-      .select("*, producto_imagenes(url, es_principal)")
+      .select("*, producto_imagenes(url, es_principal, focal_point)")
       .eq("activo", true)
       .eq("categoria_id", producto.categoria_id)
       .neq("id", producto.id)

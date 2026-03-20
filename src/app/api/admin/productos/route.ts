@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
         `
         *,
         categorias_producto(id, nombre, slug),
-        producto_imagenes(id, url, alt_text, orden, es_principal)
+        producto_imagenes(id, url, alt_text, orden, es_principal, focal_point)
       `,
         { count: "exact" }
       )
@@ -65,8 +65,31 @@ export async function GET(request: NextRequest) {
     const { data, error, count } = await query;
     if (error) throw error;
 
+    // Obtener stock reservado (pedidos pendiente_verificacion)
+    const productIds = (data || []).map((p: any) => p.id);
+    let reservadoMap: Record<number, number> = {};
+
+    if (productIds.length > 0) {
+      const { data: reservados } = await supabase
+        .from("pedido_items")
+        .select("producto_id, cantidad, pedidos!inner(estado)")
+        .in("producto_id", productIds)
+        .eq("pedidos.estado", "pendiente_verificacion");
+
+      if (reservados) {
+        for (const item of reservados) {
+          reservadoMap[item.producto_id] = (reservadoMap[item.producto_id] || 0) + item.cantidad;
+        }
+      }
+    }
+
+    const dataConReservado = (data || []).map((p: any) => ({
+      ...p,
+      stock_reservado: reservadoMap[p.id] || 0,
+    }));
+
     return NextResponse.json({
-      data,
+      data: dataConReservado,
       pagination: {
         page,
         limit,

@@ -82,6 +82,12 @@ const ESTADO_CONFIG: Record<
     label: "Retirado",
     bg: "bg-green-50",
   },
+  pendiente_verificacion: {
+    icon: Clock,
+    color: "text-amber-600",
+    label: "Verificación pendiente",
+    bg: "bg-amber-50",
+  },
   cancelado: {
     icon: XCircle,
     color: "text-destructive",
@@ -152,6 +158,7 @@ export function PedidoConfirmacionClient({ pedido, paymentStatus }: Props) {
     paymentStatus === "approved" || pedido.estado === "pagado";
   const isPending =
     paymentStatus === "pending" || pedido.estado === "pendiente";
+  const isPendingVerification = pedido.estado === "pendiente_verificacion";
   const isFailed =
     paymentStatus === "failure" || pedido.estado === "cancelado";
 
@@ -216,7 +223,7 @@ export function PedidoConfirmacionClient({ pedido, paymentStatus }: Props) {
       <div className="text-center">
         {/* Status animation */}
         {isApproved && <SuccessAnimation />}
-        {isPending && !isFailed && <PendingAnimation />}
+        {(isPending || isPendingVerification) && !isFailed && <PendingAnimation />}
         {isFailed && <FailureAnimation />}
 
         {/* Title */}
@@ -227,7 +234,8 @@ export function PedidoConfirmacionClient({ pedido, paymentStatus }: Props) {
           className="font-display text-2xl font-bold md:text-3xl"
         >
           {isApproved && "Pago confirmado"}
-          {isPending && !isFailed && "Pago pendiente"}
+          {isPendingVerification && "Transferencia recibida"}
+          {isPending && !isFailed && !isPendingVerification && "Pago pendiente"}
           {isFailed && "Pago no procesado"}
         </motion.h1>
 
@@ -239,8 +247,11 @@ export function PedidoConfirmacionClient({ pedido, paymentStatus }: Props) {
         >
           {isApproved &&
             "Tu pedido fue registrado correctamente. Te notificaremos cuando esté listo para retirar."}
+          {isPendingVerification &&
+            "Tu transferencia fue recibida y está siendo verificada. Te notificaremos cuando se confirme el pago."}
           {isPending &&
             !isFailed &&
+            !isPendingVerification &&
             "Estamos esperando la confirmación de tu pago. Actualizaremos el estado automáticamente."}
           {isFailed &&
             "Hubo un problema con tu pago. Podés intentar nuevamente desde el carrito."}
@@ -357,8 +368,8 @@ export function PedidoConfirmacionClient({ pedido, paymentStatus }: Props) {
                 Retirá en el club
               </p>
               <p className="text-bordo-800/70">
-                Te enviaremos una notificación cuando tu pedido esté listo
-                para retirar. Presentá tu número de pedido.
+                Soriano 1472, Montevideo — Martes, Jueves y Viernes de 12:30 a 15:30 hs.
+                Te enviaremos una notificación cuando esté listo. Presentá tu número de pedido.
               </p>
             </div>
           </motion.div>

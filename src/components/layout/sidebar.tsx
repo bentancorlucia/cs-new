@@ -25,6 +25,7 @@ import {
   ChevronLeft,
   ShoppingCart,
   ShieldCheck,
+  LayoutDashboard,
   Wallet,
   ArrowRightLeft,
   FolderTree,
@@ -51,6 +52,7 @@ interface NavItem {
   href: string;
   label: string;
   icon: React.ComponentType<LucideProps>;
+  exact?: boolean;
 }
 
 interface NavSection {
@@ -64,6 +66,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: "Tienda",
     requiredRoles: ["super_admin", "tienda"],
     items: [
+      { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
       { href: "/admin/productos", label: "Productos", icon: Package },
       { href: "/admin/categorias", label: "Categorías", icon: Tag },
       { href: "/admin/pedidos", label: "Pedidos", icon: ClipboardList },
@@ -123,9 +126,10 @@ const BOTTOM_ITEMS: NavItem[] = [
 function getActivePageLabel(pathname: string): string {
   for (const section of NAV_SECTIONS) {
     for (const item of section.items) {
-      if (pathname === item.href || pathname.startsWith(item.href + "/")) {
-        return item.label;
-      }
+      const match = item.exact
+        ? pathname === item.href
+        : pathname === item.href || pathname.startsWith(item.href + "/");
+      if (match) return item.label;
     }
   }
   for (const item of BOTTOM_ITEMS) {
@@ -147,8 +151,9 @@ function SidebarNavItem({
   collapsed: boolean;
   onNavigate?: () => void;
 }) {
-  const isActive =
-    pathname === item.href || pathname.startsWith(item.href + "/");
+  const isActive = item.exact
+    ? pathname === item.href
+    : pathname === item.href || pathname.startsWith(item.href + "/");
   const Icon = item.icon;
 
   return (

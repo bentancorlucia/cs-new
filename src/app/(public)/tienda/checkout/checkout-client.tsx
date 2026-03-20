@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
@@ -12,6 +12,13 @@ import {
   MapPin,
   AlertCircle,
   Lock,
+  Building2,
+  Upload,
+  FileImage,
+  FileText,
+  X,
+  Copy,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -25,12 +32,35 @@ import {
   springSmooth,
   pageTransition,
 } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 
 interface UserProfile {
   nombre: string;
   apellido: string;
   telefono: string | null;
   es_socio: boolean;
+}
+
+type MetodoPago = "transferencia";
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/80"
+    >
+      {copied ? <Check className="size-3 text-green-600" /> : <Copy className="size-3" />}
+      {copied ? "Copiado" : "Copiar"}
+    </button>
+  );
 }
 
 export function CheckoutClient() {
@@ -40,6 +70,11 @@ export function CheckoutClient() {
   const [notas, setNotas] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [metodoPago, setMetodoPago] = useState<MetodoPago>("transferencia");
+  const [comprobante, setComprobante] = useState<File | null>(null);
+  const [comprobantePreview, setComprobantePreview] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Cargar perfil del usuario
   useEffect(() => {
@@ -72,11 +107,46 @@ export function CheckoutClient() {
   const totalFinal = esSocio ? totalSocio : total;
   const descuento = esSocio ? total - totalSocio : 0;
 
+  const handleFileSelect = useCallback((file: File) => {
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+    if (!allowedTypes.includes(file.type)) {
+      setError("Formato no permitido. Usá JPG, PNG, WebP o PDF.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError("El archivo no puede superar 10MB.");
+      return;
+    }
+    setError(null);
+    setComprobante(file);
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (e) => setComprobantePreview(e.target?.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setComprobantePreview(null);
+    }
+  }, []);
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileSelect(file);
+  }
+
+  function removeComprobante() {
+    setComprobante(null);
+    setComprobantePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   async function handleCheckout() {
     setSubmitting(true);
     setError(null);
 
     try {
+      // 1. Create order
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -87,6 +157,7 @@ export function CheckoutClient() {
             cantidad: item.cantidad,
           })),
           notas: notas || undefined,
+          metodo_pago: metodoPago,
         }),
       });
 
@@ -98,9 +169,31 @@ export function CheckoutClient() {
         return;
       }
 
-      // Limpiar carrito y redirigir a MercadoPago
-      clearCart();
-      window.location.href = data.checkout_url;
+      // 2. If transferencia, upload comprobante then redirect
+      if (metodoPago === "transferencia") {
+        if (comprobante) {
+          try {
+            const formData = new FormData();
+            formData.append("archivo", comprobante);
+            formData.append("pedido_id", String(data.pedido_id));
+
+            const uploadRes = await fetch("/api/checkout/comprobante", {
+              method: "POST",
+              body: formData,
+            });
+
+            if (!uploadRes.ok) {
+              console.error("Error al subir comprobante:", await uploadRes.text());
+            }
+          } catch (uploadError) {
+            console.error("Error al subir comprobante:", uploadError);
+          }
+        }
+
+        clearCart();
+        window.location.href = `/tienda/pedido/${data.pedido_id}`;
+        return;
+      }
     } catch {
       setError("Error de conexión. Intentá de nuevo.");
       setSubmitting(false);
@@ -215,10 +308,13 @@ export function CheckoutClient() {
               <div className="text-sm">
                 <p className="font-medium">Retiro en el club</p>
                 <p className="text-muted-foreground">
-                  Te notificaremos cuando tu pedido esté listo para retirar.
+                  Soriano 1472, Montevideo — Martes, Jueves y Viernes de 12:30 a 15:30 hs.
                 </p>
               </div>
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Te notificaremos cuando tu pedido esté listo para retirar.
+            </p>
           </motion.div>
 
           {/* Items del pedido */}
@@ -271,6 +367,162 @@ export function CheckoutClient() {
               })}
             </div>
           </motion.div>
+
+          {/* Método de pago */}
+          <motion.div
+            variants={fadeInUp}
+            className="rounded-2xl border bg-card p-4 md:p-5"
+          >
+            <h2 className="mb-3 font-heading text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Método de pago
+            </h2>
+            <div className="flex items-center gap-3 rounded-xl border-2 border-bordo-800 bg-bordo-50 p-4 shadow-sm">
+              <Building2 className="size-6 text-bordo-800" />
+              <div>
+                <p className="text-sm font-medium text-bordo-900">
+                  Transferencia bancaria
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Único método de pago disponible por el momento
+                </p>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Panel datos bancarios + Upload (solo transferencia) */}
+          <AnimatePresence>
+            {metodoPago === "transferencia" && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={springSmooth}
+                className="space-y-4 overflow-hidden"
+              >
+                {/* Datos bancarios */}
+                <div className="rounded-2xl border border-bordo-200 bg-bordo-50 p-4 md:p-5">
+                  <h2 className="mb-3 font-heading text-xs font-bold uppercase tracking-wider text-bordo-900">
+                    Datos para la transferencia
+                  </h2>
+                  <div className="space-y-2.5 text-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-bordo-800/70">Banco</p>
+                        <p className="font-medium text-bordo-900">ITAU</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-bordo-800/70">Cuenta</p>
+                        <p className="font-mono font-bold text-bordo-900">9500100</p>
+                      </div>
+                      <CopyButton text="9500100" />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-bordo-800/70">Titular</p>
+                        <p className="font-medium text-bordo-900">Club Seminario</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Upload comprobante */}
+                <div className="rounded-2xl border bg-card p-4 md:p-5">
+                  <h2 className="mb-3 font-heading text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Comprobante de transferencia
+                    <span className="ml-1 text-destructive">*</span>
+                  </h2>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleFileSelect(file);
+                    }}
+                  />
+
+                  <AnimatePresence mode="wait">
+                    {comprobante ? (
+                      <motion.div
+                        key="preview"
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="relative rounded-xl border bg-superficie p-3"
+                      >
+                        <button
+                          onClick={removeComprobante}
+                          className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-white shadow-sm transition-colors hover:bg-red-50"
+                        >
+                          <X className="size-4 text-muted-foreground" />
+                        </button>
+
+                        {comprobantePreview ? (
+                          <div className="relative mx-auto h-48 w-full overflow-hidden rounded-lg">
+                            <Image
+                              src={comprobantePreview}
+                              alt="Comprobante"
+                              fill
+                              className="object-contain"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-3 py-2">
+                            <FileText className="size-10 text-bordo-800" />
+                            <div>
+                              <p className="text-sm font-medium">{comprobante.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                PDF · {(comprobante.size / 1024).toFixed(0)} KB
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="dropzone"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                        onDragLeave={() => setDragOver(false)}
+                        onDrop={handleDrop}
+                        onClick={() => fileInputRef.current?.click()}
+                        className={cn(
+                          "flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 border-dashed p-8 transition-all",
+                          dragOver
+                            ? "border-bordo-800 bg-bordo-50"
+                            : "border-linea hover:border-bordo-800/50 hover:bg-superficie"
+                        )}
+                      >
+                        <motion.div
+                          animate={dragOver ? { scale: 1.1 } : { scale: 1 }}
+                          className="flex size-12 items-center justify-center rounded-full bg-superficie"
+                        >
+                          <Upload className={cn(
+                            "size-6",
+                            dragOver ? "text-bordo-800" : "text-muted-foreground"
+                          )} />
+                        </motion.div>
+                        <div className="text-center">
+                          <p className="text-sm font-medium">
+                            Arrastrá tu comprobante o <span className="text-bordo-800">buscá en tus archivos</span>
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            JPG, PNG, WebP o PDF — Máx. 10MB
+                          </p>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Notas */}
           <motion.div
@@ -355,7 +607,7 @@ export function CheckoutClient() {
                 size="lg"
                 className="mt-5 w-full gap-2"
                 onClick={handleCheckout}
-                disabled={submitting}
+                disabled={submitting || (metodoPago === "transferencia" && !comprobante)}
               >
                 {submitting ? (
                   <>
@@ -364,16 +616,15 @@ export function CheckoutClient() {
                   </>
                 ) : (
                   <>
-                    <ShieldCheck className="size-4" />
-                    Pagar con MercadoPago
+                    <Building2 className="size-4" />
+                    Confirmar pedido
                   </>
                 )}
               </Button>
             </motion.div>
 
             <p className="mt-3 text-center text-xs text-muted-foreground">
-              Serás redirigido a MercadoPago para completar el pago de forma
-              segura.
+              Tu pedido quedará pendiente de verificación hasta confirmar la transferencia.
             </p>
           </div>
 
@@ -381,8 +632,8 @@ export function CheckoutClient() {
           <div className="rounded-2xl border bg-card p-4">
             <div className="flex flex-col gap-3 text-xs text-muted-foreground">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="size-4 text-green-600" />
-                Pago seguro con MercadoPago
+                <Building2 className="size-4 text-bordo-800" />
+                Transferencia a ITAU · Cuenta 9500100
               </div>
               <div className="flex items-center gap-2">
                 <MapPin className="size-4 text-bordo-800" />
@@ -437,7 +688,7 @@ export function CheckoutClient() {
               size="lg"
               className="w-full gap-2 text-base"
               onClick={handleCheckout}
-              disabled={submitting}
+              disabled={submitting || (metodoPago === "transferencia" && !comprobante)}
             >
               {submitting ? (
                 <>
@@ -446,8 +697,8 @@ export function CheckoutClient() {
                 </>
               ) : (
                 <>
-                  <ShieldCheck className="size-5" />
-                  Pagar con MercadoPago
+                  <Building2 className="size-5" />
+                  Confirmar pedido
                 </>
               )}
             </Button>

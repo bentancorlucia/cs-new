@@ -11,6 +11,7 @@ import {
   ArrowDownUp,
   PackageX,
   BarChart3,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +46,7 @@ interface ProductoStock {
   sku: string | null;
   stock_actual: number;
   stock_minimo: number;
+  stock_reservado: number;
   activo: boolean;
 }
 
@@ -55,7 +57,10 @@ interface Movimiento {
   stock_anterior: number;
   stock_nuevo: number;
   motivo: string | null;
+  referencia_tipo: string | null;
+  referencia_id: number | null;
   created_at: string;
+  nombre_cliente?: string | null;
 }
 
 export default function AdminStockPage() {
@@ -86,6 +91,22 @@ export default function AdminStockPage() {
 
     const { data } = await query;
     let result = (data as unknown as ProductoStock[]) || [];
+
+    // Obtener stock reservado (pedidos pendiente_verificacion)
+    const { data: reservados } = await supabase
+      .from("pedido_items")
+      .select("producto_id, cantidad, pedidos!inner(estado)")
+      .eq("pedidos.estado", "pendiente_verificacion");
+
+    const reservadoMap: Record<number, number> = {};
+    if (reservados) {
+      for (const item of reservados) {
+        reservadoMap[item.producto_id] = (reservadoMap[item.producto_id] || 0) + item.cantidad;
+      }
+    }
+
+    result = result.map((p) => ({ ...p, stock_reservado: reservadoMap[p.id] || 0 }));
+
     if (soloStockBajo) {
       result = result.filter((p) => p.stock_actual <= p.stock_minimo);
     }
@@ -143,7 +164,32 @@ export default function AdminStockPage() {
       .eq("producto_id", prod.id)
       .order("created_at", { ascending: false })
       .limit(20);
-    setMovimientos(data || []);
+
+    // Para ventas, traer nombre del cliente del pedido
+    const movs: Movimiento[] = data || [];
+    const ventaMovs = movs.filter((m) => m.referencia_tipo === "pedido" && m.referencia_id);
+    if (ventaMovs.length > 0) {
+      const pedidoIds = [...new Set(ventaMovs.map((m) => m.referencia_id!))];
+      const { data: pedidos } = await supabase
+        .from("pedidos")
+        .select("id, nombre_cliente, perfiles!perfil_id(nombre, apellido)")
+        .in("id", pedidoIds);
+
+      if (pedidos) {
+        const pedidoMap = new Map(pedidos.map((p: any) => [p.id, p]));
+        for (const mov of movs) {
+          if (mov.referencia_tipo === "pedido" && mov.referencia_id) {
+            const ped = pedidoMap.get(mov.referencia_id) as any;
+            if (ped) {
+              mov.nombre_cliente = ped.perfiles
+                ? `${ped.perfiles.nombre} ${ped.perfiles.apellido}`
+                : ped.nombre_cliente || null;
+            }
+          }
+        }
+      }
+    }
+    setMovimientos(movs);
     setLoadingMov(false);
   }
 
@@ -151,6 +197,7 @@ export default function AdminStockPage() {
     (p) => p.stock_actual <= p.stock_minimo && p.stock_actual > 0
   ).length;
   const agotadoCount = productos.filter((p) => p.stock_actual === 0).length;
+  const reservadoTotal = productos.reduce((sum, p) => sum + p.stock_reservado, 0);
 
   const statsCards = [
     {
@@ -174,6 +221,14 @@ export default function AdminStockPage() {
       color: "text-destructive",
       bg: "bg-red-50",
     },
+    {
+      label: "Uds. reservadas",
+      value: reservadoTotal,
+      icon: Clock,
+      color: "text-orange-600",
+      bg: "bg-orange-50",
+      tooltip: "Unidades en pedidos con transferencia pendiente de verificación",
+    },
   ];
 
   return (
@@ -196,12 +251,12 @@ export default function AdminStockPage() {
         variants={staggerContainer}
         initial="hidden"
         animate="visible"
-        className="grid grid-cols-3 gap-3 sm:gap-4"
+        className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4"
       >
         {statsCards.map((card) => {
           const Icon = card.icon;
           return (
-            <motion.div key={card.label} variants={fadeInUp} transition={springSmooth}>
+            <motion.div key={card.label} variants={fadeInUp} transition={springSmooth} title={"tooltip" in card ? (card as any).tooltip : undefined}>
               <Card className="border-linea">
                 <CardContent className="p-4 sm:p-5">
                   <div className="flex items-start justify-between">
@@ -313,10 +368,16 @@ export default function AdminStockPage() {
                               </p>
                             )}
                             {/* Mobile: show estado inline */}
-                            <div className="sm:hidden mt-1 flex items-center gap-2">
+                            <div className="sm:hidden mt-1 flex items-center gap-2 flex-wrap">
                               <span className="text-xs text-muted-foreground font-body">
                                 Mín: {prod.stock_minimo}
                               </span>
+                              {prod.stock_reservado > 0 && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] text-orange-600 font-body">
+                                  <Clock className="size-2.5" />
+                                  {prod.stock_reservado} res.
+                                </span>
+                              )}
                               {agotado ? (
                                 <Badge variant="destructive" className="text-[9px] py-0 h-4">Agotado</Badge>
                               ) : bajo ? (
@@ -326,15 +387,23 @@ export default function AdminStockPage() {
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
-                          <span
-                            className={cn(
-                              "font-display text-lg tabular-nums",
-                              agotado && "text-destructive",
-                              bajo && "text-amber-600"
+                          <div>
+                            <span
+                              className={cn(
+                                "font-display text-lg tabular-nums",
+                                agotado && "text-destructive",
+                                bajo && "text-amber-600"
+                              )}
+                            >
+                              {prod.stock_actual}
+                            </span>
+                            {prod.stock_reservado > 0 && (
+                              <p className="flex items-center justify-center gap-0.5 text-[10px] text-orange-600 font-body mt-0.5" title={`${prod.stock_reservado} uds. reservadas en transferencias pendientes`}>
+                                <Clock className="size-2.5" />
+                                {prod.stock_reservado} reserv.
+                              </p>
                             )}
-                          >
-                            {prod.stock_actual}
-                          </span>
+                          </div>
                         </TableCell>
                         <TableCell className="text-center text-sm text-muted-foreground font-body hidden sm:table-cell">
                           {prod.stock_minimo}
@@ -461,7 +530,12 @@ export default function AdminStockPage() {
                     )}
                     <div className="min-w-0">
                       <span className="font-medium capitalize">{mov.tipo}</span>
-                      {mov.motivo && (
+                      {mov.nombre_cliente && (
+                        <p className="text-xs text-muted-foreground line-clamp-1">
+                          {mov.nombre_cliente}
+                        </p>
+                      )}
+                      {!mov.nombre_cliente && mov.motivo && (
                         <p className="text-xs text-muted-foreground line-clamp-1">
                           {mov.motivo}
                         </p>

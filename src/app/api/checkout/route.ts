@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  createPreference,
-  getCheckoutUrl,
-  APP_URL,
-} from "@/lib/mercadopago/client";
+import { APP_URL } from "@/lib/mercadopago/client";
 import { z } from "zod";
 
 const checkoutItemSchema = z.object({
@@ -17,6 +13,7 @@ const checkoutItemSchema = z.object({
 const checkoutSchema = z.object({
   items: z.array(checkoutItemSchema).min(1, "El carrito está vacío"),
   notas: z.string().max(500).optional(),
+  metodo_pago: z.enum(["transferencia"]).default("transferencia"),
 });
 
 // POST /api/checkout — Crear pedido + preferencia MercadoPago
@@ -48,7 +45,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { items, notas } = parsed.data;
+    const { items, notas, metodo_pago } = parsed.data;
 
     // 3. Get user profile (for socio pricing)
     const { data: perfil } = await db
@@ -155,20 +152,22 @@ export async function POST(request: NextRequest) {
     );
     const total = subtotal;
 
-    // 6. Create order
+    // 6. Create order (transferencia only — MercadoPago disabled)
     const { data: pedido, error: pedidoError } = await db
       .from("pedidos")
       .insert({
         perfil_id: user.id,
         tipo: "online",
-        estado: "pendiente",
+        estado: "pendiente_verificacion",
         subtotal,
         descuento: 0,
         total,
-        metodo_pago: "mercadopago",
+        metodo_pago: "transferencia",
         nombre_cliente: `${perfil.nombre} ${perfil.apellido}`,
         telefono_cliente: perfil.telefono,
         notas: notas || null,
+        stock_reservado: true,
+        stock_reservado_at: new Date().toISOString(),
       })
       .select("id, numero_pedido")
       .single();
@@ -204,53 +203,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 8. Create MercadoPago preference
-    let preference;
+    // 8. Send pending verification email and return
     try {
-      preference = await createPreference({
-        items: itemsConPrecio.map((item) => ({
-          id: String(item.productoId),
-          title: item.nombre,
-          quantity: item.cantidad,
-          unit_price: item.precioUnitario,
-          currency_id: "UYU",
-        })),
-        external_reference: pedido.numero_pedido,
-        payer: {
-          email: user.email || "",
-          name: perfil.nombre,
-          surname: perfil.apellido,
-        },
-        back_urls: {
-          success: `${APP_URL}/tienda/pedido/${pedido.id}?status=approved`,
-          failure: `${APP_URL}/tienda/pedido/${pedido.id}?status=failure`,
-          pending: `${APP_URL}/tienda/pedido/${pedido.id}?status=pending`,
-        },
-        notification_url: `${APP_URL}/api/webhooks/mercadopago`,
-        statement_descriptor: "CLUB SEMINARIO",
-      });
-    } catch (mpError: any) {
-      console.error("MercadoPago error:", mpError?.message);
-      // Don't delete order — it stays as pendiente, user can retry
-      return NextResponse.json(
-        { error: "Error al conectar con MercadoPago. Intentá de nuevo." },
-        { status: 502 }
+      const { sendOrderPendingVerification } = await import(
+        "@/lib/email/send"
       );
+      await sendOrderPendingVerification(user.email || "", {
+        nombreCliente: `${perfil.nombre} ${perfil.apellido}`,
+        numeroPedido: pedido.numero_pedido,
+        items: itemsConPrecio.map((i) => ({
+          nombre: i.nombre,
+          cantidad: i.cantidad,
+          precioUnitario: i.precioUnitario,
+        })),
+        total,
+        pedidoUrl: `${APP_URL}/tienda/pedido/${pedido.id}`,
+      });
+    } catch (emailError) {
+      console.error("Error al enviar email de verificación:", emailError);
     }
-
-    // 9. Save preference_id on order
-    await db
-      .from("pedidos")
-      .update({ mercadopago_preference_id: preference.id })
-      .eq("id", pedido.id);
 
     return NextResponse.json({
       pedido_id: pedido.id,
       numero_pedido: pedido.numero_pedido,
-      checkout_url: getCheckoutUrl(preference),
+      metodo_pago: "transferencia",
     });
-  } catch (error) {
-    console.error("Error en checkout:", error);
+  } catch (error: any) {
+    console.error("Error en checkout:", error?.message || error, error?.stack);
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 }

@@ -30,7 +30,7 @@ import type { Database } from "@/types/database";
 
 type Producto = Database["public"]["Tables"]["productos"]["Row"] & {
   categorias_producto: { nombre: string; slug: string } | null;
-  producto_imagenes: { url: string; es_principal: boolean }[];
+  producto_imagenes: { url: string; es_principal: boolean; focal_point: string }[];
 };
 
 type Categoria = Database["public"]["Tables"]["categorias_producto"]["Row"];
@@ -54,7 +54,7 @@ export function TiendaClient() {
       const [prodRes, catRes] = await Promise.all([
         supabase
           .from("productos")
-          .select("*, categorias_producto(nombre, slug), producto_imagenes(url, es_principal)")
+          .select("*, categorias_producto(nombre, slug), producto_imagenes(url, es_principal, focal_point)")
           .eq("activo", true)
           .order("created_at", { ascending: false }),
         supabase
@@ -284,6 +284,7 @@ export function TiendaClient() {
                     precio={producto.precio}
                     precioSocio={producto.precio_socio}
                     imagenUrl={imagen?.url}
+                    imagenFocalPoint={imagen?.focal_point}
                     stock={producto.stock_actual}
                     destacado={producto.destacado}
                     categoria={producto.categorias_producto?.nombre}

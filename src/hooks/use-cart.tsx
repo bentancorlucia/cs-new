@@ -99,6 +99,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const clearCart = useCallback(() => {
     setItems([]);
+    localStorage.removeItem(CART_KEY);
   }, []);
 
   const itemCount = useMemo(() => items.reduce((sum, i) => sum + i.cantidad, 0), [items]);

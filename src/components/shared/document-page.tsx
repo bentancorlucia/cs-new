@@ -186,7 +186,7 @@ export function DocumentPageClient({
                   Soriano 1472, Colegio Seminario
                 </span>
                 <span className="font-body text-sm text-muted-foreground/70">
-                  Mar, Jue, Vie de 10 a 13 hs
+                  Martes, Jueves y Viernes de 12:30 a 15:30 hs
                 </span>
               </div>
             </div>

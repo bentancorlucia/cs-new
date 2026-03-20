@@ -148,9 +148,9 @@ export function Footer() {
                 Horario
               </span>
               <p className="font-body text-sm text-white/40 mt-1">
-                Mar, Jue, Vie
+                Martes, Jueves y Viernes
                 <br />
-                10 a 13 hs
+                12:30 a 15:30 hs
               </p>
             </div>
           </FooterColumn>

@@ -9,6 +9,7 @@ const TIENDA_ROLES = ["super_admin", "tienda"];
 const estadoSchema = z.object({
   estado: z.enum([
     "pendiente",
+    "pendiente_verificacion",
     "pagado",
     "preparando",
     "listo_retiro",
@@ -38,6 +39,10 @@ export async function GET(
           id, cantidad, precio_unitario, subtotal,
           productos(id, nombre, slug),
           producto_variantes(id, nombre)
+        ),
+        comprobantes(
+          id, url, nombre_archivo, tipo, tamano_bytes,
+          datos_extraidos, estado, verificado_at, motivo_rechazo
         )
       `
       )

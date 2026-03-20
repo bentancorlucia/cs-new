@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   MoreHorizontal,
   FileSpreadsheet,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,11 +62,12 @@ interface Producto {
   sku: string | null;
   stock_actual: number;
   stock_minimo: number;
+  stock_reservado: number;
   activo: boolean;
   destacado: boolean;
   created_at: string;
   categorias_producto: { id: number; nombre: string } | null;
-  producto_imagenes: { url: string; es_principal: boolean }[];
+  producto_imagenes: { url: string; es_principal: boolean; focal_point: string }[];
 }
 
 export default function AdminProductosPage() {
@@ -254,6 +256,7 @@ export default function AdminProductosPage() {
                                 alt={prod.nombre}
                                 fill
                                 className="object-cover"
+                                style={{ objectPosition: img.focal_point || "50% 50%" }}
                                 sizes="40px"
                               />
                             ) : (
@@ -289,6 +292,12 @@ export default function AdminProductosPage() {
                               <span className={`text-xs font-body ${prod.stock_actual === 0 ? "text-destructive font-medium" : stockBajo ? "text-amber-600 font-medium" : "text-muted-foreground"}`}>
                                 Stock: {prod.stock_actual}
                               </span>
+                              {prod.stock_reservado > 0 && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] text-orange-600 font-body">
+                                  <Clock className="size-2.5" />
+                                  {prod.stock_reservado} res.
+                                </span>
+                              )}
                               {!prod.activo && (
                                 <Badge variant="outline" className="text-[9px] py-0 h-4">Inactivo</Badge>
                               )}
@@ -309,10 +318,18 @@ export default function AdminProductosPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-center hidden sm:table-cell">
-                          <span className={`font-body text-sm ${stockBajo ? "text-amber-600 font-medium" : prod.stock_actual === 0 ? "text-destructive font-medium" : ""}`}>
-                            {prod.stock_actual}
-                          </span>
-                          {stockBajo && <AlertTriangle className="ml-1 inline size-3 text-amber-500" />}
+                          <div>
+                            <span className={`font-body text-sm ${stockBajo ? "text-amber-600 font-medium" : prod.stock_actual === 0 ? "text-destructive font-medium" : ""}`}>
+                              {prod.stock_actual}
+                            </span>
+                            {stockBajo && <AlertTriangle className="ml-1 inline size-3 text-amber-500" />}
+                            {prod.stock_reservado > 0 && (
+                              <p className="flex items-center justify-center gap-0.5 text-[10px] text-orange-600 font-body mt-0.5" title={`${prod.stock_reservado} unidades reservadas en transferencias pendientes de verificación`}>
+                                <Clock className="size-2.5" />
+                                {prod.stock_reservado} reserv.
+                              </p>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-center hidden lg:table-cell">
                           {prod.activo ? (

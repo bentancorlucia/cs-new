@@ -37,7 +37,7 @@ export async function GET(
         `
         *,
         categorias_producto(id, nombre, slug),
-        producto_imagenes(id, url, alt_text, orden, es_principal),
+        producto_imagenes(id, url, alt_text, orden, es_principal, focal_point),
         producto_variantes(id, nombre, sku, precio_override, stock_actual, atributos, activo),
         producto_proveedores(id, proveedor_id, costo, codigo_proveedor, es_principal, proveedores(id, nombre))
       `

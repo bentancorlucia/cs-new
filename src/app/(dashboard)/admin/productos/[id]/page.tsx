@@ -21,7 +21,7 @@ export default function EditarProductoPage() {
       const { data } = await supabase
         .from("productos")
         .select(
-          "*, categorias_producto(id, nombre, slug), producto_imagenes(id, url, alt_text, orden, es_principal), producto_variantes(id, nombre, sku, precio_override, stock_actual, atributos, activo)"
+          "*, categorias_producto(id, nombre, slug), producto_imagenes(id, url, alt_text, orden, es_principal, focal_point), producto_variantes(id, nombre, sku, precio_override, stock_actual, atributos, activo)"
         )
         .eq("id", parseInt(id))
         .single();

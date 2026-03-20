@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
         `
         *,
         categorias_producto(id, nombre, slug),
-        producto_imagenes(id, url, alt_text, orden, es_principal)
+        producto_imagenes(id, url, alt_text, orden, es_principal, focal_point)
       `,
         { count: "exact" }
       )

@@ -16,6 +16,7 @@ import {
   XCircle,
   ArrowRight,
   Eye,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +33,7 @@ import { fadeInUp, staggerContainer, staggerContainerFast, springSmooth } from "
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-type EstadoPedido = "pendiente" | "pagado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
+type EstadoPedido = "pendiente" | "pendiente_verificacion" | "pagado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
 
 interface Pedido {
   id: number;
@@ -47,6 +48,7 @@ interface Pedido {
 
 const tabs: { key: EstadoPedido | ""; label: string; icon: any; color: string }[] = [
   { key: "", label: "Todos", icon: Package, color: "bg-muted text-foreground" },
+  { key: "pendiente_verificacion", label: "Por conciliar", icon: Building2, color: "bg-orange-100 text-orange-700" },
   { key: "pagado", label: "Pagados", icon: CreditCard, color: "bg-emerald-100 text-emerald-700" },
   { key: "preparando", label: "Preparando", icon: Package, color: "bg-amber-100 text-amber-700" },
   { key: "listo_retiro", label: "Listo", icon: Truck, color: "bg-blue-100 text-blue-700" },
@@ -68,6 +70,7 @@ const nextLabel: Record<string, string> = {
 
 const estadoBadge: Record<EstadoPedido, { label: string; className: string }> = {
   pendiente: { label: "Pendiente", className: "bg-gray-100 text-gray-600 border-gray-200" },
+  pendiente_verificacion: { label: "Por conciliar", className: "bg-orange-50 text-orange-700 border-orange-200" },
   pagado: { label: "Pagado", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   preparando: { label: "Preparando", className: "bg-amber-50 text-amber-700 border-amber-200" },
   listo_retiro: { label: "Listo retiro", className: "bg-blue-50 text-blue-700 border-blue-200" },
@@ -321,7 +324,17 @@ export default function AdminPedidosPage() {
                         ${pedido.total.toLocaleString("es-UY")}
                       </span>
 
-                      {next ? (
+                      {pedido.estado === "pendiente_verificacion" ? (
+                        <Link href={`/admin/pedidos/${pedido.id}`}>
+                          <Button
+                            size="sm"
+                            className="h-8 gap-1 text-xs bg-orange-600 hover:bg-orange-700"
+                          >
+                            Verificar
+                            <ArrowRight className="size-3" />
+                          </Button>
+                        </Link>
+                      ) : next ? (
                         <Button
                           size="sm"
                           onClick={(e) => { e.preventDefault(); avanzarEstado(pedido); }}

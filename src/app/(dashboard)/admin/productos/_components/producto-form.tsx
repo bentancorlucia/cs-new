@@ -23,6 +23,7 @@ import {
   Truck,
   Plus,
   Layers,
+  Crosshair,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -104,6 +105,7 @@ interface ProductoImagen {
   alt_text: string | null;
   orden: number;
   es_principal: boolean;
+  focal_point: string;
 }
 
 interface Proveedor {
@@ -308,8 +310,229 @@ function ImageUploader({
     }
   };
 
+  // Crop editor
+  const [editingFocalPoint, setEditingFocalPoint] = useState<ProductoImagen | null>(null);
+  const focalContainerRef = useRef<HTMLDivElement>(null);
+  const [imgNaturalSize, setImgNaturalSize] = useState<{ w: number; h: number } | null>(null);
+  const [isDraggingCrop, setIsDraggingCrop] = useState(false);
+  const CARD_ASPECT = 4 / 5;
+
+  // Given the image natural size, compute the crop rect in % of the displayed image.
+  // object-position: X% Y% means X% of horizontal overflow is to the left,
+  // Y% of vertical overflow is to the top.
+  function getCropPercents(natW: number, natH: number, fp: string) {
+    const imgAspect = natW / natH;
+    // What fraction of the image does the 4:5 crop cover?
+    let cropFracW: number, cropFracH: number;
+    if (imgAspect > CARD_ASPECT) {
+      // Wider: full height visible, width cropped
+      cropFracH = 1;
+      cropFracW = (natH * CARD_ASPECT) / natW;
+    } else {
+      // Taller: full width visible, height cropped
+      cropFracW = 1;
+      cropFracH = (natW / CARD_ASPECT) / natH;
+    }
+
+    const parts = fp.split(" ");
+    const opx = parseFloat(parts[0]) / 100;
+    const opy = parseFloat(parts[1]) / 100;
+
+    // overflow fraction = 1 - cropFrac
+    const overflowFracW = 1 - cropFracW;
+    const overflowFracH = 1 - cropFracH;
+
+    return {
+      left: opx * overflowFracW * 100,
+      top: opy * overflowFracH * 100,
+      width: cropFracW * 100,
+      height: cropFracH * 100,
+      overflowFracW,
+      overflowFracH,
+    };
+  }
+
+  function pointerToFP(clientX: number, clientY: number): string | null {
+    if (!focalContainerRef.current || !imgNaturalSize) return null;
+    const rect = focalContainerRef.current.getBoundingClientRect();
+    const { overflowFracW, overflowFracH, width, height } = getCropPercents(
+      imgNaturalSize.w, imgNaturalSize.h, "50% 50%"
+    );
+
+    const px = (clientX - rect.left) / rect.width;
+    const py = (clientY - rect.top) / rect.height;
+
+    let opx = 50;
+    let opy = 50;
+
+    if (overflowFracW > 0.001) {
+      const desiredLeft = px - (width / 100) / 2;
+      opx = Math.max(0, Math.min(100, (desiredLeft / overflowFracW) * 100));
+    }
+    if (overflowFracH > 0.001) {
+      const desiredTop = py - (height / 100) / 2;
+      opy = Math.max(0, Math.min(100, (desiredTop / overflowFracH) * 100));
+    }
+
+    return `${Math.round(opx)}% ${Math.round(opy)}%`;
+  }
+
+  const saveFocalPoint = useCallback((fp: string) => {
+    if (!editingFocalPoint) return;
+    setEditingFocalPoint((prev) => prev ? { ...prev, focal_point: fp } : null);
+    setImagenes((prev) =>
+      prev.map((img) =>
+        img.id === editingFocalPoint.id ? { ...img, focal_point: fp } : img
+      )
+    );
+  }, [editingFocalPoint]);
+
+  const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingCrop(true);
+    focalContainerRef.current?.setPointerCapture(e.pointerId);
+    const fp = pointerToFP(e.clientX, e.clientY);
+    if (fp) saveFocalPoint(fp);
+  }, [saveFocalPoint, imgNaturalSize]);
+
+  const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingCrop) return;
+    const fp = pointerToFP(e.clientX, e.clientY);
+    if (fp) saveFocalPoint(fp);
+  }, [isDraggingCrop, saveFocalPoint, imgNaturalSize]);
+
+  const onPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingCrop || !editingFocalPoint) return;
+    setIsDraggingCrop(false);
+    focalContainerRef.current?.releasePointerCapture(e.pointerId);
+    fetch(`/api/admin/productos/${productoId}/imagenes`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "set_focal_point",
+        imagen_id: editingFocalPoint.id,
+        focal_point: editingFocalPoint.focal_point,
+      }),
+    }).catch(() => toast.error("Error al guardar punto focal"));
+  }, [isDraggingCrop, editingFocalPoint, productoId]);
+
+  const crop = editingFocalPoint && imgNaturalSize
+    ? getCropPercents(imgNaturalSize.w, imgNaturalSize.h, editingFocalPoint.focal_point || "50% 50%")
+    : null;
+
   return (
     <div className="space-y-4">
+      {/* Crop editor modal */}
+      <AnimatePresence>
+        {editingFocalPoint && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 sm:p-6"
+            onClick={() => setEditingFocalPoint(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              transition={springSmooth}
+              className="relative w-full max-w-2xl max-h-[90dvh] overflow-hidden flex flex-col rounded-2xl bg-card p-4 sm:p-5 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Crosshair className="size-4 text-primary" />
+                  <h3 className="text-sm font-semibold">Ajustar recorte</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingFocalPoint(null)}
+                  className="flex size-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-4 min-h-0 flex-1">
+                {/* Image with crop overlay */}
+                <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+                  <p className="mb-2 text-xs text-muted-foreground shrink-0">
+                    Arrastrá sobre la imagen para elegir qué parte se ve en la tarjeta
+                  </p>
+                  <div
+                    ref={focalContainerRef}
+                    onPointerDown={onPointerDown}
+                    onPointerMove={onPointerMove}
+                    onPointerUp={onPointerUp}
+                    className="relative flex-1 min-h-0 cursor-grab active:cursor-grabbing rounded-xl overflow-hidden select-none touch-none bg-neutral-900 flex items-center justify-center"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={editingFocalPoint.url}
+                      alt="Editar recorte"
+                      className="block max-w-full max-h-full w-auto h-auto object-contain"
+                      onLoad={(e) => {
+                        const img = e.currentTarget;
+                        setImgNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
+                      }}
+                      draggable={false}
+                    />
+
+                    {/* Crop overlay — no CSS transitions for instant response */}
+                    {crop && (
+                      <div
+                        className="pointer-events-none absolute border-2 border-white/90 will-change-[left,top]"
+                        style={{
+                          left: `${crop.left}%`,
+                          top: `${crop.top}%`,
+                          width: `${crop.width}%`,
+                          height: `${crop.height}%`,
+                          boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.5)",
+                        }}
+                      >
+                        {/* Corner handles */}
+                        {[
+                          "top-0 left-0 -translate-x-1/2 -translate-y-1/2",
+                          "top-0 right-0 translate-x-1/2 -translate-y-1/2",
+                          "bottom-0 left-0 -translate-x-1/2 translate-y-1/2",
+                          "bottom-0 right-0 translate-x-1/2 translate-y-1/2",
+                        ].map((pos, i) => (
+                          <div key={i} className={`absolute ${pos} size-3 rounded-full bg-white shadow-md border border-black/20`} />
+                        ))}
+                        {/* Rule of thirds */}
+                        <div className="absolute inset-0">
+                          <div className="absolute left-1/3 top-0 bottom-0 w-px bg-white/25" />
+                          <div className="absolute left-2/3 top-0 bottom-0 w-px bg-white/25" />
+                          <div className="absolute top-1/3 left-0 right-0 h-px bg-white/25" />
+                          <div className="absolute top-2/3 left-0 right-0 h-px bg-white/25" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Preview sidebar */}
+                <div className="flex sm:flex-col items-center sm:items-start gap-3 sm:w-32 shrink-0">
+                  <p className="text-[11px] text-muted-foreground sm:text-center sm:w-full">
+                    Vista previa tarjeta:
+                  </p>
+                  <div className="relative w-24 sm:w-full aspect-[4/5] overflow-hidden rounded-xl bg-muted ring-1 ring-border shadow-sm">
+                    <Image
+                      src={editingFocalPoint.url}
+                      alt="Preview"
+                      fill
+                      className="object-cover"
+                      style={{ objectPosition: editingFocalPoint.focal_point || "50% 50%" }}
+                      sizes="128px"
+                    />
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Upload zone */}
       {canUpload && (
         <motion.div
@@ -411,6 +634,7 @@ function ImageUploader({
                       alt={img.alt_text || "Producto"}
                       fill
                       className="object-cover"
+                      style={{ objectPosition: img.focal_point || "50% 50%" }}
                       sizes="56px"
                     />
                     {img.es_principal && (
@@ -420,7 +644,7 @@ function ImageUploader({
                     )}
                   </div>
 
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 space-y-0.5">
                     {img.es_principal ? (
                       <Badge variant="default" className="text-[10px] h-4 bg-primary">
                         Portada
@@ -435,6 +659,14 @@ function ImageUploader({
                         Hacer portada
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => { setImgNaturalSize(null); setEditingFocalPoint(img); }}
+                      className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
+                    >
+                      <Crosshair className="size-3" />
+                      Recorte
+                    </button>
                   </div>
 
                   <TooltipProvider delay={200}>

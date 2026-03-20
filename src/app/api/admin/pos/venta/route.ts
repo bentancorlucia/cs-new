@@ -14,7 +14,7 @@ const itemSchema = z.object({
 
 const ventaSchema = z.object({
   items: z.array(itemSchema).min(1, "Debe incluir al menos un producto"),
-  metodo_pago: z.enum(["efectivo", "mercadopago_qr"]),
+  metodo_pago: z.enum(["efectivo", "transferencia"]),
   nombre_cliente: z.string().optional().nullable(),
   perfil_socio_id: z.string().optional().nullable(),
   descuento: z.number().min(0).default(0),
@@ -66,22 +66,34 @@ export async function POST(request: NextRequest) {
 
     // 3. Crear pedido
     const estadoInicial =
-      parsed.metodo_pago === "efectivo" ? "pagado" : "pendiente";
+      parsed.metodo_pago === "efectivo"
+        ? "pagado"
+        : parsed.metodo_pago === "transferencia"
+          ? "pendiente_verificacion"
+          : "pendiente";
+
+    const pedidoData: Record<string, any> = {
+      perfil_id: parsed.perfil_socio_id || null,
+      tipo: "pos",
+      estado: estadoInicial,
+      subtotal,
+      descuento: parsed.descuento,
+      total,
+      metodo_pago: parsed.metodo_pago,
+      nombre_cliente: parsed.nombre_cliente || null,
+      notas: parsed.notas || null,
+      vendedor_id: user?.id || null,
+    };
+
+    // Transferencia: reservar stock sin descontar
+    if (parsed.metodo_pago === "transferencia") {
+      pedidoData.stock_reservado = true;
+      pedidoData.stock_reservado_at = new Date().toISOString();
+    }
 
     const { data: pedido, error: pedidoError } = await db
       .from("pedidos")
-      .insert({
-        perfil_id: parsed.perfil_socio_id || null,
-        tipo: "pos",
-        estado: estadoInicial,
-        subtotal,
-        descuento: parsed.descuento,
-        total,
-        metodo_pago: parsed.metodo_pago,
-        nombre_cliente: parsed.nombre_cliente || null,
-        notas: parsed.notas || null,
-        vendedor_id: user?.id || null,
-      })
+      .insert(pedidoData)
       .select()
       .single();
 

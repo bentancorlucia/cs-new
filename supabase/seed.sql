@@ -94,7 +94,7 @@ INSERT INTO contenido_paginas (pagina, seccion, titulo, contenido, orden) VALUES
    'Socio Colaborador: Apoya al club sin participar en actividades deportivas. Socio Deportivo: Participa activamente en una o más disciplinas deportivas.', 2),
 
   ('socios', 'contacto', 'Contacto Secretaría',
-   'Teléfono: +598 91 965 438. Email: secretaria@clubseminario.com.uy. Horario: Martes, Jueves y Viernes de 10 a 13 hs. Dirección: Soriano 1472, Montevideo.', 3),
+   'Teléfono: +598 91 965 438. Email: secretaria@clubseminario.com.uy. Horario: Martes, Jueves y Viernes de 12:30 a 15:30 hs. Dirección: Soriano 1472, Montevideo.', 3),
 
   ('beneficios', 'tarjeta', 'Tarjeta de Membresía',
    'Como socio del club, accedés a descuentos exclusivos en comercios asociados presentando tu carnet digital.', 1);

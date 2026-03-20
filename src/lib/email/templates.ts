@@ -133,7 +133,7 @@ export function orderReadyHtml(data: OrderReadyData) {
     <div style="background:${COLORS.fondoClaro};border-radius:8px;padding:16px;margin-bottom:16px;">
       <p style="margin:0;font-size:14px;color:${COLORS.texto};">
         <strong>Lugar de retiro:</strong> Sede Club Seminario<br/>
-        <strong>Horario:</strong> Lunes a viernes de 9 a 18 hs
+        <strong>Horario:</strong> Martes, Jueves y Viernes de 12:30 a 15:30 hs
       </p>
     </div>
     ${button("Ver detalles del pedido", data.pedidoUrl)}
@@ -192,6 +192,63 @@ export function ticketConfirmationHtml(data: TicketConfirmationData) {
       </p>
     </div>
     ${button("Ver evento", data.eventoUrl)}
+  `);
+}
+
+// ============================================
+// Order pending verification (transfer payment)
+// ============================================
+export interface OrderPendingVerificationData {
+  nombreCliente: string;
+  numeroPedido: string;
+  items: { nombre: string; cantidad: number; precioUnitario: number }[];
+  total: number;
+  pedidoUrl: string;
+}
+
+export function orderPendingVerificationHtml(
+  data: OrderPendingVerificationData
+) {
+  const itemsRows = data.items
+    .map(
+      (item) => `<tr>
+        <td style="padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:${COLORS.texto};">
+          ${item.nombre} &times; ${item.cantidad}
+        </td>
+        <td align="right" style="padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:${COLORS.texto};">
+          $${(item.precioUnitario * item.cantidad).toLocaleString("es-UY")}
+        </td>
+      </tr>`
+    )
+    .join("");
+
+  return layout(`
+    <h2 style="margin:0 0 8px;font-size:20px;color:${COLORS.bordo};">Pedido recibido — Verificación pendiente</h2>
+    <p style="margin:0 0 24px;font-size:14px;color:${COLORS.textoSecundario};">
+      ¡Gracias, ${data.nombreCliente}! Recibimos tu pedido y estamos verificando tu transferencia.
+    </p>
+    <p style="margin:0 0 16px;font-size:14px;color:${COLORS.texto};">
+      <strong>Pedido:</strong> #${data.numeroPedido}
+    </p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
+      ${itemsRows}
+      <tr>
+        <td style="padding:12px 0 0;font-size:16px;font-weight:700;color:${COLORS.bordo};">Total</td>
+        <td align="right" style="padding:12px 0 0;font-size:16px;font-weight:700;color:${COLORS.bordo};">
+          $${data.total.toLocaleString("es-UY")}
+        </td>
+      </tr>
+    </table>
+    <div style="background:#FEF3C7;border-radius:8px;padding:16px;margin-bottom:16px;border-left:4px solid ${COLORS.dorado};">
+      <p style="margin:0;font-size:14px;color:${COLORS.texto};">
+        <strong>Tu transferencia está siendo verificada.</strong><br/>
+        Te notificaremos por email cuando sea confirmada.
+      </p>
+    </div>
+    ${button("Ver mi pedido", data.pedidoUrl)}
+    <p style="margin:24px 0 0;font-size:13px;color:${COLORS.textoSecundario};text-align:center;">
+      Si tenés alguna consulta, escribinos a clubseminario.com.uy.
+    </p>
   `);
 }
 

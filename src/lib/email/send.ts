@@ -5,11 +5,13 @@ import {
   orderConfirmationHtml,
   orderReadyHtml,
   orderCancelledHtml,
+  orderPendingVerificationHtml,
   ticketConfirmationHtml,
   notificationHtml,
   type OrderConfirmationData,
   type OrderReadyData,
   type OrderCancelledData,
+  type OrderPendingVerificationData,
   type TicketConfirmationData,
   type NotificationData,
 } from "./templates";
@@ -44,6 +46,22 @@ export async function sendOrderReady(to: string, data: OrderReadyData) {
     });
   } catch (error) {
     console.error("[Email] Error sending order ready:", error);
+  }
+}
+
+export async function sendOrderPendingVerification(
+  to: string,
+  data: OrderPendingVerificationData
+) {
+  try {
+    await resend.emails.send({
+      from: EMAIL_FROM,
+      to,
+      subject: `Pedido #${data.numeroPedido} — Verificación de transferencia pendiente`,
+      html: orderPendingVerificationHtml(data),
+    });
+  } catch (error) {
+    console.error("[Email] Error sending order pending verification:", error);
   }
 }
 

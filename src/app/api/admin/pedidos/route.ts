@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
       )
       .order("created_at", { ascending: false });
 
-    if (estado) query = query.eq("estado", estado as "pendiente" | "pagado" | "preparando" | "listo_retiro" | "retirado" | "cancelado");
+    if (estado) query = query.eq("estado", estado as "pendiente" | "pendiente_verificacion" | "pagado" | "preparando" | "listo_retiro" | "retirado" | "cancelado");
     if (tipo) query = query.eq("tipo", tipo as "online" | "pos");
     if (search) {
       query = query.or(
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     if (error) throw error;
 
     // Fetch counts per estado for tab badges
-    const estados = ["pagado", "preparando", "listo_retiro", "retirado", "cancelado", "pendiente"] as const;
+    const estados = ["pagado", "preparando", "listo_retiro", "retirado", "cancelado", "pendiente", "pendiente_verificacion"] as const;
     const counts: Record<string, number> = {};
 
     const countPromises = estados.map(async (est) => {

@@ -9,7 +9,6 @@ import {
   Minus,
   Trash2,
   Banknote,
-  QrCode,
   UserSearch,
   X,
   ShoppingCart,
@@ -19,6 +18,10 @@ import {
   ArrowLeft,
   Percent,
   Lock,
+  Building2,
+  Upload,
+  Copy,
+  FileImage,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -59,6 +62,7 @@ interface Producto {
   categoria_id: number | null;
   activo: boolean;
   imagen_url: string | null;
+  imagen_focal_point: string | null;
 }
 
 interface Categoria {
@@ -75,6 +79,7 @@ interface POSCartItem {
   cantidad: number;
   stock_actual: number;
   imagen_url: string | null;
+  imagen_focal_point: string | null;
 }
 
 interface SocioInfo {
@@ -145,6 +150,7 @@ function POSProductCard({
             alt={producto.nombre}
             fill
             className="object-cover"
+            style={{ objectPosition: producto.imagen_focal_point || "50% 50%" }}
             sizes="120px"
           />
         ) : (
@@ -228,6 +234,7 @@ function CartItemRow({
             width={40}
             height={40}
             className="object-cover w-full h-full"
+            style={{ objectPosition: item.imagen_focal_point || "50% 50%" }}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
@@ -303,10 +310,8 @@ export function POSClient() {
   const [cedulaBusqueda, setCedulaBusqueda] = useState("");
   const [showSocioSearch, setShowSocioSearch] = useState(false);
   const [showEfectivoModal, setShowEfectivoModal] = useState(false);
-  const [showQRModal, setShowQRModal] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [ventaExitosa, setVentaExitosa] = useState(false);
-  const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [showMobileCart, setShowMobileCart] = useState(false);
   const [showDescuento, setShowDescuento] = useState(false);
   const [descuentoManualTipo, setDescuentoManualTipo] = useState<"porcentaje" | "fijo">("porcentaje");
@@ -317,6 +322,13 @@ export function POSClient() {
   const [pinInput, setPinInput] = useState("");
   const [verificandoPin, setVerificandoPin] = useState(false);
   const [requierePin, setRequierePin] = useState(false);
+  const [showTransferenciaModal, setShowTransferenciaModal] = useState(false);
+  const [comprobanteFile, setComprobanteFile] = useState<File | null>(null);
+  const [comprobantePreview, setComprobantePreview] = useState<string | null>(null);
+  const [subiendoComprobante, setSubiendoComprobante] = useState(false);
+  const [transferExitosa, setTransferExitosa] = useState(false);
+  const [cuentaCopiada, setCuentaCopiada] = useState(false);
+  const comprobanteInputRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Computed
@@ -365,7 +377,7 @@ export function POSClient() {
 
     const { data: prods } = await db
       .from("productos")
-      .select("id, nombre, slug, precio, precio_socio, stock_actual, categoria_id, activo, producto_imagenes(url, es_principal)")
+      .select("id, nombre, slug, precio, precio_socio, stock_actual, categoria_id, activo, producto_imagenes(url, es_principal, focal_point)")
       .eq("activo", true)
       .order("nombre");
 
@@ -387,6 +399,7 @@ export function POSClient() {
         categoria_id: p.categoria_id,
         activo: p.activo,
         imagen_url: img?.url || null,
+        imagen_focal_point: img?.focal_point || null,
       };
     });
 
@@ -436,6 +449,7 @@ export function POSClient() {
           cantidad: 1,
           stock_actual: producto.stock_actual,
           imagen_url: producto.imagen_url,
+          imagen_focal_point: producto.imagen_focal_point,
         },
       ];
     });
@@ -489,8 +503,8 @@ export function POSClient() {
 
   // ─── Process sale ─────────────────────────────────────────
 
-  const procesarVenta = useCallback(
-    async (metodo: "efectivo" | "mercadopago_qr") => {
+  const procesarVentaEfectivo = useCallback(
+    async () => {
       if (cart.length === 0) return;
       setProcesando(true);
 
@@ -509,7 +523,7 @@ export function POSClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             items,
-            metodo_pago: metodo,
+            metodo_pago: "efectivo",
             nombre_cliente: nombreCliente || null,
             perfil_socio_id: socio?.id || null,
             descuento: descuentoSocio + descuentoManualMonto,
@@ -529,36 +543,18 @@ export function POSClient() {
           return;
         }
 
-        if (metodo === "efectivo") {
-          setVentaExitosa(true);
-          toast.success(`Venta #${json.data.numero_pedido} registrada`);
+        setVentaExitosa(true);
+        toast.success(`Venta #${json.data.numero_pedido} registrada`);
 
-          // Refresh products for updated stock
-          fetchProductos();
+        // Refresh products for updated stock
+        fetchProductos();
 
-          // Reset after showing success
-          setTimeout(() => {
-            setVentaExitosa(false);
-            setShowEfectivoModal(false);
-            clearCart();
-          }, 2000);
-        } else {
-          // MercadoPago QR — request QR generation
-          const qrRes = await fetch("/api/admin/pos/qr", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pedido_id: json.data.id }),
-          });
-
-          const qrJson = await qrRes.json();
-
-          if (!qrRes.ok) {
-            toast.error(qrJson.error || "Error al generar QR");
-          } else {
-            setQrUrl(qrJson.data.checkout_url);
-            setShowQRModal(true);
-          }
-        }
+        // Reset after showing success
+        setTimeout(() => {
+          setVentaExitosa(false);
+          setShowEfectivoModal(false);
+          clearCart();
+        }, 2000);
       } catch (err) {
         toast.error("Error de conexión");
       } finally {
@@ -567,6 +563,111 @@ export function POSClient() {
     },
     [cart, nombreCliente, socio, usarPrecioSocio, descuentoSocio, descuentoManualMonto, descuentoManualTipo, descuentoManualPct, descuentoManualMotivo, descuentoAutorizadoPor, clearCart, fetchProductos]
   );
+
+  // ─── Process transfer sale ───────────────────────────────
+
+  const procesarTransferencia = useCallback(async () => {
+    if (cart.length === 0 || !comprobanteFile) return;
+    setSubiendoComprobante(true);
+
+    try {
+      // 1. Create order with transferencia
+      const items = cart.map((item) => ({
+        producto_id: item.producto_id,
+        cantidad: item.cantidad,
+        precio_unitario:
+          usarPrecioSocio && item.precio_socio
+            ? item.precio_socio
+            : item.precio,
+      }));
+
+      const res = await fetch("/api/admin/pos/venta", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items,
+          metodo_pago: "transferencia",
+          nombre_cliente: nombreCliente || null,
+          perfil_socio_id: socio?.id || null,
+          descuento: descuentoSocio + descuentoManualMonto,
+          descuento_tipo: descuentoManualMonto > 0 ? descuentoManualTipo : (descuentoSocio > 0 ? "socio" : null),
+          descuento_porcentaje: descuentoManualPct > 0 ? descuentoManualPct : null,
+          descuento_motivo: descuentoManualMotivo || null,
+          descuento_autorizado_por: descuentoAutorizadoPor || null,
+          notas: null,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        toast.error(json.error || "Error al procesar la venta");
+        setSubiendoComprobante(false);
+        return;
+      }
+
+      // 2. Upload comprobante
+      const formData = new FormData();
+      formData.append("archivo", comprobanteFile);
+      formData.append("pedido_id", String(json.data.id));
+
+      const compRes = await fetch("/api/admin/pos/comprobante", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!compRes.ok) {
+        const compJson = await compRes.json();
+        toast.error(compJson.error || "Error al subir comprobante");
+        setSubiendoComprobante(false);
+        return;
+      }
+
+      // 3. Success
+      setTransferExitosa(true);
+      toast.success(`Venta #${json.data.numero_pedido} pendiente de verificación`);
+      fetchProductos();
+
+      setTimeout(() => {
+        setTransferExitosa(false);
+        setShowTransferenciaModal(false);
+        setComprobanteFile(null);
+        setComprobantePreview(null);
+        clearCart();
+      }, 2000);
+    } catch (err) {
+      toast.error("Error de conexión");
+    } finally {
+      setSubiendoComprobante(false);
+    }
+  }, [cart, comprobanteFile, nombreCliente, socio, usarPrecioSocio, descuentoSocio, descuentoManualMonto, descuentoManualTipo, descuentoManualPct, descuentoManualMotivo, descuentoAutorizadoPor, clearCart, fetchProductos]);
+
+  // Handle file selection for comprobante
+  const handleComprobanteSelect = useCallback((file: File | null) => {
+    if (!file) return;
+    const allowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+    if (!allowed.includes(file.type)) {
+      toast.error("Formato no permitido. Usá JPG, PNG, WebP o PDF.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("El archivo no puede superar 10MB");
+      return;
+    }
+    setComprobanteFile(file);
+    if (file.type.startsWith("image/")) {
+      const url = URL.createObjectURL(file);
+      setComprobantePreview(url);
+    } else {
+      setComprobantePreview(null);
+    }
+  }, []);
+
+  const copiarCuenta = useCallback(() => {
+    navigator.clipboard.writeText("9500100");
+    setCuentaCopiada(true);
+    setTimeout(() => setCuentaCopiada(false), 2000);
+  }, []);
 
   // ─── Keyboard shortcut: focus search ──────────────────────
 
@@ -1062,7 +1163,7 @@ export function POSClient() {
               <Button
                 onClick={() => setShowEfectivoModal(true)}
                 disabled={cart.length === 0 || procesando || (requierePin && !descuentoAutorizado)}
-                className="w-full h-14 bg-green-600 hover:bg-green-700 text-white rounded-xl font-heading font-bold text-base gap-2"
+                className="w-full h-14 bg-green-600 hover:bg-green-700 text-white rounded-xl font-heading font-bold text-sm gap-1.5"
               >
                 <Banknote className="size-5" />
                 Efectivo
@@ -1070,16 +1171,12 @@ export function POSClient() {
             </motion.div>
             <motion.div whileTap={{ scale: 0.97 }}>
               <Button
-                onClick={() => procesarVenta("mercadopago_qr")}
+                onClick={() => setShowTransferenciaModal(true)}
                 disabled={cart.length === 0 || procesando || (requierePin && !descuentoAutorizado)}
-                className="w-full h-14 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-heading font-bold text-base gap-2"
+                className="w-full h-14 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-heading font-bold text-sm gap-1.5"
               >
-                {procesando ? (
-                  <Loader2 className="size-5 animate-spin" />
-                ) : (
-                  <QrCode className="size-5" />
-                )}
-                MP QR
+                <Building2 className="size-5" />
+                Transferencia
               </Button>
             </motion.div>
           </div>
@@ -1184,7 +1281,7 @@ export function POSClient() {
                     Cancelar
                   </Button>
                   <Button
-                    onClick={() => procesarVenta("efectivo")}
+                    onClick={() => procesarVentaEfectivo()}
                     disabled={procesando}
                     className="bg-green-600 hover:bg-green-700 text-white gap-2"
                   >
@@ -1202,75 +1299,209 @@ export function POSClient() {
         </DialogContent>
       </Dialog>
 
-      {/* MercadoPago QR Modal */}
+      {/* Transferencia Modal */}
       <Dialog
-        open={showQRModal}
+        open={showTransferenciaModal}
         onOpenChange={(open) => {
-          setShowQRModal(open);
-          if (!open) {
-            clearCart();
-            fetchProductos();
+          setShowTransferenciaModal(open);
+          if (!open && !transferExitosa) {
+            setComprobanteFile(null);
+            setComprobantePreview(null);
           }
         }}
       >
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="font-heading">Cobro con MercadoPago</DialogTitle>
-            <DialogDescription>
-              El cliente puede escanear el QR o usar el enlace de pago.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4 flex flex-col items-center gap-4">
-            {qrUrl ? (
-              <>
+        <DialogContent className="sm:max-w-md">
+          <AnimatePresence mode="wait">
+            {transferExitosa ? (
+              <motion.div
+                key="transfer-success"
+                variants={scaleIn}
+                initial="hidden"
+                animate="visible"
+                transition={springBouncy}
+                className="flex flex-col items-center py-8"
+              >
                 <motion.div
-                  variants={scaleIn}
-                  initial="hidden"
-                  animate="visible"
-                  transition={springBouncy}
-                  className="p-4 bg-white rounded-xl border-2 border-sky-200"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ ...springBouncy, delay: 0.1 }}
+                  className="size-16 rounded-full bg-amber-100 flex items-center justify-center mb-4"
                 >
-                  {/* QR code rendered as image from API */}
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(qrUrl)}`}
-                    alt="QR de pago"
-                    width={240}
-                    height={240}
-                    className="rounded-lg"
-                  />
+                  <Check className="size-8 text-amber-600" />
                 </motion.div>
-                <div className="text-center space-y-2">
-                  <p className="font-heading font-bold text-2xl text-bordo-800">
-                    ${total.toLocaleString("es-UY")}
-                  </p>
-                  <p className="text-xs text-muted-foreground font-body">
-                    Esperando confirmación de pago...
-                  </p>
-                  <Loader2 className="size-5 animate-spin mx-auto text-sky-500" />
-                </div>
-              </>
-            ) : (
-              <div className="flex flex-col items-center py-8">
-                <Loader2 className="size-8 animate-spin text-sky-500 mb-3" />
-                <p className="text-sm text-muted-foreground font-body">
-                  Generando código QR...
+                <h3 className="font-heading font-bold text-xl mb-1">Venta registrada</h3>
+                <p className="text-muted-foreground text-sm font-body text-center">
+                  Pendiente de verificación en &quot;Por conciliar&quot;
                 </p>
-              </div>
+              </motion.div>
+            ) : (
+              <motion.div key="transfer-form">
+                <DialogHeader>
+                  <DialogTitle className="font-heading">Pago por transferencia</DialogTitle>
+                  <DialogDescription>
+                    Datos bancarios para la transferencia y comprobante.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="py-4 space-y-4">
+                  {/* Bank details */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-superficie rounded-xl p-4 space-y-2"
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <Building2 className="size-4 text-bordo-700" />
+                      <span className="font-heading font-bold text-sm text-bordo-800">
+                        Datos bancarios
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm font-body">
+                      <span className="text-muted-foreground">Banco:</span>
+                      <span className="font-medium">ITAU</span>
+                      <span className="text-muted-foreground">Cuenta:</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-bordo-800">9500100</span>
+                        <motion.button
+                          whileTap={{ scale: 0.9 }}
+                          onClick={copiarCuenta}
+                          className="text-muted-foreground hover:text-bordo-700 transition-colors"
+                          title="Copiar número de cuenta"
+                        >
+                          {cuentaCopiada ? (
+                            <Check className="size-3.5 text-green-600" />
+                          ) : (
+                            <Copy className="size-3.5" />
+                          )}
+                        </motion.button>
+                      </div>
+                      <span className="text-muted-foreground">Titular:</span>
+                      <span className="font-medium">Club Seminario</span>
+                    </div>
+                    <div className="pt-2 border-t border-linea mt-2">
+                      <div className="flex justify-between font-heading font-bold text-lg">
+                        <span>Total a transferir:</span>
+                        <span className="text-bordo-800">${total.toLocaleString("es-UY")}</span>
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  {/* Upload comprobante */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className="space-y-2"
+                  >
+                    <label className="text-sm font-body font-medium">
+                      Comprobante de transferencia
+                    </label>
+                    <input
+                      ref={comprobanteInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      className="hidden"
+                      onChange={(e) => handleComprobanteSelect(e.target.files?.[0] || null)}
+                    />
+
+                    {comprobanteFile ? (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="relative border-2 border-green-200 bg-green-50/50 rounded-xl p-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          {comprobantePreview ? (
+                            <img
+                              src={comprobantePreview}
+                              alt="Preview"
+                              className="size-16 rounded-lg object-cover border border-linea"
+                            />
+                          ) : (
+                            <div className="size-16 rounded-lg bg-superficie flex items-center justify-center border border-linea">
+                              <FileImage className="size-6 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-body font-medium truncate">
+                              {comprobanteFile.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {(comprobanteFile.size / 1024).toFixed(0)} KB
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setComprobanteFile(null);
+                              setComprobantePreview(null);
+                              if (comprobanteInputRef.current) {
+                                comprobanteInputRef.current.value = "";
+                              }
+                            }}
+                            className="text-muted-foreground hover:text-red-600 transition-colors"
+                          >
+                            <X className="size-4" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <motion.button
+                        type="button"
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => comprobanteInputRef.current?.click()}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleComprobanteSelect(e.dataTransfer.files?.[0] || null);
+                        }}
+                        className="w-full border-2 border-dashed border-gray-300 hover:border-bordo-400 rounded-xl p-6 flex flex-col items-center gap-2 text-muted-foreground hover:text-bordo-700 transition-colors cursor-pointer"
+                      >
+                        <Upload className="size-6" />
+                        <span className="text-sm font-body font-medium">
+                          Subir comprobante
+                        </span>
+                        <span className="text-xs">
+                          JPG, PNG, WebP o PDF (máx. 10MB)
+                        </span>
+                      </motion.button>
+                    )}
+                  </motion.div>
+                </div>
+
+                <DialogFooter className="gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowTransferenciaModal(false);
+                      setComprobanteFile(null);
+                      setComprobantePreview(null);
+                    }}
+                    disabled={subiendoComprobante}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={procesarTransferencia}
+                    disabled={!comprobanteFile || subiendoComprobante}
+                    className="bg-amber-500 hover:bg-amber-600 text-white gap-2"
+                  >
+                    {subiendoComprobante ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Building2 className="size-4" />
+                    )}
+                    {subiendoComprobante ? "Procesando..." : `Confirmar $${total.toLocaleString("es-UY")}`}
+                  </Button>
+                </DialogFooter>
+              </motion.div>
             )}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowQRModal(false);
-                clearCart();
-                fetchProductos();
-              }}
-              className="w-full"
-            >
-              Cerrar y finalizar
-            </Button>
-          </DialogFooter>
+          </AnimatePresence>
         </DialogContent>
       </Dialog>
     </div>

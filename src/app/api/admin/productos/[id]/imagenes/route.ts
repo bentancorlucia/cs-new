@@ -169,6 +169,19 @@ export async function PUT(
       return NextResponse.json({ success: true });
     }
 
+    // Set focal point
+    if (body.action === "set_focal_point" && body.imagen_id && body.focal_point) {
+      const { error } = await (supabase as any)
+        .from("producto_imagenes")
+        .update({ focal_point: body.focal_point })
+        .eq("id", body.imagen_id)
+        .eq("producto_id", productoId);
+
+      if (error) throw error;
+
+      return NextResponse.json({ success: true });
+    }
+
     // Reorder images
     if (body.action === "reorder" && Array.isArray(body.orden)) {
       for (let i = 0; i < body.orden.length; i++) {
