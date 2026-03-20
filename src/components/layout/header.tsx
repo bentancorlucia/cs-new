@@ -20,6 +20,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { createBrowserClient } from "@/lib/supabase/client";
+import { useCart } from "@/hooks/use-cart";
 import { springBouncy, springSmooth } from "@/lib/motion";
 
 const CLUB_LINKS = [
@@ -195,6 +196,7 @@ function MobileNav({
 }) {
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const { itemCount } = useCart();
 
   const toggleSection = (section: string) => {
     setOpenSection(openSection === section ? null : section);
@@ -209,11 +211,11 @@ function MobileNav({
       <SheetContent
         side="left"
         showCloseButton={false}
-        className="w-full max-w-none sm:max-w-none bg-bordo-950 border-none p-0"
+        className="w-full max-w-none sm:max-w-none bg-bordo-950 border-none p-0 overflow-y-auto"
       >
         <SheetTitle className="sr-only">Menú de navegación</SheetTitle>
         {/* Close button */}
-        <div className="flex justify-end p-4">
+        <div className="sticky top-0 z-10 flex justify-end p-4 bg-bordo-950">
           <button onClick={() => setOpen(false)} className="p-2 text-white/60 hover:text-white transition-colors">
             <X className="size-6" />
           </button>
@@ -334,6 +336,19 @@ function MobileNav({
                 <User className="size-5" />
                 Mi cuenta
               </Link>
+              <Link
+                href="/tienda/carrito"
+                onClick={() => setOpen(false)}
+                className="py-3 font-body text-base text-white/60 hover:text-white transition-colors flex items-center gap-3"
+              >
+                <ShoppingBag className="size-5" />
+                Mi carrito
+                {itemCount > 0 && (
+                  <span className="ml-auto inline-flex items-center justify-center size-6 rounded-full bg-dorado-300 text-bordo-950 text-xs font-bold">
+                    {itemCount}
+                  </span>
+                )}
+              </Link>
               <button
                 onClick={() => {
                   onLogout();
@@ -365,9 +380,8 @@ export function Header() {
   const { scrollY } = useScroll();
   const [user, setUser] = useState<{ email?: string; initials?: string; avatar_url?: string | null } | null>(null);
 
-  // Transparent navbar on home and tienda home; solid on tienda subpages, eventos, etc.
-  const transparentPaths = ["/", "/tienda"];
-  const isTransparentHero = transparentPaths.includes(pathname);
+  // Transparent navbar on all pages except eventos
+  const isTransparentHero = !pathname.startsWith("/eventos");
 
   // Scroll-driven transforms
   const navPaddingY = useTransform(
