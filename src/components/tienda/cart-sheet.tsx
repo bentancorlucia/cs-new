@@ -30,7 +30,11 @@ import {
   fadeInUp,
 } from "@/lib/motion";
 
-export function CartSheet() {
+interface CartSheetProps {
+  trigger?: React.ReactNode;
+}
+
+export function CartSheet({ trigger }: CartSheetProps = {}) {
   const { items, itemCount, total, totalSocio, updateQuantity, removeItem } =
     useCart();
   const [open, setOpen] = useState(false);
@@ -38,28 +42,32 @@ export function CartSheet() {
   return (
     <>
       {/* Trigger button */}
-      <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={() => setOpen(true)}
-        className="relative flex size-10 items-center justify-center rounded-full bg-bordo/5 text-bordo transition-colors hover:bg-bordo/10"
-      >
-        <ShoppingBag className="size-[18px]" />
-        <AnimatePresence>
-          {itemCount > 0 && (
-            <motion.span
-              key={itemCount}
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0 }}
-              transition={springBouncy}
-              className="absolute -right-1.5 -top-1.5 z-10 flex size-[22px] items-center justify-center rounded-full border-2 border-white bg-[#730d32] text-[11px] font-bold text-white shadow-md"
-            >
-              {itemCount}
-            </motion.span>
-          )}
-        </AnimatePresence>
-      </motion.button>
+      {trigger ? (
+        <div onClick={() => setOpen(true)}>{trigger}</div>
+      ) : (
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setOpen(true)}
+          className="relative flex size-10 items-center justify-center rounded-full bg-bordo/5 text-bordo transition-colors hover:bg-bordo/10"
+        >
+          <ShoppingBag className="size-[18px]" />
+          <AnimatePresence>
+            {itemCount > 0 && (
+              <motion.span
+                key={itemCount}
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0 }}
+                transition={springBouncy}
+                className="absolute -right-1.5 -top-1.5 z-10 flex size-[22px] items-center justify-center rounded-full border-2 border-white bg-[#730d32] text-[11px] font-bold text-white shadow-md"
+              >
+                {itemCount}
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </motion.button>
+      )}
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-[420px]">
