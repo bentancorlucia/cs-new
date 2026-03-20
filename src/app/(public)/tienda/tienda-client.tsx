@@ -248,17 +248,46 @@ export function TiendaClient({
             }}
             transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
           />
+          {/* Yellow light — bottom left */}
           <motion.div
-            className="absolute -bottom-1/3 -left-1/4 w-[50vw] h-[50vw] rounded-full bg-dorado-300/8 blur-[100px]"
+            className="absolute -bottom-1/4 -left-1/4 w-[50vw] h-[50vw] rounded-full bg-dorado-400/40 blur-[100px]"
             animate={{
               scale: [1.1, 1, 1.1],
-              opacity: [0.2, 0.4, 0.2],
+              opacity: [0.4, 0.7, 0.4],
             }}
             transition={{
               duration: 10,
               repeat: Infinity,
               ease: "easeInOut",
               delay: 2,
+            }}
+          />
+          {/* Yellow light — top center */}
+          <motion.div
+            className="absolute -top-[10%] left-1/3 w-[35vw] h-[35vw] rounded-full bg-dorado-300/30 blur-[80px]"
+            animate={{
+              scale: [1, 1.2, 1],
+              opacity: [0.3, 0.55, 0.3],
+            }}
+            transition={{
+              duration: 12,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: 4,
+            }}
+          />
+          {/* Yellow light — right mid */}
+          <motion.div
+            className="absolute top-1/3 -right-[10%] w-[30vw] h-[30vw] rounded-full bg-dorado-400/25 blur-[80px]"
+            animate={{
+              scale: [1.05, 0.95, 1.05],
+              opacity: [0.3, 0.5, 0.3],
+            }}
+            transition={{
+              duration: 9,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: 1,
             }}
           />
         </div>

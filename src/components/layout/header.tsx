@@ -202,7 +202,7 @@ function MobileNav({
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger className="md:hidden p-2 -ml-2">
+      <SheetTrigger id="mobile-nav-trigger" className="md:hidden p-2 -ml-2">
         <Menu className="size-6 text-white" />
         <span className="sr-only">Menú</span>
       </SheetTrigger>
