@@ -25,8 +25,7 @@ export function HaceteSocioCTA() {
             Hacete socio
           </h2>
           <p className="mt-4 font-body text-lg text-muted-foreground max-w-xl mx-auto">
-            Accedé a beneficios exclusivos, descuentos del 5% al 50%, y formá
-            parte de La Bordó.
+            Accedé a beneficios exclusivos y formá parte de La Bordó.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link href="/socios">
