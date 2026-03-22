@@ -41,11 +41,22 @@ function parseDate(val: unknown): string | null {
   const str = String(val).trim();
   if (!str) return null;
 
-  // Try dd/mm/yyyy or dd-mm-yyyy
-  const ddmmyyyy = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-  if (ddmmyyyy) {
-    const [, d, m, y] = ddmmyyyy;
-    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  // Try dd/mm/yyyy or mm/dd/yyyy (auto-detect based on validity)
+  const twoSlash = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (twoSlash) {
+    const [, a, b, y] = twoSlash;
+    const aNum = parseInt(a, 10);
+    const bNum = parseInt(b, 10);
+
+    // Try dd/mm/yyyy first (Uruguay format)
+    if (bNum >= 1 && bNum <= 12 && aNum >= 1 && aNum <= 31) {
+      return `${y}-${b.padStart(2, "0")}-${a.padStart(2, "0")}`;
+    }
+    // Fallback to mm/dd/yyyy (US format)
+    if (aNum >= 1 && aNum <= 12 && bNum >= 1 && bNum <= 31) {
+      return `${y}-${a.padStart(2, "0")}-${b.padStart(2, "0")}`;
+    }
+    return null;
   }
 
   // Try yyyy-mm-dd

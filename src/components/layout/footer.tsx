@@ -27,15 +27,15 @@ const SOCIOS_LINKS = [
 ];
 
 const SPONSORS_PRINCIPALES = [
-  { nombre: "Renato Conti", logo: "/images/sponsors/logo-rc.png" },
-  { nombre: "Itaú", logo: "/images/sponsors/logo-itau.png" },
-  { nombre: "UCU", logo: "/images/sponsors/logo-ucu.png" },
-  { nombre: "Summum", logo: "/images/sponsors/logo-summum.png" },
+  { nombre: "Renato Conti", logo: "/images/sponsors/logo-rc.png", url: "https://renatoconti.uy/" },
+  { nombre: "Itaú", logo: "/images/sponsors/logo-itau.png", url: "https://www.itau.com.uy/inst/" },
+  { nombre: "UCU", logo: "/images/sponsors/logo-ucu.png", url: "https://www.ucu.edu.uy/" },
+  { nombre: "Summum", logo: "/images/sponsors/logo-summum.png", url: "https://summum.com.uy/" },
 ];
 const SPONSORS_SECUNDARIOS = [
-  { nombre: "Zillertal", logo: "/images/sponsors/logo-zillertal.png" },
-  { nombre: "SUAT", logo: "/images/sponsors/logo-suat.png" },
-  { nombre: "Gatorade", logo: "/images/sponsors/logo-gatorade.png" },
+  { nombre: "Zillertal", logo: "/images/sponsors/logo-zillertal.png", url: "https://www.fnc.com.uy/" },
+  { nombre: "SUAT", logo: "/images/sponsors/logo-suat.png", url: "https://www.suat.com.uy/" },
+  { nombre: "Gatorade", logo: "/images/sponsors/logo-gatorade.png", url: "https://www.gatorade-uruguay.com/" },
 ];
 
 const SOCIAL_LINKS = [
@@ -168,37 +168,49 @@ export function Footer() {
           {/* Principales — más grandes y visibles */}
           <div className="flex flex-wrap items-center justify-center gap-x-12 gap-y-6 sm:gap-x-16 mb-6">
             {SPONSORS_PRINCIPALES.map((sponsor) => (
-              <div
+              <a
                 key={sponsor.nombre}
-                className="sponsor-logo h-8 w-24 sm:h-10 sm:w-32 opacity-40 hover:opacity-70 transition-opacity duration-300"
-                style={
-                  {
-                    "--logo-src": `url(${sponsor.logo})`,
-                    backgroundColor: "rgba(247, 182, 67, 0.9)",
-                  } as React.CSSProperties
-                }
+                href={sponsor.url}
+                target="_blank"
+                rel="noopener noreferrer"
                 title={sponsor.nombre}
-                role="img"
-                aria-label={sponsor.nombre}
-              />
+              >
+                <div
+                  className="sponsor-logo h-8 w-24 sm:h-10 sm:w-32 opacity-40 hover:opacity-70 transition-opacity duration-300"
+                  style={
+                    {
+                      "--logo-src": `url(${sponsor.logo})`,
+                      backgroundColor: "rgba(247, 182, 67, 0.9)",
+                    } as React.CSSProperties
+                  }
+                  role="img"
+                  aria-label={sponsor.nombre}
+                />
+              </a>
             ))}
           </div>
           {/* Secundarios — más chicos y sutiles */}
           <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 sm:gap-x-12">
             {SPONSORS_SECUNDARIOS.map((sponsor) => (
-              <div
+              <a
                 key={sponsor.nombre}
-                className="sponsor-logo h-5 w-16 sm:h-6 sm:w-20 opacity-25 hover:opacity-50 transition-opacity duration-300"
-                style={
-                  {
-                    "--logo-src": `url(${sponsor.logo})`,
-                    backgroundColor: "rgba(247, 182, 67, 0.9)",
-                  } as React.CSSProperties
-                }
+                href={sponsor.url}
+                target="_blank"
+                rel="noopener noreferrer"
                 title={sponsor.nombre}
-                role="img"
-                aria-label={sponsor.nombre}
-              />
+              >
+                <div
+                  className="sponsor-logo h-5 w-16 sm:h-6 sm:w-20 opacity-25 hover:opacity-50 transition-opacity duration-300"
+                  style={
+                    {
+                      "--logo-src": `url(${sponsor.logo})`,
+                      backgroundColor: "rgba(247, 182, 67, 0.9)",
+                    } as React.CSSProperties
+                  }
+                  role="img"
+                  aria-label={sponsor.nombre}
+                />
+              </a>
             ))}
           </div>
         </div>

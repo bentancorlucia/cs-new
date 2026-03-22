@@ -24,15 +24,15 @@ const DEPORTES = [
 ];
 
 const SPONSORS_PRINCIPALES = [
-  { nombre: "Renato Conti", logo: "/images/sponsors/logo-rc.png" },
-  { nombre: "Itaú", logo: "/images/sponsors/logo-itau.png" },
-  { nombre: "UCU", logo: "/images/sponsors/logo-ucu.png" },
-  { nombre: "Summum", logo: "/images/sponsors/logo-summum.png" },
+  { nombre: "Renato Conti", logo: "/images/sponsors/logo-rc.png", url: "https://renatoconti.uy/" },
+  { nombre: "Itaú", logo: "/images/sponsors/logo-itau.png", url: "https://www.itau.com.uy/inst/" },
+  { nombre: "UCU", logo: "/images/sponsors/logo-ucu.png", url: "https://www.ucu.edu.uy/" },
+  { nombre: "Summum", logo: "/images/sponsors/logo-summum.png", url: "https://summum.com.uy/" },
 ];
 const SPONSORS_SECUNDARIOS = [
-  { nombre: "Zillertal", logo: "/images/sponsors/logo-zillertal.png" },
-  { nombre: "SUAT", logo: "/images/sponsors/logo-suat.png" },
-  { nombre: "Gatorade", logo: "/images/sponsors/logo-gatorade.png" },
+  { nombre: "Zillertal", logo: "/images/sponsors/logo-zillertal.png", url: "https://www.fnc.com.uy/" },
+  { nombre: "SUAT", logo: "/images/sponsors/logo-suat.png", url: "https://www.suat.com.uy/" },
+  { nombre: "Gatorade", logo: "/images/sponsors/logo-gatorade.png", url: "https://www.gatorade-uruguay.com/" },
 ];
 
 export function HomeClient() {
@@ -162,9 +162,12 @@ export function HomeClient() {
           {/* Sponsors principales */}
           <AnimateStaggerGroup className="flex flex-wrap items-center justify-center gap-10 sm:gap-16 mb-8">
             {SPONSORS_PRINCIPALES.map((sponsor) => (
-              <motion.div
+              <motion.a
                 key={sponsor.nombre}
                 variants={fadeInUp}
+                href={sponsor.url}
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 <div
                   role="img"
@@ -172,16 +175,19 @@ export function HomeClient() {
                   className="h-10 sm:h-14 w-28 sm:w-40 sponsor-logo opacity-60 hover:opacity-100 transition-opacity duration-300"
                   style={{ "--logo-src": `url(${sponsor.logo})` } as React.CSSProperties}
                 />
-              </motion.div>
+              </motion.a>
             ))}
           </AnimateStaggerGroup>
 
           {/* Sponsors secundarios */}
           <AnimateStaggerGroup className="flex flex-wrap items-center justify-center gap-8 sm:gap-12">
             {SPONSORS_SECUNDARIOS.map((sponsor) => (
-              <motion.div
+              <motion.a
                 key={sponsor.nombre}
                 variants={fadeInUp}
+                href={sponsor.url}
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 <div
                   role="img"
@@ -189,7 +195,7 @@ export function HomeClient() {
                   className="h-7 sm:h-10 w-24 sm:w-32 sponsor-logo opacity-40 hover:opacity-80 transition-opacity duration-300"
                   style={{ "--logo-src": `url(${sponsor.logo})` } as React.CSSProperties}
                 />
-              </motion.div>
+              </motion.a>
             ))}
           </AnimateStaggerGroup>
         </div>

@@ -321,7 +321,7 @@ function SociosListContent() {
             <SelectContent>
               <SelectItem value="todas">Todas</SelectItem>
               {disciplinas.map((d) => (
-                <SelectItem key={d.id} value={String(d.id)}>
+                <SelectItem key={d.id} value={String(d.id)} label={d.nombre}>
                   {d.nombre}
                 </SelectItem>
               ))}
@@ -372,7 +372,7 @@ function SociosListContent() {
                   </SelectTrigger>
                   <SelectContent>
                     {disciplinas.map((d) => (
-                      <SelectItem key={d.id} value={String(d.id)}>
+                      <SelectItem key={d.id} value={String(d.id)} label={d.nombre}>
                         {d.nombre}
                       </SelectItem>
                     ))}

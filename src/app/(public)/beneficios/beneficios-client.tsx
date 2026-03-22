@@ -184,12 +184,12 @@ export function BeneficiosClient() {
 
           <AnimateStaggerGroup className="flex flex-wrap items-center justify-center gap-10 sm:gap-16 mb-10">
             {[
-              { nombre: "Renato Conti", logo: "/images/sponsors/logo-rc.png" },
-              { nombre: "Itaú", logo: "/images/sponsors/logo-itau.png" },
-              { nombre: "UCU", logo: "/images/sponsors/logo-ucu.png" },
-              { nombre: "Summum", logo: "/images/sponsors/logo-summum.png" },
+              { nombre: "Renato Conti", logo: "/images/sponsors/logo-rc.png", url: "https://renatoconti.uy/" },
+              { nombre: "Itaú", logo: "/images/sponsors/logo-itau.png", url: "https://www.itau.com.uy/inst/" },
+              { nombre: "UCU", logo: "/images/sponsors/logo-ucu.png", url: "https://www.ucu.edu.uy/" },
+              { nombre: "Summum", logo: "/images/sponsors/logo-summum.png", url: "https://summum.com.uy/" },
             ].map((s) => (
-              <motion.div key={s.nombre} variants={fadeInUp}>
+              <motion.a key={s.nombre} variants={fadeInUp} href={s.url} target="_blank" rel="noopener noreferrer">
                 <div
                   role="img"
                   aria-label={s.nombre}
@@ -198,23 +198,17 @@ export function BeneficiosClient() {
                     { "--logo-src": `url(${s.logo})` } as React.CSSProperties
                   }
                 />
-              </motion.div>
+              </motion.a>
             ))}
           </AnimateStaggerGroup>
 
           <AnimateStaggerGroup className="flex flex-wrap items-center justify-center gap-8 sm:gap-12">
             {[
-              {
-                nombre: "Zillertal",
-                logo: "/images/sponsors/logo-zillertal.png",
-              },
-              { nombre: "SUAT", logo: "/images/sponsors/logo-suat.png" },
-              {
-                nombre: "Gatorade",
-                logo: "/images/sponsors/logo-gatorade.png",
-              },
+              { nombre: "Zillertal", logo: "/images/sponsors/logo-zillertal.png", url: "https://www.fnc.com.uy/" },
+              { nombre: "SUAT", logo: "/images/sponsors/logo-suat.png", url: "https://www.suat.com.uy/" },
+              { nombre: "Gatorade", logo: "/images/sponsors/logo-gatorade.png", url: "https://www.gatorade-uruguay.com/" },
             ].map((s) => (
-              <motion.div key={s.nombre} variants={fadeInUp}>
+              <motion.a key={s.nombre} variants={fadeInUp} href={s.url} target="_blank" rel="noopener noreferrer">
                 <div
                   role="img"
                   aria-label={s.nombre}
@@ -223,7 +217,7 @@ export function BeneficiosClient() {
                     { "--logo-src": `url(${s.logo})` } as React.CSSProperties
                   }
                 />
-              </motion.div>
+              </motion.a>
             ))}
           </AnimateStaggerGroup>
         </div>

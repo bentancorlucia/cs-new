@@ -629,7 +629,7 @@ function AddDisciplinaDialog({
                   </SelectTrigger>
                   <SelectContent>
                     {available.map((d) => (
-                      <SelectItem key={d.id} value={String(d.id)}>
+                      <SelectItem key={d.id} value={String(d.id)} label={d.nombre}>
                         {d.nombre}
                       </SelectItem>
                     ))}
