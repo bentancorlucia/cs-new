@@ -11,7 +11,7 @@ export default function FutbolPage() {
   return (
     <SportPage
       title="Fútbol"
-      description="La disciplina más grande del club. 10 planteles compitiendo en la Liga Universitaria de Deportes."
+      description="Contamos con equipos de fútbol femenino y masculino para todas las edades."
       heroImage="/images/deportes/futbol-masculino.jpg"
       categories={[
         {

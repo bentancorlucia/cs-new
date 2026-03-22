@@ -11,7 +11,7 @@ export default function HandballPage() {
   return (
     <SportPage
       title="Handball"
-      description="Tres equipos compitiendo en ligas ACB y ADIC. Handball para todos los niveles."
+      description="Handball femenino, masculino y mami handball del Club Seminario. Horarios y contacto."
       heroImage="/images/deportes/hb-femenino.jpg"
       categories={[
         {
