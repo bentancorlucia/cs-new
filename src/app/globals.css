@@ -58,6 +58,7 @@
   --font-body: "Satoshi", sans-serif;
 
   /* Brand colors — Bordo */
+  --color-bordo: #730d32;
   --color-bordo-50: #fdf2f5;
   --color-bordo-100: #fce7ec;
   --color-bordo-200: #f9d0db;
@@ -71,6 +72,7 @@
   --color-bordo-950: #3a0417;
 
   /* Brand colors — Dorado */
+  --color-dorado: #f7b643;
   --color-dorado-50: #fefbf0;
   --color-dorado-100: #fef5d4;
   --color-dorado-200: #fdeaa8;
@@ -81,6 +83,10 @@
   --color-dorado-700: #a94f09;
   --color-dorado-800: #8a3e10;
   --color-dorado-900: #723410;
+
+  /* Brand aliases */
+  --color-texto: #1f1f1f;
+  --color-amarillo: #f7b643;
 
   /* Brand surfaces */
   --color-fondo: #faf8f5;
