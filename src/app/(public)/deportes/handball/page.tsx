@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import { SportPage } from "@/components/shared/sport-page";
 
 export const metadata: Metadata = {
-  title: "Handball — Club Seminario",
+  title: "Handball",
   description:
     "Handball femenino, masculino y mami handball del Club Seminario. Horarios y contacto.",
 };

@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import { DocumentPageClient } from "@/components/shared/document-page";
 
 export const metadata: Metadata = {
-  title: "Estatuto — Club Seminario",
+  title: "Estatuto",
   description:
     "Estatuto del Club Seminario. Consultá el documento completo contactando a secretaría.",
 };

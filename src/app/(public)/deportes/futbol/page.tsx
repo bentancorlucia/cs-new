@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import { SportPage } from "@/components/shared/sport-page";
 
 export const metadata: Metadata = {
-  title: "Fútbol — Club Seminario",
+  title: "Fútbol",
   description:
     "Fútbol femenino, masculino y mami fútbol del Club Seminario. 10 planteles en 7 categorías.",
 };

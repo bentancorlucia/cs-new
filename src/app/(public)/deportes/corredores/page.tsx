@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import { SportPage } from "@/components/shared/sport-page";
 
 export const metadata: Metadata = {
-  title: "Corredores — Club Seminario",
+  title: "Corredores",
   description:
     "Grupo de corredores del Club Seminario. De 5K al maratón. Entrenamientos en Rambla de Punta Carretas.",
 };

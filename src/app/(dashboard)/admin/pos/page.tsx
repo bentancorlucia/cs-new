@@ -3,7 +3,7 @@ import { getUserRoles } from "@/lib/supabase/roles";
 import { POSClient } from "./pos-client";
 
 export const metadata = {
-  title: "POS — Club Seminario",
+  title: "POS",
   description: "Punto de venta presencial",
 };
 

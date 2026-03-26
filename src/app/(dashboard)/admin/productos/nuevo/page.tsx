@@ -4,8 +4,10 @@ import { motion } from "framer-motion";
 import { Plus } from "lucide-react";
 import { fadeInUp, springSmooth } from "@/lib/motion";
 import { ProductoForm } from "../_components/producto-form";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 export default function NuevoProductoPage() {
+  useDocumentTitle("Nuevo Producto");
   return (
     <div className="mx-auto max-w-5xl px-1">
       <motion.div

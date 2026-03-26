@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import { SportPage } from "@/components/shared/sport-page";
 
 export const metadata: Metadata = {
-  title: "Básquetbol — Club Seminario",
+  title: "Básquetbol",
   description:
     "Papi Basket y Mami Basket del Club Seminario. Horarios, categorías y contacto.",
 };

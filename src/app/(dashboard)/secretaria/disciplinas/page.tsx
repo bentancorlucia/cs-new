@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { staggerContainer, fadeInUp, springSmooth } from "@/lib/motion";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface DisciplinaData {
   id: number;
@@ -44,6 +45,7 @@ interface DisciplinaData {
 }
 
 export default function DisciplinasPage() {
+  useDocumentTitle("Disciplinas");
   const [disciplinas, setDisciplinas] = useState<DisciplinaData[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);

@@ -31,6 +31,7 @@ import {
 } from "@/lib/motion";
 import { toast } from "sonner";
 import Link from "next/link";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface ListaPrecio {
   id: number;
@@ -43,6 +44,7 @@ interface ListaPrecio {
 }
 
 export default function ListasPrecioPage() {
+  useDocumentTitle("Listas de Precio");
   const [listas, setListas] = useState<ListaPrecio[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);

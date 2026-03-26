@@ -1,7 +1,7 @@
 import { EventosAdminClient } from "./eventos-admin-client";
 
 export const metadata = {
-  title: "Eventos — Panel Admin",
+  title: "Eventos",
 };
 
 export default function EventosAdminPage() {

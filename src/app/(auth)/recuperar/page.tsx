@@ -21,6 +21,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { fadeInUp, staggerContainer, easeSmooth } from "@/lib/motion";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 const recuperarSchema = z.object({
   email: z.email("Ingresá un email válido"),
@@ -29,6 +30,7 @@ const recuperarSchema = z.object({
 type RecuperarForm = z.infer<typeof recuperarSchema>;
 
 export default function RecuperarPage() {
+  useDocumentTitle("Recuperar Contraseña");
   const [isLoading, setIsLoading] = useState(false);
   const [enviado, setEnviado] = useState(false);
 

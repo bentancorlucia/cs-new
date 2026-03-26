@@ -22,6 +22,7 @@ import { fadeInUp, springSmooth } from "@/lib/motion";
 import { toast } from "sonner";
 import { createBrowserClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface ListaPrecioItem {
   id?: number;
@@ -47,6 +48,7 @@ interface ListaPrecio {
 }
 
 export default function ListaPrecioDetailPage() {
+  useDocumentTitle("Lista de Precio");
   const params = useParams();
   const id = params.id as string;
 

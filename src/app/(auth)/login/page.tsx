@@ -22,6 +22,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { fadeInUp, staggerContainer, easeSmooth } from "@/lib/motion";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 const loginSchema = z.object({
   email: z.email("Ingresá un email válido"),
@@ -31,6 +32,7 @@ const loginSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
+  useDocumentTitle("Iniciar Sesión");
   return (
     <Suspense>
       <LoginForm />

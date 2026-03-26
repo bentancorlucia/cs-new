@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!producto) return { title: "Producto no encontrado" };
 
   return {
-    title: `${producto.nombre} | Tienda Club Seminario`,
+    title: producto.nombre,
     description: producto.descripcion_corta || `Comprá ${producto.nombre} en la tienda oficial de Club Seminario.`,
   };
 }

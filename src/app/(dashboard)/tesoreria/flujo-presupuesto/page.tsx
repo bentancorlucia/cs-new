@@ -86,6 +86,7 @@ import {
   View as PDFView,
   StyleSheet as PDFStyleSheet,
 } from "@react-pdf/renderer";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -718,6 +719,7 @@ function ProyeccionPDF({ anio, moneda, saldoInicial, ajusteIng, ajusteEgr, saldo
 // ── Main Component ───────────────────────────────────────────────────────
 
 export default function FlujoPresupuestoPage() {
+  useDocumentTitle("Flujo y Presupuesto");
   // ── State ──
   const [anio, setAnio] = useState(new Date().getFullYear());
   const [tab, setTab] = useState<TabActiva>("presupuesto");

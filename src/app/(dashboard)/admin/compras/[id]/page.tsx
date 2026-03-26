@@ -35,6 +35,7 @@ import { fadeInUp, staggerContainer } from "@/lib/motion";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface CompraItem {
   id: number;
@@ -83,6 +84,7 @@ const estadoLabels: Record<string, string> = {
 };
 
 export default function CompraDetallePage() {
+  useDocumentTitle("Detalle de Compra");
   const params = useParams();
   const router = useRouter();
   const compraId = params.id as string;

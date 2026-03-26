@@ -49,6 +49,7 @@ import {
 import { createBrowserClient } from "@/lib/supabase/client";
 import { fadeInUp } from "@/lib/motion";
 import { toast } from "sonner";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface Proveedor {
   id: number;
@@ -64,6 +65,7 @@ interface Proveedor {
 }
 
 export default function AdminProveedoresPage() {
+  useDocumentTitle("Proveedores");
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");

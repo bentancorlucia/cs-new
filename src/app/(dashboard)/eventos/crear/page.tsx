@@ -1,7 +1,7 @@
 import { EventoFormClient } from "@/components/eventos/evento-form-client";
 
 export const metadata = {
-  title: "Crear Evento — Panel Admin",
+  title: "Crear Evento",
 };
 
 export default function CrearEventoPage() {

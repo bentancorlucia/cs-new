@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import { SportPage } from "@/components/shared/sport-page";
 
 export const metadata: Metadata = {
-  title: "Rugby — Club Seminario",
+  title: "Rugby",
   description:
     "Rugby del Club Seminario. Categorías M19, Intermedia y Primera en la Unión de Rugby del Uruguay.",
 };

@@ -38,6 +38,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { fadeInUp, staggerContainer, springSmooth } from "@/lib/motion";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface PadronDisciplina {
   id: number;
@@ -77,6 +78,7 @@ interface Disciplina {
 }
 
 export default function FichaSocioPage() {
+  useDocumentTitle("Ficha de Socio");
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [socio, setSocio] = useState<PadronSocioData | null>(null);

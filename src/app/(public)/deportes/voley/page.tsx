@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import { SportPage } from "@/components/shared/sport-page";
 
 export const metadata: Metadata = {
-  title: "Vóleibol — Club Seminario",
+  title: "Vóleibol",
   description:
     "Papi Volley y Mami Volley del Club Seminario. Horarios y contacto en el Polideportivo Gonzaga.",
 };

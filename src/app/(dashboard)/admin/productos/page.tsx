@@ -52,6 +52,7 @@ import {
 import { staggerContainerFast, fadeInUp } from "@/lib/motion";
 import { toast } from "sonner";
 import { ImportarExcelDialog } from "./_components/importar-excel-dialog";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface Producto {
   id: number;
@@ -71,6 +72,7 @@ interface Producto {
 }
 
 export default function AdminProductosPage() {
+  useDocumentTitle("Productos");
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");

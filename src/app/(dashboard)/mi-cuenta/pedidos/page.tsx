@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { staggerContainer, fadeInUp } from "@/lib/motion";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface PedidoItem {
   id: number;
@@ -47,6 +48,7 @@ const ESTADO_CONFIG: Record<string, { label: string; color: string }> = {
 };
 
 export default function MisPedidosPage() {
+  useDocumentTitle("Mis Pedidos");
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<number | null>(null);

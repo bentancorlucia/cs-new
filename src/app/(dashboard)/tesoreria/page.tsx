@@ -19,6 +19,7 @@ import {
 import { createBrowserClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { staggerContainer, fadeInUp, springSmooth } from "@/lib/motion";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface CuentaFinanciera {
   id: number;
@@ -150,6 +151,7 @@ function formatCurrency(monto: number, moneda: string): string {
 }
 
 export default function TesoreriaDashboard() {
+  useDocumentTitle("Tesorería");
   const [stats, setStats] = useState<DashboardStats>({
     saldoTotalUYU: 0,
     ingresosMes: 0,

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import VerificarSocioPage from "./verificar-client";
 
 export const metadata: Metadata = {
-  title: "Verificación de Socio — Club Seminario",
+  title: "Verificación de Socio",
   description:
     "Verificación de membresía de socio del Club Seminario de Montevideo.",
 };

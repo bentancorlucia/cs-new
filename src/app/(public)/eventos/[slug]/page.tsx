@@ -8,10 +8,10 @@ export async function generateMetadata({
 }) {
   const { slug } = await params;
   return {
-    title: `Evento — Club Seminario`,
+    title: "Evento",
     description: `Detalle del evento en Club Seminario`,
     openGraph: {
-      title: `Evento — Club Seminario`,
+      title: "Evento",
     },
   };
 }

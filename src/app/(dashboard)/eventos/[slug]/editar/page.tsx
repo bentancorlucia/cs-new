@@ -1,7 +1,7 @@
 import { EventoFormClient } from "@/components/eventos/evento-form-client";
 
 export const metadata = {
-  title: "Editar Evento — Panel Admin",
+  title: "Editar Evento",
 };
 
 export default async function EditarEventoPage({

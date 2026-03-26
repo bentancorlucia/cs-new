@@ -8,7 +8,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://clubseminario.com.u
 export const metadata: Metadata = {
   title: {
     default: "Club Seminario",
-    template: "%s | Club Seminario",
+    template: "%s — Club Seminario",
   },
   description:
     "Club deportivo, social y cultural de la comunidad jesuita en Uruguay. Fundado el 13 de mayo de 2010.",

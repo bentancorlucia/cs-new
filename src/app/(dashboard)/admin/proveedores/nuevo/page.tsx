@@ -11,8 +11,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { fadeInUp, staggerContainer } from "@/lib/motion";
 import Link from "next/link";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 export default function NuevoProveedorPage() {
+  useDocumentTitle("Nuevo Proveedor");
   const router = useRouter();
   const [saving, setSaving] = useState(false);
 

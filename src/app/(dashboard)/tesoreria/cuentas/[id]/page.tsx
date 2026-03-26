@@ -30,6 +30,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { staggerContainer, fadeInUp, springSmooth } from "@/lib/motion";
 import { toast } from "sonner";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface CuentaDetalle {
   id: number;
@@ -123,6 +124,7 @@ function AnimatedCounter({ value, prefix = "" }: { value: number; prefix?: strin
 }
 
 export default function CuentaDetallePage() {
+  useDocumentTitle("Cuenta");
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [cuenta, setCuenta] = useState<CuentaDetalle | null>(null);

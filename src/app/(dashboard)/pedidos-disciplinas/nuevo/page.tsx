@@ -30,6 +30,7 @@ import { fadeInUp, springSmooth, springBouncy } from "@/lib/motion";
 import { toast } from "sonner";
 import { createBrowserClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface Disciplina {
   id: number;
@@ -51,6 +52,7 @@ interface CartItem extends CatalogoItem {
 }
 
 export default function NuevoPedidoDisciplinaPage() {
+  useDocumentTitle("Nuevo Pedido");
   const router = useRouter();
   const supabase = useMemo(() => createBrowserClient(), []);
 

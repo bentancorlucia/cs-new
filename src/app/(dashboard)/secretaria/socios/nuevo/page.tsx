@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { fadeInUp, staggerContainer, springSmooth } from "@/lib/motion";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 const socioSchema = z.object({
   nombre: z.string().min(1, "Nombre requerido").max(100),
@@ -43,6 +44,7 @@ interface SelectedDisciplina {
 }
 
 export default function NuevoSocioPage() {
+  useDocumentTitle("Nuevo Socio");
   const router = useRouter();
   const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
   const [selectedDisciplinas, setSelectedDisciplinas] = useState<

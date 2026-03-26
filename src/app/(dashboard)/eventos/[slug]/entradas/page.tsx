@@ -1,7 +1,7 @@
 import { EntradasEventoClient } from "./entradas-evento-client";
 
 export const metadata = {
-  title: "Entradas del Evento — Panel Admin",
+  title: "Entradas del Evento",
 };
 
 export default async function EntradasEventoPage({

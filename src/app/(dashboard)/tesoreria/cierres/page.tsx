@@ -40,6 +40,7 @@ import {
 import { staggerContainer, fadeInUp, springSmooth } from "@/lib/motion";
 import { formatMonto, nombreMes } from "@/lib/tesoreria/format";
 import { toast } from "sonner";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface CierreMensual {
   id: number;
@@ -69,6 +70,7 @@ interface ResumenMes {
 }
 
 export default function CierresPage() {
+  useDocumentTitle("Cierres");
   const [cierres, setCierres] = useState<CierreMensual[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMes, setSelectedMes] = useState<{ anio: number; mes: number } | null>(null);

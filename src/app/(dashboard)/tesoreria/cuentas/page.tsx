@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dialog";
 import { staggerContainer, fadeInUp, springSmooth } from "@/lib/motion";
 import { toast } from "sonner";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface CuentaFinanciera {
   id: number;
@@ -137,6 +138,7 @@ function AnimatedCounter({ value, prefix = "" }: { value: number; prefix?: strin
 }
 
 export default function CuentasFinancierasPage() {
+  useDocumentTitle("Cuentas");
   const [cuentas, setCuentas] = useState<CuentaFinanciera[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);

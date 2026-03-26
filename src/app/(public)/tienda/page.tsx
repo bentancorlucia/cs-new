@@ -3,7 +3,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { TiendaClient } from "./tienda-client";
 
 export const metadata: Metadata = {
-  title: "Tienda | Club Seminario",
+  title: "Tienda",
   description:
     "Tienda oficial de Club Seminario. Encontrá indumentaria, accesorios y más.",
 };

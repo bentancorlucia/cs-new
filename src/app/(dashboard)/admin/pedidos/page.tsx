@@ -32,6 +32,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { fadeInUp, staggerContainer, staggerContainerFast, springSmooth } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 type EstadoPedido = "pendiente" | "pendiente_verificacion" | "pagado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
 
@@ -79,6 +80,7 @@ const estadoBadge: Record<EstadoPedido, { label: string; className: string }> = 
 };
 
 export default function AdminPedidosPage() {
+  useDocumentTitle("Pedidos");
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");

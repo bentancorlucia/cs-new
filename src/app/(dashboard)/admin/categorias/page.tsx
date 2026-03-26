@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { fadeInUp } from "@/lib/motion";
 import { toast } from "sonner";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface Categoria {
   id: number;
@@ -47,6 +48,7 @@ function slugify(str: string) {
 }
 
 export default function AdminCategoriasPage() {
+  useDocumentTitle("Categorías");
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);

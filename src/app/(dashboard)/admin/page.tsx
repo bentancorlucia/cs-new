@@ -47,6 +47,7 @@ import {
   BarChart,
   Bar,
 } from "recharts";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -208,6 +209,7 @@ function ChartTooltip({ active, payload, label }: any) {
 // ─── Main Dashboard ─────────────────────────────────────
 
 export default function AdminDashboardPage() {
+  useDocumentTitle("Panel Tienda");
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

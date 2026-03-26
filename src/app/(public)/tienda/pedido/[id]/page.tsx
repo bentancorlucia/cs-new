@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { PedidoConfirmacionClient } from "./pedido-confirmacion-client";
 
 export const metadata: Metadata = {
-  title: "Pedido | Club Seminario",
+  title: "Pedido",
   description: "Estado de tu pedido en Club Seminario.",
 };
 

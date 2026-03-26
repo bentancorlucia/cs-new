@@ -45,6 +45,7 @@ import {
   springBouncy,
 } from "@/lib/motion";
 import { toast } from "sonner";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 // --- Types ---
 
@@ -138,6 +139,7 @@ function AnimatedCounter({ value }: { value: number }) {
 // --- Page Component ---
 
 export default function CategoriasFinancierasPage() {
+  useDocumentTitle("Categorías Contables");
   const [categorias, setCategorias] = useState<CategoriaFinanciera[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"ingreso" | "egreso">("ingreso");

@@ -45,6 +45,7 @@ import {
   StyleSheet,
   Font,
 } from "@react-pdf/renderer";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 // ============================================
 // Tipos de reporte
@@ -785,6 +786,7 @@ function CierreMensualPDF({ data }: { data: any }) {
 // ============================================
 
 export default function ReportesPage() {
+  useDocumentTitle("Reportes");
   const [selectedTipo, setSelectedTipo] = useState<TipoReporte | null>(null);
   const [anio, setAnio] = useState(new Date().getFullYear());
   const [mes, setMes] = useState(new Date().getMonth() + 1);

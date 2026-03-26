@@ -41,6 +41,7 @@ import {
 } from "@/lib/motion";
 import { toast } from "sonner";
 import { createBrowserClient } from "@/lib/supabase/client";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface Deposito {
   id: number;
@@ -77,6 +78,7 @@ interface ProductoSearch {
 }
 
 export default function TransferenciasPage() {
+  useDocumentTitle("Transferencias de Stock");
   const [depositos, setDepositos] = useState<Deposito[]>([]);
   const [transferencias, setTransferencias] = useState<Transferencia[]>([]);
   const [loading, setLoading] = useState(true);

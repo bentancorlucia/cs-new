@@ -47,6 +47,7 @@ import { Label } from "@/components/ui/label";
 import { fadeInUp, staggerContainer, springSmooth } from "@/lib/motion";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 type EstadoPedido = "pendiente" | "pendiente_verificacion" | "pagado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
 
@@ -249,6 +250,7 @@ function OcrIndicators({
 }
 
 export default function DetallePedidoPage() {
+  useDocumentTitle("Detalle de Pedido");
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;

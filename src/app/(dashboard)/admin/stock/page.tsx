@@ -39,6 +39,7 @@ import { createBrowserClient } from "@/lib/supabase/client";
 import { fadeInUp, staggerContainer, springSmooth } from "@/lib/motion";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface ProductoStock {
   id: number;
@@ -64,6 +65,7 @@ interface Movimiento {
 }
 
 export default function AdminStockPage() {
+  useDocumentTitle("Stock");
   const [productos, setProductos] = useState<ProductoStock[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");

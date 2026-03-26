@@ -48,6 +48,7 @@ import {
   scaleIn,
 } from "@/lib/motion";
 import { VerificarSocio } from "@/components/shared/verificar-socio";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -69,6 +70,7 @@ interface Perfil {
 // ── Main Component ─────────────────────────────────────
 
 export default function MiCuentaPage() {
+  useDocumentTitle("Mi Cuenta");
   const router = useRouter();
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [loading, setLoading] = useState(true);

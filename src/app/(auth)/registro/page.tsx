@@ -22,6 +22,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { fadeInUp, staggerContainer, easeSmooth } from "@/lib/motion";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 const registroSchema = z
   .object({
@@ -41,6 +42,7 @@ const registroSchema = z
 type RegistroForm = z.infer<typeof registroSchema>;
 
 export default function RegistroPage() {
+  useDocumentTitle("Registro");
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);

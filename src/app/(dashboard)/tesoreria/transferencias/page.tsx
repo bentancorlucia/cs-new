@@ -33,6 +33,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { staggerContainer, fadeInUp, springSmooth } from "@/lib/motion";
 import { toast } from "sonner";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface CuentaFinanciera {
   id: number;
@@ -84,6 +85,7 @@ function formatDate(dateStr: string): string {
 }
 
 export default function TransferenciasPage() {
+  useDocumentTitle("Transferencias");
   const [transferencias, setTransferencias] = useState<Transferencia[]>([]);
   const [cuentas, setCuentas] = useState<CuentaFinanciera[]>([]);
   const [loading, setLoading] = useState(true);

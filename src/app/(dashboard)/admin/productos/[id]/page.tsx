@@ -8,8 +8,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { fadeInUp, springSmooth } from "@/lib/motion";
 import { ProductoForm } from "../_components/producto-form";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 export default function EditarProductoPage() {
+  useDocumentTitle("Editar Producto");
   const params = useParams();
   const id = params.id as string;
   const [producto, setProducto] = useState<any>(null);

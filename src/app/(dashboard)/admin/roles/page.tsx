@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createBrowserClient } from "@/lib/supabase/client";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface Perfil {
   id: string;
@@ -75,6 +76,7 @@ function getRolLabel(rolNombre: string) {
 const LIMIT = 20;
 
 export default function RolesPage() {
+  useDocumentTitle("Roles");
   const [perfiles, setPerfiles] = useState<PerfilConRoles[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);

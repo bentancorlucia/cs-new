@@ -50,6 +50,7 @@ import { staggerContainer, fadeInUp, springSmooth } from "@/lib/motion";
 import { formatMonto, formatFecha, nombreMes } from "@/lib/tesoreria/format";
 import { FORMATO_OPTIONS } from "@/lib/tesoreria/parsear-extracto";
 import { toast } from "sonner";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface CuentaFinanciera {
   id: number;
@@ -95,6 +96,7 @@ interface ConciliacionItem {
 }
 
 export default function ConciliacionPage() {
+  useDocumentTitle("Conciliación");
   const [cuentas, setCuentas] = useState<CuentaFinanciera[]>([]);
   const [conciliaciones, setConciliaciones] = useState<Conciliacion[]>([]);
   const [loading, setLoading] = useState(true);

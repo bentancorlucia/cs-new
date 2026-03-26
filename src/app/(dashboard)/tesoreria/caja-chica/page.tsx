@@ -33,6 +33,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { staggerContainer, fadeInUp, springSmooth } from "@/lib/motion";
 import { toast } from "sonner";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface CuentaCajaChica {
   id: number;
@@ -169,6 +170,7 @@ function DiferenciaBadge({ diferencia, moneda }: { diferencia: number; moneda: s
 }
 
 export default function CajaChicaPage() {
+  useDocumentTitle("Caja Chica");
   const [cuentas, setCuentas] = useState<CuentaConArqueo[]>([]);
   const [arqueos, setArqueos] = useState<Arqueo[]>([]);
   const [loading, setLoading] = useState(true);

@@ -21,6 +21,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { fadeInUp, staggerContainer, easeSmooth } from "@/lib/motion";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 const cambiarPasswordSchema = z
   .object({
@@ -35,6 +36,7 @@ const cambiarPasswordSchema = z
 type CambiarPasswordForm = z.infer<typeof cambiarPasswordSchema>;
 
 export default function CambiarPasswordPage() {
+  useDocumentTitle("Cambiar Contraseña");
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);

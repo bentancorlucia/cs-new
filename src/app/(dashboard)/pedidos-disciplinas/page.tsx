@@ -27,6 +27,7 @@ import {
 import { toast } from "sonner";
 import { createBrowserClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface Disciplina {
   id: number;
@@ -47,6 +48,7 @@ interface Pedido {
 }
 
 export default function PedidosDisciplinasPage() {
+  useDocumentTitle("Pedidos de Disciplinas");
   const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);

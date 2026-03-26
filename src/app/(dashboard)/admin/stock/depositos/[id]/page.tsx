@@ -19,6 +19,7 @@ import {
 } from "@/lib/motion";
 import { toast } from "sonner";
 import Link from "next/link";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface StockItem {
   id: number;
@@ -50,6 +51,7 @@ interface Deposito {
 }
 
 export default function DepositoDetallePage() {
+  useDocumentTitle("Depósito");
   const params = useParams();
   const id = params.id as string;
 

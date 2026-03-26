@@ -53,6 +53,7 @@ import { fadeInUp, staggerContainer } from "@/lib/motion";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface Proveedor {
   id: number;
@@ -103,6 +104,7 @@ interface MovimientoCuenta {
 }
 
 export default function ProveedorDetallePage() {
+  useDocumentTitle("Proveedor");
   const params = useParams();
   const router = useRouter();
   const proveedorId = params.id as string;

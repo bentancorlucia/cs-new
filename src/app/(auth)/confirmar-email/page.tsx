@@ -18,8 +18,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { fadeInUp, staggerContainer, easeSmooth } from "@/lib/motion";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 export default function ConfirmarEmailPage() {
+  useDocumentTitle("Confirmar Email");
   return (
     <Suspense>
       <ConfirmarEmailContent />

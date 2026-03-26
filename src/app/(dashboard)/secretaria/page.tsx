@@ -23,6 +23,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface DashboardStats {
   totalActivos: number;
@@ -115,6 +116,7 @@ const quickLinks = [
 ];
 
 export default function SecretariaDashboard() {
+  useDocumentTitle("Secretaría");
   const [stats, setStats] = useState<DashboardStats>({
     totalActivos: 0,
     totalMorosos: 0,

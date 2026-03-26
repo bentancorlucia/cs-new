@@ -43,6 +43,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { ImportarSociosDialog } from "./_components/importar-excel-dialog";
 import { toast } from "sonner";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface PadronSocio {
   id: number;
@@ -66,6 +67,7 @@ interface Disciplina {
 const LIMIT = 20;
 
 export default function SociosListPage() {
+  useDocumentTitle("Socios");
   return (
     <Suspense fallback={<div className="p-8 text-center text-muted-foreground font-body">Cargando...</div>}>
       <SociosListContent />

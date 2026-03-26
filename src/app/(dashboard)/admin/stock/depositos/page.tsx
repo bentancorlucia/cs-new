@@ -32,6 +32,7 @@ import {
 } from "@/lib/motion";
 import { toast } from "sonner";
 import Link from "next/link";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface Deposito {
   id: number;
@@ -43,6 +44,7 @@ interface Deposito {
 }
 
 export default function DepositosPage() {
+  useDocumentTitle("Depósitos");
   const [depositos, setDepositos] = useState<Deposito[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);

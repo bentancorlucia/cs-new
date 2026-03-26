@@ -46,6 +46,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { staggerContainer, fadeInUp, springSmooth } from "@/lib/motion";
 import { toast } from "sonner";
 import { ImportarCSVDialog } from "@/components/tesoreria/importar-csv-dialog";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface Cuenta {
   id: number;
@@ -107,6 +108,7 @@ function getToday(): string {
 }
 
 export default function TesoreriaMovimientosPage() {
+  useDocumentTitle("Movimientos");
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [loading, setLoading] = useState(true);
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
