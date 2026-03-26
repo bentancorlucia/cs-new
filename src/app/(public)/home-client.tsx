@@ -89,7 +89,7 @@ export function HomeClient() {
       </section>
 
       {/* Visión & Misión — compact strip */}
-      <section className="py-14 sm:py-16 bg-white border-y border-linea">
+      <section className="py-14 sm:py-16 bg-white">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-10 items-stretch">
             <AnimateOnScroll variant="fadeInUp" className="h-full">
@@ -129,7 +129,7 @@ export function HomeClient() {
       </section>
 
       {/* Deportes */}
-      <section className="py-16 sm:py-24 bg-gradient-to-b from-bordo-800/[0.03] via-fondo to-bordo-800/[0.03] border-b border-linea">
+      <section className="py-16 sm:py-24 bg-gradient-to-b from-bordo-800/[0.03] via-fondo to-bordo-800/[0.03]">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <SectionHeader
             eyebrow="Nuestras disciplinas"
@@ -151,7 +151,7 @@ export function HomeClient() {
       </section>
 
       {/* Sponsors */}
-      <section className="py-16 sm:py-20 bg-fondo border-t border-linea">
+      <section className="py-16 sm:py-20 bg-fondo">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <AnimateOnScroll variant="fadeInUp">
             <p className="text-center font-heading uppercase tracking-editorial text-xs text-muted-foreground mb-8">
