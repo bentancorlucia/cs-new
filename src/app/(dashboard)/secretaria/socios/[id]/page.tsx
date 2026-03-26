@@ -388,7 +388,7 @@ export default function FichaSocioPage() {
                     label="Fecha de nacimiento"
                     value={
                       socio.fecha_nacimiento
-                        ? new Date(socio.fecha_nacimiento).toLocaleDateString("es-UY")
+                        ? new Date(socio.fecha_nacimiento + "T00:00:00").toLocaleDateString("es-UY")
                         : null
                     }
                   />

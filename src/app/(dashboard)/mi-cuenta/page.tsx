@@ -463,7 +463,7 @@ export default function MiCuentaPage() {
                                 icon={Calendar}
                                 label="Nacimiento"
                                 value={new Date(
-                                  perfil.fecha_nacimiento
+                                  perfil.fecha_nacimiento + "T00:00:00"
                                 ).toLocaleDateString("es-UY")}
                               />
                             )}
