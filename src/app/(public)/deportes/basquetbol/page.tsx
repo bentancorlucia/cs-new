@@ -15,6 +15,15 @@ export default function BasquetbolPage() {
       heroImage="/images/deportes/PapiBasket.JPG"
       categories={[
         {
+          name: "Basket Universitario",
+          description:
+            "Entrenamos durante la semana para representar al club en la Liga Universitaria de Basketball. Somos un grupo con ganas de competir y mejorar, donde lo que importa es el compromiso y las ganas de jugar.",
+          schedule: "Lunes y jueves de 21:00 a 22:00",
+          location: "Gonzaga",
+          contact: { name: "Juan Abou-Nigm", phone: "095 050 431" },
+          image: "/images/deportes/basket-universitario.jpeg",
+        },
+        {
           name: "Papi Basket",
           description:
             "El Papibasket, es un grupo de disfrute, deporte y encuentros sociales. Un gran grupo humano que sigue creciendo en todos los aspectos. Durante el año realizamos torneos internos, reuniones, asados y cerramos con una despedida del año.",
