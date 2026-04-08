@@ -198,6 +198,19 @@ export async function PUT(
       return NextResponse.json({ error: "Socio no encontrado" }, { status: 404 });
     }
 
+    // Timestamps de alta/baja
+    const daBaja = parsed.activo === false && actual.activo === true;
+    const daAlta = parsed.activo === true && actual.activo === false;
+
+    if (daBaja) {
+      updateData.desactivado_at = new Date().toISOString();
+      updateData.activo_since = null;
+    }
+    if (daAlta) {
+      updateData.activo_since = new Date().toISOString();
+      updateData.desactivado_at = null;
+    }
+
     // Actualizar padrón
     const { data, error } = await supabase
       .from("padron_socios")
@@ -212,11 +225,10 @@ export async function PUT(
 
     // Sincronizar con perfiles si está vinculado
     if (actual.perfil_id) {
-      if (parsed.activo === false && actual.activo === true) {
+      if (daBaja) {
         await desvincularPerfil(supabase, actual.perfil_id);
       }
-
-      if (parsed.activo === true && actual.activo === false) {
+      if (daAlta) {
         await revincularPerfil(supabase, actual.perfil_id, padronId);
       }
     }
@@ -239,48 +251,16 @@ export async function PUT(
   }
 }
 
-// ── DELETE /api/padron/[id] — desactivar socio (soft delete) ──
+// ── DELETE /api/padron/[id] — dar de baja (redirige a PUT con activo: false) ──
 
 export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
 ) {
-  try {
-    await requireRole(PADRON_ROLES);
-    const { id } = await params;
-    const supabase = createAdminClient();
-
-    const { data: actualDelData } = await supabase
-      .from("padron_socios")
-      .select("perfil_id")
-      .eq("id", parseInt(id))
-      .single();
-
-    const actualDel = actualDelData as unknown as { perfil_id: string | null } | null;
-
-    if (!actualDel) {
-      return NextResponse.json({ error: "Socio no encontrado" }, { status: 404 });
-    }
-
-    // Soft delete: desactivar
-    await supabase
-      .from("padron_socios")
-      .update({ activo: false } as never)
-      .eq("id", parseInt(id));
-
-    // Si está vinculado, desvincular completamente
-    if (actualDel.perfil_id) {
-      await desvincularPerfil(supabase, actualDel.perfil_id);
-    }
-
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    if (err instanceof Error && err.message === "No autorizado") {
-      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-    }
-    return NextResponse.json(
-      { error: "Error interno del servidor" },
-      { status: 500 }
-    );
-  }
+  const fakeRequest = new NextRequest(request.url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ activo: false }),
+  });
+  return PUT(fakeRequest, context);
 }

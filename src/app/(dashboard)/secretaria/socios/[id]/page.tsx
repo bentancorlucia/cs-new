@@ -61,6 +61,8 @@ interface PadronSocioData {
   perfil_id: string | null;
   vinculado_at: string | null;
   created_at: string;
+  activo_since: string | null;
+  desactivado_at: string | null;
   padron_disciplinas: PadronDisciplina[];
   perfiles: {
     id: string;
@@ -160,9 +162,14 @@ export default function FichaSocioPage() {
     }
   };
 
-  const handleToggleActivo = async () => {
+  const handleToggleBaja = async () => {
     if (!socio) return;
     const nuevoEstado = !socio.activo;
+
+    if (socio.activo) {
+      if (!confirm("¿Estás seguro de dar de baja a este socio? Se desvinculará su cuenta si está vinculada.")) return;
+    }
+
     try {
       const res = await fetch(`/api/padron/${id}`, {
         method: "PUT",
@@ -173,7 +180,7 @@ export default function FichaSocioPage() {
         toast.error("Error al cambiar estado");
         return;
       }
-      toast.success(`Socio ${nuevoEstado ? "activado" : "desactivado"}`);
+      toast.success(nuevoEstado ? "Socio dado de alta" : "Socio dado de baja");
       fetchSocio();
     } catch {
       toast.error("Error de conexión");
@@ -395,13 +402,25 @@ export default function FichaSocioPage() {
                     }
                   />
                   <InfoRow
-                    label="Socio desde"
+                    label="En padrón desde"
                     value={
                       socio.created_at
                         ? new Date(socio.created_at).toLocaleDateString("es-UY")
                         : null
                     }
                   />
+                  {socio.activo_since && (
+                    <InfoRow
+                      label="Activo desde"
+                      value={new Date(socio.activo_since).toLocaleDateString("es-UY")}
+                    />
+                  )}
+                  {socio.desactivado_at && (
+                    <InfoRow
+                      label="Dado de baja el"
+                      value={new Date(socio.desactivado_at).toLocaleDateString("es-UY")}
+                    />
+                  )}
                   {socio.notas && (
                     <div className="sm:col-span-2">
                       <InfoRow label="Notas" value={socio.notas} />
@@ -511,7 +530,7 @@ export default function FichaSocioPage() {
             </CardHeader>
             <CardContent className="flex flex-wrap gap-3">
               <button
-                onClick={handleToggleActivo}
+                onClick={handleToggleBaja}
                 className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-body transition-colors ${
                   socio.activo
                     ? "border-red-200 text-red-600 hover:bg-red-50"
@@ -521,37 +540,14 @@ export default function FichaSocioPage() {
                 {socio.activo ? (
                   <>
                     <XCircle className="size-4" />
-                    Desactivar socio
+                    Dar de baja
                   </>
                 ) : (
                   <>
                     <CheckCircle className="size-4" />
-                    Reactivar socio
+                    Dar de alta
                   </>
                 )}
-              </button>
-              <button
-                onClick={async () => {
-                  if (
-                    !confirm(
-                      "¿Estás seguro de dar de baja a este socio? Se marcará como inactivo."
-                    )
-                  )
-                    return;
-                  const res = await fetch(`/api/padron/${id}`, {
-                    method: "DELETE",
-                  });
-                  if (res.ok) {
-                    toast.success("Socio dado de baja");
-                    router.push("/secretaria/socios");
-                  } else {
-                    toast.error("Error al dar de baja");
-                  }
-                }}
-                className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-4 py-2 text-sm font-body text-red-600 hover:bg-red-50 transition-colors"
-              >
-                <Trash2 className="size-4" />
-                Dar de baja
               </button>
             </CardContent>
           </Card>
