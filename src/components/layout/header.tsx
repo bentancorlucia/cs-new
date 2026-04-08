@@ -46,7 +46,7 @@ const DIRECT_LINKS = [
   { href: "/socios", label: "Socios" },
   { href: "/beneficios", label: "Beneficios" },
   { href: "/tienda", label: "Tienda" },
-  { href: "/eventos", label: "Eventos" },
+  // { href: "/eventos", label: "Eventos" },
 ];
 
 function NavDropdown({
@@ -120,7 +120,7 @@ function NavDropdown({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -4 }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute top-full left-0 mt-3 min-w-[180px] rounded-xl bg-bordo-800 p-2 shadow-elevated ring-1 ring-white/10 z-50"
+            className="absolute top-full left-0 mt-3 min-w-[180px] rounded-xl bg-bordo-800/70 backdrop-blur-xl p-2 shadow-elevated ring-1 ring-white/10 z-50"
           >
             {links.map((link, i) => (
               <motion.div
@@ -380,8 +380,12 @@ export function Header() {
   const { scrollY } = useScroll();
   const [user, setUser] = useState<{ email?: string; initials?: string; avatar_url?: string | null } | null>(null);
 
-  // Transparent navbar on all pages except eventos
-  const isTransparentHero = !pathname.startsWith("/eventos");
+  // Solid navbar on product detail pages, cart, and eventos; transparent elsewhere
+  const isSolidNav =
+    pathname.startsWith("/eventos") ||
+    pathname === "/tienda/carrito" ||
+    (pathname.startsWith("/tienda/") && pathname !== "/tienda");
+  const isTransparentHero = !isSolidNav;
 
   // Scroll-driven transforms
   const navPaddingY = useTransform(
@@ -393,22 +397,29 @@ export function Header() {
     scrollY,
     [0, 80],
     isTransparentHero
-      ? ["rgba(115, 13, 50, 0)", "rgba(115, 13, 50, 0.95)"]
-      : ["rgba(115, 13, 50, 0.95)", "rgba(115, 13, 50, 0.95)"]
+      ? ["rgba(115, 13, 50, 0)", "rgba(115, 13, 50, 0.85)"]
+      : ["rgba(115, 13, 50, 0.85)", "rgba(115, 13, 50, 0.85)"]
   );
   const backdropBlur = useTransform(
     scrollY,
     [0, 80],
     isTransparentHero
-      ? ["blur(0px)", "blur(12px)"]
-      : ["blur(12px)", "blur(12px)"]
+      ? ["blur(0px)", "blur(16px)"]
+      : ["blur(16px)", "blur(16px)"]
   );
   const headerShadow = useTransform(
     scrollY,
     [0, 80],
     isTransparentHero
-      ? ["0 0 0 0 rgba(0,0,0,0)", "0 4px 30px rgba(0,0,0,0.3)"]
-      : ["0 4px 30px rgba(0,0,0,0.3)", "0 4px 30px rgba(0,0,0,0.3)"]
+      ? ["0 0 0 0 rgba(0,0,0,0)", "0 4px 30px rgba(74,8,32,0.3)"]
+      : ["0 4px 30px rgba(74,8,32,0.3)", "0 4px 30px rgba(74,8,32,0.3)"]
+  );
+  const headerBorder = useTransform(
+    scrollY,
+    [0, 80],
+    isTransparentHero
+      ? ["1px solid rgba(255,255,255,0)", "1px solid rgba(255,255,255,0.1)"]
+      : ["1px solid rgba(255,255,255,0.1)", "1px solid rgba(255,255,255,0.1)"]
   );
 
   useEffect(() => {
@@ -465,6 +476,7 @@ export function Header() {
         backdropFilter: backdropBlur,
         WebkitBackdropFilter: backdropBlur,
         boxShadow: headerShadow,
+        borderBottom: headerBorder,
       }}
       className="fixed top-0 left-0 right-0 z-50"
     >

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
@@ -46,6 +47,7 @@ interface DisciplinaData {
 
 export default function DisciplinasPage() {
   useDocumentTitle("Disciplinas");
+  const router = useRouter();
   const [disciplinas, setDisciplinas] = useState<DisciplinaData[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
@@ -148,7 +150,8 @@ export default function DisciplinasPage() {
                 transition={springSmooth}
               >
                 <Card
-                  className={`border-linea overflow-hidden transition-all hover:shadow-card h-full ${
+                  onClick={() => router.push(`/secretaria/disciplinas/${disc.id}`)}
+                  className={`border-linea overflow-hidden transition-all hover:shadow-card h-full cursor-pointer ${
                     !disc.activa ? "opacity-60" : ""
                   }`}
                 >
@@ -207,14 +210,14 @@ export default function DisciplinasPage() {
 
                     <div className="flex gap-2 pt-2 mt-auto">
                       <button
-                        onClick={() => setEditId(disc.id)}
+                        onClick={(e) => { e.stopPropagation(); setEditId(disc.id); }}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-linea px-3 py-1.5 text-xs font-body text-muted-foreground hover:text-foreground hover:bg-superficie transition-colors"
                       >
                         <Edit3 className="size-3" />
                         Editar
                       </button>
                       <button
-                        onClick={() => toggleActiva(disc)}
+                        onClick={(e) => { e.stopPropagation(); toggleActiva(disc); }}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-linea px-3 py-1.5 text-xs font-body text-muted-foreground hover:text-foreground hover:bg-superficie transition-colors"
                       >
                         {disc.activa ? (

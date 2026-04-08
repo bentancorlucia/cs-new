@@ -4,9 +4,8 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { ShoppingCart, Check } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { fadeInUp, springBouncy, springSmooth } from "@/lib/motion";
+import { ShoppingCart, Check, Plus } from "lucide-react";
+import { fadeInUp, springBouncy } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 export interface ProductCardProps {
@@ -37,9 +36,6 @@ export function ProductCard({
 }: ProductCardProps) {
   const agotado = stock <= 0;
   const tieneDescuento = precioSocio != null && precioSocio < precio;
-  const porcentajeDescuento = tieneDescuento
-    ? Math.round(((precio - precioSocio!) / precio) * 100)
-    : 0;
   const [added, setAdded] = useState(false);
   const [imgError, setImgError] = useState(false);
 
@@ -55,114 +51,145 @@ export function ProductCard({
   return (
     <motion.div
       variants={fadeInUp}
-      className="group relative flex flex-col overflow-hidden rounded-2xl bg-card ring-1 ring-foreground/[0.06] transition-shadow hover:shadow-lg hover:ring-foreground/15 active:scale-[0.98]"
+      className="group relative flex flex-col cursor-pointer"
     >
       {/* Image */}
-      <Link href={`/tienda/${slug}`} className="relative aspect-[4/5] overflow-hidden bg-muted">
+      <Link href={`/tienda/${slug}`} className="relative aspect-[4/5] overflow-hidden bg-superficie border border-bordo-800/5">
         {imagenUrl && !imgError ? (
           <Image
             src={imagenUrl}
             alt={nombre}
             fill
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            className="object-cover transition-transform duration-500 group-hover:scale-105 mix-blend-multiply"
             style={{ objectPosition: imagenFocalPoint || "50% 50%" }}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
             onError={() => setImgError(true)}
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
-            <ShoppingCart className="size-12 opacity-20" />
+          <div className="flex h-full items-center justify-center text-bordo-800/20">
+            <ShoppingCart className="size-12" />
           </div>
         )}
 
-        {/* Badges */}
-        <div className="absolute left-2 top-2 flex flex-col gap-1.5">
-          {agotado && (
-            <Badge variant="destructive" className="text-[10px] shadow-sm">
-              Agotado
-            </Badge>
-          )}
-          {tieneDescuento && !agotado && (
-            <Badge className="bg-amarillo text-texto text-[10px] shadow-sm">
-              -{porcentajeDescuento}%
-            </Badge>
-          )}
-          {destacado && !agotado && (
-            <Badge variant="secondary" className="text-[10px] shadow-sm">
-              Destacado
-            </Badge>
-          )}
-        </div>
 
-        {/* Quick-add floating button (mobile: always visible, desktop: on hover) */}
+        {/* Agotado overlay */}
+        {agotado && (
+          <div className="absolute inset-0 bg-superficie/60 z-10 flex items-center justify-center backdrop-blur-[1px]">
+            <span
+              className="bg-bordo-800 text-dorado-300 px-3 py-1 font-display text-sm uppercase tracking-widest -rotate-12 border border-dorado-300/30"
+              style={{ clipPath: "polygon(0 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%)" }}
+            >
+              Agotado
+            </span>
+          </div>
+        )}
+
+        {/* Slide-up quick-add button — desktop only (hover) */}
         {!agotado && (
-          <motion.button
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            whileTap={{ scale: 0.85 }}
-            transition={springBouncy}
+          <button
             onClick={handleAdd}
             className={cn(
-              "absolute bottom-2.5 right-2.5 flex size-10 items-center justify-center rounded-full shadow-lg transition-colors",
-              "md:opacity-0 md:group-hover:opacity-100",
+              "absolute bottom-0 left-0 w-full z-20 items-center justify-center gap-2 py-2.5 md:py-3 font-display text-[10px] md:text-xs uppercase tracking-wider transition-all duration-300",
+              "hidden md:flex",
+              "translate-y-full group-hover:translate-y-0",
               added
-                ? "bg-emerald-500 text-white"
-                : "bg-white text-bordo active:bg-bordo active:text-white"
+                ? "bg-emerald-600 text-white"
+                : "bg-bordo-950 text-white hover:bg-bordo-800"
             )}
           >
             <AnimatePresence mode="wait">
               {added ? (
                 <motion.span
                   key="check"
-                  initial={{ scale: 0, rotate: -90 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  exit={{ scale: 0 }}
-                  transition={springBouncy}
-                >
-                  <Check className="size-5" strokeWidth={2.5} />
-                </motion.span>
-              ) : (
-                <motion.span
-                  key="cart"
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   exit={{ scale: 0 }}
+                  transition={springBouncy}
+                  className="flex items-center gap-1.5"
                 >
-                  <ShoppingCart className="size-[18px]" />
+                  <Check className="size-3.5" strokeWidth={2.5} />
+                  Agregado
+                </motion.span>
+              ) : (
+                <motion.span
+                  key="add"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0 }}
+                  className="flex items-center gap-1.5"
+                >
+                  Añadir
+                  <Plus className="size-3.5" strokeWidth={2.5} />
                 </motion.span>
               )}
             </AnimatePresence>
-          </motion.button>
+          </button>
         )}
       </Link>
 
+      {/* Always-visible add-to-cart — mobile only */}
+      {!agotado && (
+        <button
+          onClick={handleAdd}
+          className={cn(
+            "flex md:hidden w-full items-center justify-center gap-2 py-2.5 border-t border-dashed border-bordo-800/15 font-display text-[10px] uppercase tracking-wider transition-all duration-200",
+            added
+              ? "bg-emerald-600 text-white"
+              : "bg-transparent text-bordo-950 active:bg-bordo-950 active:text-white"
+          )}
+        >
+          <AnimatePresence mode="wait">
+            {added ? (
+              <motion.span
+                key="check-m"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0 }}
+                transition={springBouncy}
+                className="flex items-center gap-1.5"
+              >
+                <Check className="size-3.5" strokeWidth={2.5} />
+                Agregado
+              </motion.span>
+            ) : (
+              <motion.span
+                key="add-m"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0 }}
+                className="flex items-center gap-1.5"
+              >
+                <ShoppingCart className="size-3.5" strokeWidth={2.5} />
+                Añadir
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </button>
+      )}
+
       {/* Info */}
-      <Link href={`/tienda/${slug}`} className="flex flex-1 flex-col gap-1 p-3 pb-3.5">
-        {categoria && (
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            {categoria}
-          </span>
-        )}
-        <span className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground transition-colors group-hover:text-bordo sm:text-sm">
+      <Link href={`/tienda/${slug}`} className="flex flex-1 flex-col gap-1 pt-3 pb-1">
+        <span className="font-display text-sm md:text-base uppercase leading-tight text-bordo-950 group-hover:text-bordo-800 transition-colors line-clamp-2">
           {nombre}
         </span>
 
-        <div className="mt-auto flex items-baseline gap-1.5 pt-1.5">
+        <div className="mt-auto flex flex-col gap-0.5 pt-1">
           {tieneDescuento ? (
             <>
-              <span className="text-[13px] font-medium text-muted-foreground line-through sm:text-sm">
-                ${precio.toLocaleString("es-UY")}
+              <span className="font-bold text-[15px] sm:text-lg text-bordo-800 leading-none">
+                Socio: ${precioSocio!.toLocaleString("es-UY")}
               </span>
-              <span className="text-base font-bold text-bordo sm:text-lg">
-                ${precioSocio!.toLocaleString("es-UY")}
+              <span className="text-bordo-800/50 line-through text-[11px] sm:text-sm font-medium leading-none">
+                ${precio.toLocaleString("es-UY")}
               </span>
             </>
           ) : (
-            <span className="text-base font-bold text-foreground sm:text-lg">
+            <span className="font-bold text-[15px] sm:text-lg text-bordo-950 leading-none">
               ${precio.toLocaleString("es-UY")}
             </span>
           )}
         </div>
+
       </Link>
     </motion.div>
   );

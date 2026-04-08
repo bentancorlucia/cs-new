@@ -1,44 +1,29 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
+import { motion, useScroll, useTransform } from "framer-motion";
 import {
   Search,
   ShoppingBag,
   ChevronDown,
   ArrowRight,
   ArrowUpRight,
-  Sparkles,
-  Shirt,
-  Tag,
-  Star,
-  Truck,
+  ArrowDownUp,
 } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ProductCard } from "@/components/tienda/product-card";
 import { useCart } from "@/hooks/use-cart";
 import { CartSheet } from "@/components/tienda/cart-sheet";
 import { MobileCartBar } from "@/components/tienda/mobile-cart-bar";
-import { SectionHeader } from "@/components/shared/section-header";
 import {
   AnimateOnScroll,
-  AnimateStaggerGroup,
 } from "@/components/shared/animate-on-scroll";
 import { createBrowserClient } from "@/lib/supabase/client";
 import {
   staggerContainer,
-  fadeInUp,
   springBouncy,
   springSmooth,
 } from "@/lib/motion";
@@ -91,9 +76,7 @@ export function TiendaClient({
   }, []);
 
   useEffect(() => {
-    // Skip client fetch if we already have server-rendered data
     if (hasInitialData) return;
-
     const supabase = createBrowserClient();
 
     async function fetchData() {
@@ -120,22 +103,14 @@ export function TiendaClient({
     fetchData();
   }, [hasInitialData]);
 
-  // Featured products (destacados, fallback to any with images)
+  // Featured products
   const productosDestacados = useMemo(() => {
     const destacados = productos
       .filter((p) => p.destacado && p.stock_actual > 0)
       .slice(0, 6);
     if (destacados.length > 0) return destacados;
-    // Fallback: any products that have images
     return productos
       .filter((p) => p.producto_imagenes?.length > 0 && p.stock_actual > 0)
-      .slice(0, 6);
-  }, [productos]);
-
-  // Products with images for hero grid (need at least 4)
-  const heroProducts = useMemo(() => {
-    return productos
-      .filter((p) => p.producto_imagenes?.some((img) => img.url))
       .slice(0, 6);
   }, [productos]);
 
@@ -221,7 +196,6 @@ export function TiendaClient({
   function handleCategoryClick(slug: string) {
     setCategoriaActiva(slug);
     setPage(1);
-    // Small delay to let state update, then scroll
     setTimeout(() => {
       catalogRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 100);
@@ -230,64 +204,52 @@ export function TiendaClient({
   return (
     <>
       {/* ============================================ */}
-      {/* HERO — Immersive dark bordo section          */}
+      {/* HERO — Solid bordó, full page                */}
       {/* ============================================ */}
       <section
         ref={heroRef}
-        className="relative -mt-20 min-h-[45vh] sm:h-[105vh] flex items-center overflow-hidden bg-bordo-950 noise-overlay"
+        className="relative -mt-20 min-h-[55vh] md:min-h-screen flex flex-col justify-end md:justify-center overflow-hidden bg-bordo-800 noise-overlay"
       >
-        {/* Animated gradient background */}
-        <div className="absolute inset-0">
-          <div className="absolute inset-0 bg-gradient-to-br from-bordo-950 via-bordo-900 to-bordo-950" />
-          {/* Decorative gradient orbs */}
+        {/* Animated gradient orbs — strong gold glow bottom-right like preview */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          {/* Large gold glow — bottom right */}
           <motion.div
-            className="absolute -top-1/4 -right-1/4 w-[60vw] h-[60vw] rounded-full bg-bordo-800/20 blur-[120px]"
+            className="absolute -bottom-[20%] -right-[10%] w-[70vw] h-[70vw] rounded-full blur-[120px]"
+            style={{ backgroundColor: "#f7b643" }}
             animate={{
-              scale: [1, 1.15, 1],
-              opacity: [0.3, 0.5, 0.3],
+              scale: [1, 1.08, 1],
+              opacity: [0.45, 0.55, 0.45],
             }}
-            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+            transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
           />
-          {/* Yellow light — bottom left */}
+          {/* Dark bordo shadow — top left to add depth */}
           <motion.div
-            className="absolute -bottom-1/4 -left-1/4 w-[50vw] h-[50vw] rounded-full bg-dorado-400/40 blur-[100px]"
+            className="absolute -top-[20%] -left-[10%] w-[60vw] h-[60vw] rounded-full blur-[120px]"
+            style={{ backgroundColor: "#3a0417" }}
             animate={{
               scale: [1.1, 1, 1.1],
-              opacity: [0.4, 0.7, 0.4],
-            }}
-            transition={{
-              duration: 10,
-              repeat: Infinity,
-              ease: "easeInOut",
-              delay: 2,
-            }}
-          />
-          {/* Yellow light — top center */}
-          <motion.div
-            className="absolute -top-[10%] left-1/3 w-[35vw] h-[35vw] rounded-full bg-dorado-300/30 blur-[80px]"
-            animate={{
-              scale: [1, 1.2, 1],
-              opacity: [0.3, 0.55, 0.3],
+              opacity: [0.7, 0.9, 0.7],
             }}
             transition={{
               duration: 12,
               repeat: Infinity,
               ease: "easeInOut",
-              delay: 4,
+              delay: 2,
             }}
           />
-          {/* Yellow light — right mid */}
+          {/* Smaller gold accent — top right */}
           <motion.div
-            className="absolute top-1/3 -right-[10%] w-[30vw] h-[30vw] rounded-full bg-dorado-400/25 blur-[80px]"
+            className="absolute top-[10%] right-[5%] w-[30vw] h-[30vw] rounded-full blur-[100px]"
+            style={{ backgroundColor: "#f7b643" }}
             animate={{
-              scale: [1.05, 0.95, 1.05],
-              opacity: [0.3, 0.5, 0.3],
+              scale: [1, 1.15, 1],
+              opacity: [0.15, 0.3, 0.15],
             }}
             transition={{
-              duration: 9,
+              duration: 8,
               repeat: Infinity,
               ease: "easeInOut",
-              delay: 1,
+              delay: 4,
             }}
           />
         </div>
@@ -295,159 +257,74 @@ export function TiendaClient({
         {/* Content */}
         <motion.div
           style={{ y: heroContentY, opacity: heroOpacity }}
-          className="relative z-10 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 pt-32 sm:pt-28 pb-16 sm:pb-16"
+          className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-12 md:pt-32 md:pb-16 text-left flex flex-col items-start justify-end md:justify-center"
         >
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-12 items-center">
-            {/* Left — Text */}
-            <div>
-              <motion.span
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.1 }}
-                className="inline-flex items-center gap-2 font-heading uppercase tracking-editorial text-xs text-dorado-300 mb-6"
-              >
-                <span className="w-8 h-px bg-dorado-300/50" />
-                Tienda oficial
-              </motion.span>
+          <motion.span
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
+            className="inline-block bg-dorado-300 text-bordo-950 font-heading text-[10px] uppercase font-extrabold px-2.5 py-1 tracking-editorial mb-3 md:hidden"
+          >
+            Tienda Oficial
+          </motion.span>
 
-              <motion.h1
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{
-                  duration: 0.8,
-                  delay: 0.2,
-                  ease: [0.16, 1, 0.3, 1],
-                }}
-                className="font-display text-title-1 sm:text-display uppercase tracking-wide text-white"
-              >
-                Vestí los
-                <br />
-                <span className="text-dorado-300">colores</span> del club
-              </motion.h1>
+          <motion.h1
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              duration: 0.8,
+              delay: 0.1,
+              ease: [0.16, 1, 0.3, 1],
+            }}
+            className="font-display text-[clamp(2.5rem,10vw,7rem)] uppercase leading-[0.92] tracking-tight text-white max-w-5xl"
+          >
+            Vestí los colores del <em>club</em>
+          </motion.h1>
 
-              <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{
-                  duration: 0.7,
-                  delay: 0.4,
-                  ease: [0.16, 1, 0.3, 1],
-                }}
-                className="mt-5 font-body text-base sm:text-lg text-white/60 max-w-md"
-              >
-                Indumentaria oficial, accesorios y merchandising de Club
-                Seminario. Precios especiales para socios.
-              </motion.p>
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              duration: 0.7,
+              delay: 0.3,
+              ease: [0.16, 1, 0.3, 1],
+            }}
+            className="mt-3 md:mt-5 max-w-xl font-body text-sm md:text-lg text-white/80 leading-relaxed"
+          >
+            Indumentaria oficial, accesorios y merchandising de Club
+            Seminario. Precios especiales para socios.
+          </motion.p>
 
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.6 }}
-                className="mt-8 flex flex-wrap gap-3"
-              >
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.5 }}
+            className="mt-6 md:mt-8 flex flex-col sm:flex-row gap-3 w-full sm:w-auto"
+          >
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              transition={springBouncy}
+              onClick={scrollToCatalog}
+              className="inline-flex items-center justify-center bg-dorado-300 px-6 py-3 font-heading text-[11px] uppercase tracking-editorial text-bordo-950 hover:bg-dorado-200 transition-colors"
+            >
+              Ver catálogo
+              <ArrowRight className="ml-2 size-3.5" />
+            </motion.button>
+            <CartSheet
+              trigger={
                 <motion.button
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
                   transition={springBouncy}
-                  onClick={scrollToCatalog}
-                  className="inline-flex items-center rounded-full bg-dorado-300 px-7 py-3.5 font-heading text-xs uppercase tracking-editorial text-bordo-950 hover:bg-dorado-200 transition-colors"
+                  className="hidden sm:inline-flex items-center gap-2 border border-dorado-300/30 bg-bordo-900/30 px-6 py-3 font-heading text-[11px] uppercase tracking-editorial text-dorado-300 hover:bg-dorado-300/10 transition-colors backdrop-blur-sm"
                 >
-                  Ver catálogo
-                  <ArrowRight className="ml-2 size-3.5" />
+                  <ShoppingBag className="size-4" />
+                  Mi carrito
                 </motion.button>
-                <CartSheet
-                  trigger={
-                    <motion.button
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
-                      transition={springBouncy}
-                      className="inline-flex items-center gap-2 rounded-full border border-white/20 px-7 py-3.5 font-heading text-xs uppercase tracking-editorial text-white hover:bg-white/10 transition-colors"
-                    >
-                      <ShoppingBag className="size-4" />
-                      Mi carrito
-                    </motion.button>
-                  }
-                />
-              </motion.div>
-            </div>
-
-            {/* Right — Dynamic product showcase */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.92 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{
-                duration: 1,
-                delay: 0.4,
-                ease: [0.16, 1, 0.3, 1],
-              }}
-              className="relative hidden lg:block"
-            >
-              {/* 2x2 product grid — all same size, staggered entry */}
-              <div className="grid grid-cols-2 gap-3">
-                {heroProducts.slice(0, 4).map((producto, i) => {
-                  const img =
-                    producto.producto_imagenes?.find((im) => im.es_principal) ??
-                    producto.producto_imagenes?.[0];
-                  return (
-                    <motion.div
-                      key={producto.id}
-                      initial={{ opacity: 0, y: 30 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{
-                        duration: 0.7,
-                        delay: 0.5 + i * 0.12,
-                        ease: [0.16, 1, 0.3, 1],
-                      }}
-                      className={`relative aspect-[4/5] rounded-2xl overflow-hidden bg-bordo-800/30 ${
-                        i % 2 === 1 ? "mt-6" : ""
-                      }`}
-                    >
-                      {img?.url && (
-                        <Image
-                          src={img.url}
-                          alt={producto.nombre}
-                          fill
-                          className="object-cover"
-                          style={{
-                            objectPosition: img.focal_point || "50% 50%",
-                          }}
-                          sizes="(max-width: 1024px) 0vw, 20vw"
-                        />
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-bordo-950/80 via-bordo-950/30 to-bordo-950/60" />
-                    </motion.div>
-                  );
-                })}
-              </div>
-
-              {/* Floating feature badges */}
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5, delay: 1.2, ...springBouncy }}
-                className="absolute top-6 -left-6 z-20 flex items-center gap-2 rounded-full bg-white/10 backdrop-blur-md border border-white/10 px-4 py-2 shadow-xl"
-              >
-                <Star className="size-3.5 text-dorado-300" />
-                <span className="font-heading text-[11px] uppercase tracking-editorial text-white/90">
-                  Precios socios
-                </span>
-              </motion.div>
-
-
-              {/* Animated floating ring decoration */}
-              <motion.div
-                className="absolute -bottom-8 -right-8 size-32 rounded-full border border-dorado-300/20"
-                animate={{ rotate: 360 }}
-                transition={{
-                  duration: 20,
-                  repeat: Infinity,
-                  ease: "linear",
-                }}
-              >
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 size-3 rounded-full bg-dorado-300/40" />
-              </motion.div>
-            </motion.div>
-          </div>
+              }
+            />
+          </motion.div>
         </motion.div>
 
         {/* Scroll indicator */}
@@ -455,7 +332,7 @@ export function TiendaClient({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1.2, duration: 0.5 }}
-          className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10"
+          className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 hidden md:block"
         >
           <motion.div
             animate={{ y: [0, 8, 0] }}
@@ -470,40 +347,69 @@ export function TiendaClient({
         </motion.div>
       </section>
 
-      {/* Decorative border */}
-      <div className="h-[3px] bg-bordo-800" />
-      <div className="h-[2px] bg-dorado-400" />
+      {/* ============================================ */}
+      {/* MARQUEE — Scrolling banner                   */}
+      {/* ============================================ */}
+      {/* Bar — Text — Bar */}
+      <div className="h-[3px] bg-dorado-400" />
+      <div className="w-full bg-bordo-800 overflow-hidden py-3">
+        <motion.div
+          animate={{ x: ["0%", "-50%"] }}
+          transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+          className="flex whitespace-nowrap"
+        >
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center">
+              <span className="font-display text-sm font-bold tracking-wide uppercase text-dorado-300">Club Seminario</span>
+              <span className="mx-6 text-dorado-300/60">—</span>
+              <span className="font-display text-sm font-bold tracking-wide uppercase text-dorado-300">Tienda Oficial</span>
+              <span className="mx-6 text-dorado-300/60">—</span>
+              <span className="font-display text-sm font-bold tracking-wide uppercase text-dorado-300">Precios Exclusivos Para Socios</span>
+              <span className="mx-6 text-dorado-300/60">—</span>
+            </div>
+          ))}
+        </motion.div>
+      </div>
+      <div className="h-[3px] bg-dorado-400" />
 
       {/* ============================================ */}
-      {/* CATEGORIES — Sport-card style grid            */}
+      {/* CATEGORIES — Bento grid (asymmetric)         */}
       {/* ============================================ */}
-      <section className="py-16 sm:py-24 bg-gradient-to-b from-bordo-800/[0.03] via-fondo to-fondo">
+      <section className="py-16 sm:py-24 bg-fondo">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <SectionHeader
-            eyebrow="Categorías"
-            title="Explorá por categoría"
-            description="Encontrá lo que buscás navegando nuestras colecciones"
-          />
+          <div className="flex items-end justify-between mb-8">
+            <AnimateOnScroll variant="fadeInUp">
+              <h2 className="font-display text-title-1 sm:text-display uppercase tracking-tightest text-bordo-950">
+                Colecciones
+              </h2>
+            </AnimateOnScroll>
+            <AnimateOnScroll variant="fadeInUp" delay={0.1}>
+              <button
+                onClick={() => handleCategoryClick("todas")}
+                className="hidden md:inline-flex items-center gap-1.5 font-heading uppercase tracking-editorial text-xs text-bordo-800 hover:text-bordo-900 transition-colors group"
+              >
+                Ver todas
+                <ArrowRight className="size-3.5 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+            </AnimateOnScroll>
+          </div>
 
           {loading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 auto-rows-[300px] md:auto-rows-[400px]">
               {Array.from({ length: 4 }).map((_, i) => (
                 <Skeleton
                   key={i}
-                  className="aspect-[3/4] w-full rounded-xl"
+                  className="w-full h-full rounded-sm"
                 />
               ))}
             </div>
           ) : (
-            <AnimateStaggerGroup className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-              {categorias.map((cat) => {
-                // Count products per category
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-[2px] md:gap-4 auto-rows-[180px] sm:auto-rows-[300px] md:auto-rows-[400px]">
+              {categorias.map((cat, idx) => {
                 const catProducts = productos.filter(
                   (p) => p.categorias_producto?.slug === cat.slug
                 );
                 const count = catProducts.length;
-
-                // Use a product image from this category
                 const catProductImg = (() => {
                   for (const p of catProducts) {
                     const img =
@@ -514,103 +420,131 @@ export function TiendaClient({
                   return null;
                 })();
 
+                // Category with most products gets large card
+                const maxCount = Math.max(
+                  ...categorias.map(
+                    (c) => productos.filter((p) => p.categorias_producto?.slug === c.slug).length
+                  )
+                );
+                const isLarge = count === maxCount && count > 0 &&
+                  idx === categorias.findIndex((c) =>
+                    productos.filter((p) => p.categorias_producto?.slug === c.slug).length === maxCount
+                  );
+
                 return (
-                  <motion.div
+                  <motion.button
                     key={cat.id}
-                    variants={fadeInUp}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-40px" }}
                     transition={{
                       duration: 0.6,
+                      delay: idx * 0.08,
                       ease: [0.16, 1, 0.3, 1],
                     }}
+                    onClick={() => handleCategoryClick(cat.slug)}
+                    className={`group relative w-full h-full overflow-hidden text-left ${
+                      isLarge
+                        ? "md:col-span-2 lg:col-span-2 md:row-span-2"
+                        : ""
+                    }`}
                   >
-                    <button
-                      onClick={() => handleCategoryClick(cat.slug)}
-                      className="group block relative aspect-[3/4] w-full overflow-hidden text-left"
+                    {/* Image */}
+                    <motion.div
+                      className="absolute inset-0"
+                      whileHover={{ scale: 1.06 }}
+                      transition={{
+                        duration: 0.5,
+                        ease: [0.16, 1, 0.3, 1],
+                      }}
                     >
-                      {/* Image — use product photo from this category */}
-                      <motion.div
-                        className="absolute inset-0"
-                        whileHover={{ scale: 1.06 }}
-                        transition={{
-                          duration: 0.5,
-                          ease: [0.16, 1, 0.3, 1],
-                        }}
+                      {catProductImg?.url ? (
+                        <Image
+                          src={catProductImg.url}
+                          alt={cat.nombre}
+                          fill
+                          className="object-cover"
+                          sizes={
+                            isLarge
+                              ? "(max-width: 768px) 100vw, 50vw"
+                              : "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                          }
+                          style={{
+                            objectPosition:
+                              catProductImg.focal_point || "50% 50%",
+                          }}
+                        />
+                      ) : (
+                        <div className="absolute inset-0 bg-gradient-to-br from-bordo-800 to-bordo-950" />
+                      )}
+                    </motion.div>
+
+                    {/* Warm tint overlay */}
+                    <div className="absolute inset-0 bg-bordo-950/20 mix-blend-multiply" />
+
+                    {/* Gradient overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-bordo-950/95 via-bordo-950/40 to-transparent group-hover:from-bordo-800/95 group-hover:via-bordo-800/50 transition-all duration-500" />
+
+                    {/* Content */}
+                    <div className="absolute inset-0 flex flex-col justify-end p-5 sm:p-6 z-10">
+                      <span className="font-heading uppercase tracking-editorial text-[10px] text-dorado-300 mb-1">
+                        {count} producto{count !== 1 ? "s" : ""}
+                      </span>
+                      <h3
+                        className={`font-display uppercase tracking-tightest text-white group-hover:-translate-y-1 transition-transform duration-300 ${
+                          isLarge
+                            ? "text-title-1 sm:text-display"
+                            : "text-title-2 sm:text-title-1"
+                        }`}
                       >
-                        {catProductImg?.url ? (
-                          <Image
-                            src={catProductImg.url}
-                            alt={cat.nombre}
-                            fill
-                            className="object-cover"
-                            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                            style={{
-                              objectPosition:
-                                catProductImg.focal_point || "50% 50%",
-                            }}
-                          />
-                        ) : (
-                          <div className="absolute inset-0 bg-gradient-to-br from-bordo-800 to-bordo-950" />
-                        )}
-                      </motion.div>
+                        {cat.nombre}
+                      </h3>
+                    </div>
 
-                      {/* Overlay */}
-                      <div className="absolute inset-0 bg-gradient-to-t from-bordo-950 via-bordo-950/85 to-bordo-950/70 group-hover:via-bordo-950/75 group-hover:to-bordo-950/55 transition-all duration-500" />
-
-                      {/* Content */}
-                      <div className="absolute inset-0 flex flex-col justify-end p-5 sm:p-6">
-                        <h3 className="font-display text-title-2 uppercase tracking-tightest text-white group-hover:-translate-y-1 transition-transform duration-300">
-                          {cat.nombre}
-                        </h3>
-                        <p className="mt-1 font-body text-sm text-white/50">
-                          {count} producto{count !== 1 ? "s" : ""}
-                        </p>
+                    {/* Arrow badge */}
+                    <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
+                      <div className="size-8 rounded-full bg-dorado-300 flex items-center justify-center">
+                        <ArrowUpRight className="size-4 text-bordo-950" />
                       </div>
-
-                      {/* Arrow badge */}
-                      <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <div className="size-8 rounded-full bg-dorado-300 flex items-center justify-center">
-                          <ArrowUpRight className="size-4 text-bordo-950" />
-                        </div>
-                      </div>
-                    </button>
-                  </motion.div>
+                    </div>
+                  </motion.button>
                 );
               })}
 
-              {/* "Ver todo" card */}
-              <motion.div
-                variants={fadeInUp}
+              {/* "Ver todo" card — hidden on mobile */}
+              <motion.button
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
                 transition={{
                   duration: 0.6,
+                  delay: categorias.length * 0.08,
                   ease: [0.16, 1, 0.3, 1],
                 }}
+                onClick={() => handleCategoryClick("todas")}
+                className="flex sm:hidden group relative w-full h-full overflow-hidden flex-col items-center justify-center gap-3 border-2 border-dashed border-bordo-800/20 hover:border-bordo-800/40 bg-superficie/50 hover:bg-superficie transition-all duration-300"
               >
-                <button
-                  onClick={() => handleCategoryClick("todas")}
-                  className="group relative aspect-[3/4] w-full overflow-hidden flex flex-col items-center justify-center gap-3 border-2 border-dashed border-bordo-800/20 rounded-sm hover:border-bordo-800/40 bg-superficie/50 hover:bg-superficie transition-all duration-300"
+                <motion.div
+                  whileHover={{ scale: 1.1, rotate: 90 }}
+                  transition={springSmooth}
+                  className="size-12 rounded-full border-2 border-bordo-800/20 flex items-center justify-center group-hover:border-bordo-800/40 group-hover:bg-bordo-800/5 transition-colors"
                 >
-                  <motion.div
-                    whileHover={{ scale: 1.1, rotate: 90 }}
-                    transition={springSmooth}
-                    className="size-12 rounded-full border-2 border-bordo-800/20 flex items-center justify-center group-hover:border-bordo-800/40 group-hover:bg-bordo-800/5 transition-colors"
-                  >
-                    <ArrowRight className="size-5 text-bordo-800/60 group-hover:text-bordo-800 transition-colors" />
-                  </motion.div>
-                  <span className="font-heading uppercase tracking-editorial text-xs text-bordo-800/60 group-hover:text-bordo-800 transition-colors">
-                    Ver todo
-                  </span>
-                  <span className="font-body text-sm text-muted-foreground">
-                    {productos.length} productos
-                  </span>
-                </button>
-              </motion.div>
-            </AnimateStaggerGroup>
+                  <ArrowRight className="size-5 text-bordo-800/60 group-hover:text-bordo-800 transition-colors" />
+                </motion.div>
+                <span className="font-heading uppercase tracking-editorial text-xs text-bordo-800/60 group-hover:text-bordo-800 transition-colors">
+                  Ver todo
+                </span>
+                <span className="font-body text-sm text-bordo-800/40">
+                  {productos.length} productos
+                </span>
+              </motion.button>
+            </div>
           )}
         </div>
       </section>
 
       {/* ============================================ */}
-      {/* FEATURED — Horizontal scroll of destacados   */}
+      {/* FEATURED — Horizontal scroll carousel        */}
       {/* ============================================ */}
       {productosDestacados.length > 0 && (
         <section className="py-16 sm:py-20 bg-white border-y border-linea">
@@ -655,7 +589,7 @@ export function TiendaClient({
                       delay: i * 0.08,
                       ease: [0.16, 1, 0.3, 1],
                     }}
-                    className="w-[260px] sm:w-[300px] flex-shrink-0 snap-start"
+                    className="w-[80vw] sm:w-[300px] flex-shrink-0 snap-start"
                   >
                     <ProductCard
                       id={producto.id}
@@ -689,22 +623,23 @@ export function TiendaClient({
         className="py-16 sm:py-24 bg-fondo scroll-mt-20"
       >
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <SectionHeader
-            eyebrow="Catálogo"
-            title="Todos los productos"
-          />
+          <AnimateOnScroll variant="fadeInUp">
+            <h2 className="font-display text-title-2 sm:text-title-1 uppercase tracking-tightest text-bordo-950 mb-8">
+              Todos los productos
+            </h2>
+          </AnimateOnScroll>
 
-          {/* Filters bar */}
+          {/* Filters bar — sticky on mobile */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
-            className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center"
+            className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sticky top-0 z-40 bg-fondo/95 backdrop-blur-md -mx-4 px-4 py-3 sm:static sm:mx-0 sm:px-0 sm:py-0 sm:bg-transparent sm:backdrop-blur-none border-b border-linea sm:border-0"
           >
             {/* Search */}
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-bordo-800/40" />
               <Input
                 placeholder="Buscar productos..."
                 value={searchInput}
@@ -713,25 +648,30 @@ export function TiendaClient({
               />
             </div>
 
-            {/* Sort */}
-            <Select
-              value={orden}
-              onValueChange={(v) => {
-                if (v) {
-                  setOrden(v);
-                  setPage(1);
-                }
-              }}
-            >
-              <SelectTrigger className="w-full sm:w-44">
-                <SelectValue placeholder="Ordenar por" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="nuevos">Más nuevos</SelectItem>
-                <SelectItem value="precio-asc">Menor precio</SelectItem>
-                <SelectItem value="precio-desc">Mayor precio</SelectItem>
-              </SelectContent>
-            </Select>
+            {/* Sort pills */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <ArrowDownUp className="size-3.5 text-bordo-800/40 hidden sm:block" />
+              {([
+                { key: "nuevos", label: "Más nuevos" },
+                { key: "precio-asc", label: "Menor precio" },
+                { key: "precio-desc", label: "Mayor precio" },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => {
+                    setOrden(opt.key);
+                    setPage(1);
+                  }}
+                  className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${
+                    orden === opt.key
+                      ? "border-bordo-800 bg-bordo-800 text-white shadow-sm"
+                      : "border-bordo-800/20 bg-bordo-800/5 text-bordo-800 hover:border-bordo-800/40"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </motion.div>
 
           {/* Category pills */}
@@ -750,7 +690,7 @@ export function TiendaClient({
               className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition-all ${
                 categoriaActiva === "todas"
                   ? "border-bordo-800 bg-bordo-800 text-white shadow-sm"
-                  : "border-bordo-800/20 bg-white text-foreground/70 hover:border-bordo-800/40 hover:text-foreground shadow-sm"
+                  : "border-bordo-800/20 bg-bordo-800/5 text-bordo-800 hover:border-bordo-800/40 shadow-sm"
               }`}
             >
               Todas
@@ -765,7 +705,7 @@ export function TiendaClient({
                 className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition-all ${
                   categoriaActiva === cat.slug
                     ? "border-bordo-800 bg-bordo-800 text-white shadow-sm"
-                    : "border-bordo-800/20 bg-white text-foreground/70 hover:border-bordo-800/40 hover:text-foreground shadow-sm"
+                    : "border-bordo-800/20 bg-bordo-800/5 text-bordo-800 hover:border-bordo-800/40 shadow-sm"
                 }`}
               >
                 {cat.nombre}
@@ -778,7 +718,7 @@ export function TiendaClient({
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
-            className="mb-4 text-sm text-muted-foreground"
+            className="mb-4 text-sm text-bordo-800/60"
           >
             {productosFiltrados.length} producto
             {productosFiltrados.length !== 1 ? "s" : ""}
@@ -787,10 +727,10 @@ export function TiendaClient({
 
           {/* Product grid */}
           {loading ? (
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-[2px] md:gap-4 md:grid-cols-3 lg:grid-cols-4">
               {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} className="space-y-3">
-                  <Skeleton className="aspect-[4/5] w-full rounded-xl" />
+                  <Skeleton className="aspect-[4/5] w-full" />
                   <Skeleton className="h-4 w-3/4" />
                   <Skeleton className="h-4 w-1/2" />
                 </div>
@@ -800,7 +740,7 @@ export function TiendaClient({
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="flex flex-col items-center justify-center gap-3 py-20 text-muted-foreground"
+              className="flex flex-col items-center justify-center gap-3 py-20 text-bordo-800/40"
             >
               <ShoppingBag className="size-16 opacity-20" />
               <p className="text-lg font-medium">
@@ -813,36 +753,34 @@ export function TiendaClient({
           ) : (
             <>
               <motion.div
+                key={`${categoriaActiva}-${orden}-${search}`}
                 variants={staggerContainer}
                 initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true, margin: "-40px" }}
-                className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4"
+                animate="visible"
+                className="grid grid-cols-2 gap-[2px] md:gap-4 md:grid-cols-3 lg:grid-cols-4"
               >
-                <AnimatePresence mode="popLayout">
-                  {productosPagina.map((producto) => {
-                    const imagen =
-                      producto.producto_imagenes?.find(
-                        (i) => i.es_principal
-                      ) ?? producto.producto_imagenes?.[0];
-                    return (
-                      <ProductCard
-                        key={producto.id}
-                        id={producto.id}
-                        nombre={producto.nombre}
-                        slug={producto.slug}
-                        precio={producto.precio}
-                        precioSocio={producto.precio_socio}
-                        imagenUrl={imagen?.url}
-                        imagenFocalPoint={imagen?.focal_point}
-                        stock={producto.stock_actual}
-                        destacado={producto.destacado}
-                        categoria={producto.categorias_producto?.nombre}
-                        onAddToCart={() => handleAddToCart(producto)}
-                      />
-                    );
-                  })}
-                </AnimatePresence>
+                {productosPagina.map((producto) => {
+                  const imagen =
+                    producto.producto_imagenes?.find(
+                      (i) => i.es_principal
+                    ) ?? producto.producto_imagenes?.[0];
+                  return (
+                    <ProductCard
+                      key={producto.id}
+                      id={producto.id}
+                      nombre={producto.nombre}
+                      slug={producto.slug}
+                      precio={producto.precio}
+                      precioSocio={producto.precio_socio}
+                      imagenUrl={imagen?.url}
+                      imagenFocalPoint={imagen?.focal_point}
+                      stock={producto.stock_actual}
+                      destacado={producto.destacado}
+                      categoria={producto.categorias_producto?.nombre}
+                      onAddToCart={() => handleAddToCart(producto)}
+                    />
+                  );
+                })}
               </motion.div>
 
               {/* Load more */}
@@ -857,6 +795,7 @@ export function TiendaClient({
                     variant="outline"
                     size="lg"
                     onClick={() => setPage((p) => p + 1)}
+                    className="border-bordo-800/20 text-bordo-800 hover:bg-bordo-800 hover:text-white"
                   >
                     Cargar más productos
                     <ChevronDown className="ml-1 size-4" />
