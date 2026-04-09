@@ -31,8 +31,6 @@ const registroSchema = z
     email: z.email("Ingresá un email válido"),
     password: z.string().min(8, "Mínimo 8 caracteres"),
     confirmPassword: z.string(),
-    telefono: z.string().optional(),
-    cedula: z.string().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Las contraseñas no coinciden",
@@ -68,8 +66,6 @@ export default function RegistroPage() {
           data: {
             nombre: data.nombre,
             apellido: data.apellido,
-            telefono: data.telefono || null,
-            cedula: data.cedula || null,
           },
         },
       });
@@ -177,43 +173,6 @@ export default function RegistroPage() {
                     {errors.email.message}
                   </p>
                 )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="telefono">
-                    Teléfono{" "}
-                    <span className="text-muted-foreground font-normal">
-                      (opcional)
-                    </span>
-                  </Label>
-                  <Input
-                    id="telefono"
-                    type="tel"
-                    placeholder="099 123 456"
-                    autoComplete="tel"
-                    className="focus-visible:ring-bordo-700/30 focus-visible:border-bordo-300"
-                    {...register("telefono")}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="cedula">
-                    Cédula{" "}
-                    <span className="text-muted-foreground font-normal">
-                      (opcional)
-                    </span>
-                  </Label>
-                  <Input
-                    id="cedula"
-                    placeholder="1.234.567-8"
-                    className="focus-visible:ring-bordo-700/30 focus-visible:border-bordo-300"
-                    {...register("cedula")}
-                  />
-                  <p className="text-[10px] text-muted-foreground">
-                    Si sos socio, ingresá tu cédula para vincular tu cuenta automáticamente
-                  </p>
-                </div>
               </div>
 
               <div className="space-y-2">
