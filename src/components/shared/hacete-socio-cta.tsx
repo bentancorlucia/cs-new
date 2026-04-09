@@ -33,7 +33,7 @@ export function HaceteSocioCTA() {
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
                 transition={springBouncy}
-                className="inline-flex items-center gap-2 rounded-full bg-bordo-800 px-7 py-3.5 font-heading text-xs uppercase tracking-editorial text-white hover:bg-bordo-900 transition-colors"
+                className="inline-flex items-center justify-center gap-2 bg-bordo-800 px-6 py-3 font-heading text-[11px] uppercase tracking-editorial text-white hover:bg-bordo-900 transition-colors"
               >
                 Quiero ser socio
                 <ArrowRight className="size-4" />
@@ -44,7 +44,7 @@ export function HaceteSocioCTA() {
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
                 transition={springBouncy}
-                className="inline-flex items-center rounded-full border border-bordo-800 px-7 py-3.5 font-heading text-xs uppercase tracking-editorial text-bordo-800 hover:bg-bordo-800 hover:text-white transition-colors"
+                className="inline-flex items-center border border-bordo-800/30 px-6 py-3 font-heading text-[11px] uppercase tracking-editorial text-bordo-800 hover:bg-bordo-800 hover:text-white transition-colors"
               >
                 Ver beneficios
               </motion.span>

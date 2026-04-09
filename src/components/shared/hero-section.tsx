@@ -127,7 +127,7 @@ export function HeroSection({
                       whileHover={{ scale: 1.03 }}
                       whileTap={{ scale: 0.97 }}
                       transition={springBouncy}
-                      className="inline-flex items-center rounded-full bg-bordo-800 px-6 py-3 font-heading text-xs uppercase tracking-editorial text-white hover:bg-bordo-900 transition-colors"
+                      className="inline-flex items-center justify-center bg-bordo-800 px-6 py-3 font-heading text-[11px] uppercase tracking-editorial text-white hover:bg-bordo-900 transition-colors"
                     >
                       {cta.label}
                     </motion.span>
@@ -138,7 +138,7 @@ export function HeroSection({
                         whileHover={{ scale: 1.03 }}
                         whileTap={{ scale: 0.97 }}
                         transition={springBouncy}
-                        className="inline-flex items-center rounded-full border border-bordo-800 px-6 py-3 font-heading text-xs uppercase tracking-editorial text-bordo-800 hover:bg-bordo-800 hover:text-white transition-colors"
+                        className="inline-flex items-center border border-bordo-800/30 px-6 py-3 font-heading text-[11px] uppercase tracking-editorial text-bordo-800 hover:bg-bordo-800 hover:text-white transition-colors"
                       >
                         {secondaryCta.label}
                       </motion.span>
@@ -249,7 +249,7 @@ export function HeroSection({
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
                 transition={springBouncy}
-                className="inline-flex items-center rounded-full bg-dorado-300 px-7 py-3.5 font-heading text-xs uppercase tracking-editorial text-bordo-950 hover:bg-dorado-200 transition-colors"
+                className="inline-flex items-center justify-center bg-dorado-300 px-6 py-3 font-heading text-[11px] uppercase tracking-editorial text-bordo-950 hover:bg-dorado-200 transition-colors"
               >
                 {cta.label}
               </motion.span>
@@ -260,7 +260,7 @@ export function HeroSection({
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
                   transition={springBouncy}
-                  className="inline-flex items-center rounded-full border border-white/30 px-7 py-3.5 font-heading text-xs uppercase tracking-editorial text-white hover:bg-white hover:text-bordo-950 transition-colors"
+                  className="inline-flex items-center border border-dorado-300/30 bg-bordo-900/30 px-6 py-3 font-heading text-[11px] uppercase tracking-editorial text-dorado-300 hover:bg-dorado-300/10 transition-colors backdrop-blur-sm"
                 >
                   {secondaryCta.label}
                 </motion.span>

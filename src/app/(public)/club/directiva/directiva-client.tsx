@@ -55,7 +55,7 @@ function PersonCard({
     <motion.div
       variants={fadeInUp}
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-      className="bg-white rounded-xl p-5 shadow-card hover:shadow-card-hover transition-shadow duration-300"
+      className="bg-white p-5 shadow-card hover:shadow-card-hover transition-shadow duration-300"
     >
       {cargo && (
         <span className="font-heading uppercase tracking-editorial text-[11px] text-bordo-800 block mb-1">

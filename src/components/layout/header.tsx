@@ -211,11 +211,16 @@ function MobileNav({
       <SheetContent
         side="left"
         showCloseButton={false}
-        className="w-full max-w-none sm:max-w-none bg-bordo-950 border-none p-0 overflow-y-auto"
+        className="w-full max-w-none sm:max-w-none border-none p-0 overflow-y-auto"
+        style={{
+          backgroundColor: "rgba(115, 13, 50, 0.85)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
+        }}
       >
         <SheetTitle className="sr-only">Menú de navegación</SheetTitle>
         {/* Close button */}
-        <div className="sticky top-0 z-10 flex justify-end p-4 bg-bordo-950">
+        <div className="sticky top-0 z-10 flex justify-end p-4">
           <button onClick={() => setOpen(false)} className="p-2 text-white/60 hover:text-white transition-colors">
             <X className="size-6" />
           </button>
