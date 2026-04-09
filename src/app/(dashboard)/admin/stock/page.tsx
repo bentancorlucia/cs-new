@@ -12,6 +12,7 @@ import {
   PackageX,
   BarChart3,
   Clock,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,15 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 
+interface VarianteStock {
+  id: number;
+  nombre: string;
+  sku: string | null;
+  stock_actual: number;
+  stock_reservado: number;
+  atributos: Record<string, string>;
+}
+
 interface ProductoStock {
   id: number;
   nombre: string;
@@ -49,6 +59,7 @@ interface ProductoStock {
   stock_minimo: number;
   stock_reservado: number;
   activo: boolean;
+  variantes: VarianteStock[];
 }
 
 interface Movimiento {
@@ -79,12 +90,22 @@ export default function AdminStockPage() {
   const [historialProduct, setHistorialProduct] = useState<ProductoStock | null>(null);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [loadingMov, setLoadingMov] = useState(false);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  function toggleExpand(productoId: number) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(productoId)) next.delete(productoId);
+      else next.add(productoId);
+      return next;
+    });
+  }
 
   const fetchProductos = useCallback(async () => {
     const supabase = createBrowserClient();
     let query = supabase
       .from("productos")
-      .select("id, nombre, sku, stock_actual, stock_minimo, activo")
+      .select("id, nombre, sku, stock_actual, stock_minimo, activo, producto_variantes(id, nombre, sku, stock_actual, atributos, activo)")
       .order("nombre");
 
     if (search) {
@@ -92,22 +113,43 @@ export default function AdminStockPage() {
     }
 
     const { data } = await query;
-    let result = (data as unknown as ProductoStock[]) || [];
 
-    // Obtener stock reservado (pedidos pendiente_verificacion)
+    // Obtener stock reservado por producto y variante (pedidos pendiente_verificacion)
     const { data: reservados } = await supabase
       .from("pedido_items")
-      .select("producto_id, cantidad, pedidos!inner(estado)")
+      .select("producto_id, variante_id, cantidad, pedidos!inner(estado)")
       .eq("pedidos.estado", "pendiente_verificacion");
 
     const reservadoMap: Record<number, number> = {};
+    const reservadoVarianteMap: Record<number, number> = {};
     if (reservados) {
       for (const item of reservados) {
         reservadoMap[item.producto_id] = (reservadoMap[item.producto_id] || 0) + item.cantidad;
+        if (item.variante_id) {
+          reservadoVarianteMap[item.variante_id] = (reservadoVarianteMap[item.variante_id] || 0) + item.cantidad;
+        }
       }
     }
 
-    result = result.map((p) => ({ ...p, stock_reservado: reservadoMap[p.id] || 0 }));
+    let result: ProductoStock[] = ((data as any[]) || []).map((p) => ({
+      id: p.id,
+      nombre: p.nombre,
+      sku: p.sku,
+      stock_actual: p.stock_actual,
+      stock_minimo: p.stock_minimo,
+      stock_reservado: reservadoMap[p.id] || 0,
+      activo: p.activo,
+      variantes: (p.producto_variantes || [])
+        .filter((v: any) => v.activo)
+        .map((v: any) => ({
+          id: v.id,
+          nombre: v.nombre,
+          sku: v.sku,
+          stock_actual: v.stock_actual,
+          stock_reservado: reservadoVarianteMap[v.id] || 0,
+          atributos: v.atributos || {},
+        })),
+    }));
 
     if (soloStockBajo) {
       result = result.filter((p) => p.stock_actual <= p.stock_minimo);
@@ -320,14 +362,14 @@ export default function AdminStockPage() {
         className="rounded-xl border border-linea bg-white overflow-hidden"
       >
         <div className="overflow-x-auto">
-          <Table>
+          <Table className="table-fixed">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="font-heading uppercase tracking-editorial text-xs min-w-[180px]">Producto</TableHead>
-                <TableHead className="font-heading uppercase tracking-editorial text-xs text-center">Stock</TableHead>
-                <TableHead className="font-heading uppercase tracking-editorial text-xs text-center hidden sm:table-cell">Mínimo</TableHead>
-                <TableHead className="font-heading uppercase tracking-editorial text-xs text-center hidden sm:table-cell">Estado</TableHead>
-                <TableHead className="font-heading uppercase tracking-editorial text-xs w-auto"></TableHead>
+                <TableHead className="font-heading uppercase tracking-editorial text-xs w-full">Producto</TableHead>
+                <TableHead className="font-heading uppercase tracking-editorial text-xs text-center w-[90px] shrink-0">Stock</TableHead>
+                <TableHead className="font-heading uppercase tracking-editorial text-xs text-center hidden sm:table-cell w-[90px] shrink-0">Mínimo</TableHead>
+                <TableHead className="font-heading uppercase tracking-editorial text-xs text-center hidden sm:table-cell w-[90px] shrink-0">Estado</TableHead>
+                <TableHead className="font-heading uppercase tracking-editorial text-xs w-[160px] shrink-0"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -349,42 +391,60 @@ export default function AdminStockPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                <AnimatePresence>
-                  {productos.map((prod) => {
+                  productos.flatMap((prod) => {
                     const bajo = prod.stock_actual <= prod.stock_minimo && prod.stock_actual > 0;
                     const agotado = prod.stock_actual === 0;
-                    return (
-                      <motion.tr
+                    const hasVariantes = prod.variantes.length > 0;
+                    const isExpanded = expanded.has(prod.id);
+                    const rows: React.ReactNode[] = [];
+                    rows.push(
+                      <TableRow
                         key={prod.id}
-                        variants={fadeInUp}
-                        initial="hidden"
-                        animate="visible"
-                        className="border-b border-linea last:border-0 transition-colors hover:bg-superficie/50"
+                        className={cn(
+                          hasVariantes && "cursor-pointer"
+                        )}
+                        onClick={hasVariantes ? () => toggleExpand(prod.id) : undefined}
                       >
                         <TableCell className="py-3">
-                          <div>
-                            <span className="font-body text-sm font-medium">{prod.nombre}</span>
-                            {prod.sku && (
-                              <p className="text-xs text-muted-foreground font-body">
-                                SKU: {prod.sku}
-                              </p>
+                          <div className="flex items-center gap-1.5">
+                            {hasVariantes && (
+                              <motion.span
+                                animate={{ rotate: isExpanded ? 90 : 0 }}
+                                transition={{ duration: 0.15 }}
+                                className="shrink-0"
+                              >
+                                <ChevronRight className="size-3.5 text-muted-foreground" />
+                              </motion.span>
                             )}
-                            {/* Mobile: show estado inline */}
-                            <div className="sm:hidden mt-1 flex items-center gap-2 flex-wrap">
-                              <span className="text-xs text-muted-foreground font-body">
-                                Mín: {prod.stock_minimo}
-                              </span>
-                              {prod.stock_reservado > 0 && (
-                                <span className="inline-flex items-center gap-0.5 text-[10px] text-orange-600 font-body">
-                                  <Clock className="size-2.5" />
-                                  {prod.stock_reservado} res.
-                                </span>
+                            <div>
+                              <span className="font-body text-sm font-medium">{prod.nombre}</span>
+                              {prod.sku && (
+                                <p className="text-xs text-muted-foreground font-body">
+                                  SKU: {prod.sku}
+                                </p>
                               )}
-                              {agotado ? (
-                                <Badge variant="destructive" className="text-[9px] py-0 h-4">Agotado</Badge>
-                              ) : bajo ? (
-                                <Badge className="bg-amber-100 text-amber-700 text-[9px] py-0 h-4">Bajo</Badge>
-                              ) : null}
+                              {hasVariantes && (
+                                <p className="text-[10px] text-muted-foreground font-body">
+                                  {prod.variantes.length} variante{prod.variantes.length > 1 ? "s" : ""}
+                                </p>
+                              )}
+                              {/* Mobile: show estado inline */}
+                              <div className="sm:hidden mt-1 flex items-center gap-2 flex-wrap">
+                                <span className="text-xs text-muted-foreground font-body">
+                                  Mín: {prod.stock_minimo}
+                                </span>
+                                {prod.stock_reservado > 0 && (
+                                  <span className="inline-flex items-center gap-0.5 text-[10px] text-orange-600 font-body">
+                                    <Clock className="size-2.5" />
+                                    {prod.stock_reservado} res.
+                                  </span>
+                                )}
+                                {agotado ? (
+                                  <Badge variant="destructive" className="text-[9px] py-0 h-4">Agotado</Badge>
+                                ) : bajo ? (
+                                  <Badge className="bg-amber-100 text-amber-700 text-[9px] py-0 h-4">Bajo</Badge>
+                                ) : null}
+                              </div>
                             </div>
                           </div>
                         </TableCell>
@@ -420,7 +480,7 @@ export default function AdminStockPage() {
                           )}
                         </TableCell>
                         <TableCell className="py-3">
-                          <div className="flex items-center gap-1 justify-end">
+                          <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
                             <Button
                               variant="outline"
                               size="xs"
@@ -443,10 +503,62 @@ export default function AdminStockPage() {
                             </Button>
                           </div>
                         </TableCell>
-                      </motion.tr>
+                      </TableRow>
                     );
-                  })}
-                </AnimatePresence>
+                    if (hasVariantes && isExpanded) {
+                      for (const v of prod.variantes) {
+                        const vAgotado = v.stock_actual === 0;
+                        const vDisponible = Math.max(0, v.stock_actual - v.stock_reservado);
+                        rows.push(
+                          <TableRow
+                            key={`v-${v.id}`}
+                            className="border-b border-linea/50 bg-superficie/30 hover:bg-superficie/50"
+                          >
+                            <TableCell className="py-2 pl-10">
+                              <div>
+                                <span className="font-body text-xs font-medium text-muted-foreground">
+                                  {v.nombre}
+                                </span>
+                                {v.sku && (
+                                  <span className="ml-2 text-[10px] text-muted-foreground/70 font-body">
+                                    {v.sku}
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center py-2">
+                              <div>
+                                <span
+                                  className={cn(
+                                    "font-display text-sm tabular-nums",
+                                    vAgotado && "text-destructive"
+                                  )}
+                                >
+                                  {v.stock_actual}
+                                </span>
+                                {v.stock_reservado > 0 && (
+                                  <p className="flex items-center justify-center gap-0.5 text-[10px] text-orange-600 font-body" title={`${v.stock_reservado} reserv. → ${vDisponible} disponible`}>
+                                    <Clock className="size-2" />
+                                    {v.stock_reservado} reserv.
+                                  </p>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="hidden sm:table-cell" />
+                            <TableCell className="text-center hidden sm:table-cell">
+                              {vAgotado ? (
+                                <Badge variant="destructive" className="text-[9px] py-0 h-4">Agotado</Badge>
+                              ) : vDisponible === 0 ? (
+                                <Badge className="bg-orange-100 text-orange-700 text-[9px] py-0 h-4">Reservado</Badge>
+                              ) : null}
+                            </TableCell>
+                            <TableCell />
+                          </TableRow>
+                        );
+                      }
+                    }
+                    return rows;
+                  })
               )}
             </TableBody>
           </Table>

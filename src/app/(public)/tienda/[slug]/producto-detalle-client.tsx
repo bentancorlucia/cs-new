@@ -74,12 +74,18 @@ interface RelacionadoSimple {
   producto_imagenes: { url: string; es_principal: boolean; focal_point: string }[];
 }
 
+interface StockReservado {
+  producto: number;
+  variantes: Record<number, number>;
+}
+
 interface Props {
   producto: Producto;
   relacionados: RelacionadoSimple[];
+  stockReservado: StockReservado;
 }
 
-export function ProductoDetalleClient({ producto, relacionados }: Props) {
+export function ProductoDetalleClient({ producto, relacionados, stockReservado }: Props) {
   const imagenes = [...producto.producto_imagenes].sort((a, b) => a.orden - b.orden);
   const variantes = producto.producto_variantes?.filter((v) => v.activo) ?? [];
   const tieneVariantes = variantes.length > 0;
@@ -167,6 +173,11 @@ export function ProductoDetalleClient({ producto, relacionados }: Props) {
     });
   }
 
+  function getStockDisponible(variante: ProductoVariante): number {
+    const reservado = stockReservado.variantes[variante.id] || 0;
+    return Math.max(0, variante.stock_actual - reservado);
+  }
+
   function getStockForAtributoValue(key: string, value: string): number {
     const match = variantes.find((v) => {
       if (v.atributos[key] !== value) return false;
@@ -174,11 +185,14 @@ export function ProductoDetalleClient({ producto, relacionados }: Props) {
         (k) => k === key || v.atributos[k] === seleccionAtributos[k]
       );
     });
-    return match?.stock_actual ?? 0;
+    if (!match) return 0;
+    return getStockDisponible(match);
   }
 
   const precioActual = varianteActual?.precio_override ?? producto.precio;
-  const stockActual = varianteActual?.stock_actual ?? producto.stock_actual;
+  const stockActual = varianteActual
+    ? getStockDisponible(varianteActual)
+    : Math.max(0, producto.stock_actual - stockReservado.producto);
   const agotado = stockActual <= 0;
 
   const tieneDescuento =

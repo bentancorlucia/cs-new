@@ -42,6 +42,26 @@ export default async function ProductoDetallePage({ params }: Props) {
   if (!rawProducto) notFound();
   const producto = rawProducto as any;
 
+  // Stock reservado (pedidos pendientes de verificación)
+  const { data: reservados } = await supabase
+    .from("pedido_items")
+    .select("producto_id, variante_id, cantidad, pedidos!inner(estado)")
+    .eq("producto_id", producto.id)
+    .eq("pedidos.estado", "pendiente_verificacion");
+
+  // Build reserved map: { productoTotal, variantes: { [varianteId]: cantidad } }
+  let stockReservadoProducto = 0;
+  const stockReservadoVariantes: Record<number, number> = {};
+  if (reservados) {
+    for (const item of reservados) {
+      stockReservadoProducto += item.cantidad;
+      if (item.variante_id) {
+        stockReservadoVariantes[item.variante_id] =
+          (stockReservadoVariantes[item.variante_id] || 0) + item.cantidad;
+      }
+    }
+  }
+
   // Productos relacionados (misma categoría)
   let relacionados: any[] = [];
   if (producto.categoria_id) {
@@ -59,6 +79,10 @@ export default async function ProductoDetallePage({ params }: Props) {
     <ProductoDetalleClient
       producto={producto}
       relacionados={relacionados}
+      stockReservado={{
+        producto: stockReservadoProducto,
+        variantes: stockReservadoVariantes,
+      }}
     />
   );
 }
