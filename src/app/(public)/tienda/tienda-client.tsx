@@ -259,15 +259,6 @@ export function TiendaClient({
           style={{ y: heroContentY, opacity: heroOpacity }}
           className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-12 md:pt-32 md:pb-16 text-left flex flex-col items-start justify-end md:justify-center"
         >
-          <motion.span
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
-            className="inline-block bg-dorado-300 text-bordo-950 font-heading text-[10px] uppercase font-extrabold px-2.5 py-1 tracking-editorial mb-3 md:hidden"
-          >
-            Tienda Oficial
-          </motion.span>
-
           <motion.h1
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -276,7 +267,7 @@ export function TiendaClient({
               delay: 0.1,
               ease: [0.16, 1, 0.3, 1],
             }}
-            className="font-display text-[clamp(2.5rem,10vw,7rem)] uppercase leading-[0.92] tracking-tight text-white max-w-5xl"
+            className="font-display text-[clamp(2.5rem,10vw,7rem)] uppercase leading-[0.92] tracking-[0.05em] text-white max-w-5xl"
           >
             Vestí los colores del <em>club</em>
           </motion.h1>

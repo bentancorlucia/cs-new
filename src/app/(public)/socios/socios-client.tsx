@@ -29,13 +29,6 @@ export function SociosClient() {
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
               className="group bg-white border border-bordo-800/10 relative flex flex-col"
             >
-              {/* Popular badge — store-style diagonal */}
-              <span
-                className="absolute -top-px -left-px z-10 bg-bordo-800 text-dorado-300 px-3 py-1 font-display text-[10px] uppercase tracking-widest border border-dorado-300/30"
-                style={{ clipPath: "polygon(0 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%)" }}
-              >
-                Popular
-              </span>
 
               <div className="p-6 sm:p-8 flex flex-col flex-1">
                 <div className="flex items-start gap-4 mb-6">
