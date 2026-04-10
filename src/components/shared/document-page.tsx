@@ -63,7 +63,7 @@ export function DocumentPageClient({
                     whileHover={{ scale: 1.03 }}
                     whileTap={{ scale: 0.97 }}
                     transition={springBouncy}
-                    className="inline-flex items-center gap-2 rounded-full border border-bordo-200 bg-white px-4 py-2.5 font-heading text-xs uppercase tracking-editorial text-bordo-800 hover:bg-bordo-50 transition-colors"
+                    className="inline-flex items-center gap-2 border border-bordo-200 bg-white px-4 py-2.5 font-heading text-xs uppercase tracking-editorial text-bordo-800 hover:bg-bordo-50 transition-colors"
                   >
                     <ExternalLink className="size-3.5" />
                     Abrir en nueva pestaña
@@ -74,7 +74,7 @@ export function DocumentPageClient({
                     whileHover={{ scale: 1.03 }}
                     whileTap={{ scale: 0.97 }}
                     transition={springBouncy}
-                    className="inline-flex items-center gap-2 rounded-full bg-bordo-800 px-4 py-2.5 font-heading text-xs uppercase tracking-editorial text-white hover:bg-bordo-900 transition-colors"
+                    className="inline-flex items-center gap-2 bg-bordo-800 px-4 py-2.5 font-heading text-xs uppercase tracking-editorial text-white hover:bg-bordo-900 transition-colors"
                   >
                     <Download className="size-3.5" />
                     Descargar PDF

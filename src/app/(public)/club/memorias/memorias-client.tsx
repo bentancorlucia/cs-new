@@ -8,7 +8,6 @@ import {
 import { motion } from "framer-motion";
 import {
   fadeInUp,
-  scaleIn,
   springBouncy,
   springSmooth,
   easeDramatic,
@@ -69,16 +68,26 @@ function FeaturedMemoria({ memoria }: { memoria: Memoria }) {
   return (
     <AnimateOnScroll variant="scaleIn">
       <motion.div
-        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-bordo-900 via-bordo-800 to-bordo-950 p-8 sm:p-10 lg:p-12 shadow-elevated noise-overlay"
+        className="relative overflow-hidden bg-bordo-800 p-8 sm:p-10 lg:p-12 noise-overlay"
         whileHover={{ y: -4 }}
         transition={springSmooth}
       >
-        {/* Decorative accent line */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-dorado-300 via-dorado-400 to-dorado-300" />
+        {/* Gold accent bar top */}
+        <div className="absolute top-0 left-0 right-0 h-[3px] bg-dorado-400" />
 
-        {/* Decorative circles */}
-        <div className="absolute -top-20 -right-20 size-64 rounded-full bg-dorado-300/5 blur-2xl" />
-        <div className="absolute -bottom-16 -left-16 size-48 rounded-full bg-bordo-700/30 blur-2xl" />
+        {/* Gradient orbs like tienda hero */}
+        <motion.div
+          className="absolute -bottom-[30%] -right-[15%] w-[50vw] h-[50vw] rounded-full blur-[120px] pointer-events-none"
+          style={{ backgroundColor: "#f7b643" }}
+          animate={{ scale: [1, 1.08, 1], opacity: [0.2, 0.35, 0.2] }}
+          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.div
+          className="absolute -top-[20%] -left-[10%] w-[40vw] h-[40vw] rounded-full blur-[120px] pointer-events-none"
+          style={{ backgroundColor: "#3a0417" }}
+          animate={{ scale: [1.1, 1, 1.1], opacity: [0.7, 0.9, 0.7] }}
+          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+        />
 
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
           <div className="flex-1">
@@ -87,7 +96,7 @@ function FeaturedMemoria({ memoria }: { memoria: Memoria }) {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="inline-flex items-center gap-2 rounded-full bg-dorado-300/15 px-3.5 py-1.5 mb-5"
+              className="inline-flex items-center gap-2 bg-dorado-300/15 px-3.5 py-1.5 mb-5"
             >
               <Star className="size-3.5 text-dorado-300 fill-dorado-300" />
               <span className="font-heading text-[11px] uppercase tracking-editorial text-dorado-300">
@@ -128,10 +137,10 @@ function FeaturedMemoria({ memoria }: { memoria: Memoria }) {
               <motion.a
                 href={memoria.pdfUrl}
                 download
-                whileHover={{ scale: 1.04 }}
-                whileTap={{ scale: 0.96 }}
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
                 transition={springBouncy}
-                className="inline-flex items-center gap-2 rounded-full bg-dorado-300 px-6 py-3 font-heading text-xs uppercase tracking-editorial text-bordo-950 hover:bg-dorado-200 transition-colors"
+                className="inline-flex items-center gap-2 bg-dorado-300 px-6 py-3 font-heading text-[11px] uppercase tracking-editorial text-bordo-950 hover:bg-dorado-200 transition-colors"
               >
                 <Download className="size-4" />
                 Descargar PDF
@@ -140,10 +149,10 @@ function FeaturedMemoria({ memoria }: { memoria: Memoria }) {
                 href={memoria.pdfUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                whileHover={{ scale: 1.04 }}
-                whileTap={{ scale: 0.96 }}
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
                 transition={springBouncy}
-                className="inline-flex items-center gap-2 rounded-full border border-white/20 px-6 py-3 font-heading text-xs uppercase tracking-editorial text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+                className="inline-flex items-center gap-2 border border-dorado-300/30 bg-bordo-900/30 px-6 py-3 font-heading text-[11px] uppercase tracking-editorial text-dorado-300 hover:bg-dorado-300/10 transition-colors backdrop-blur-sm"
               >
                 <ExternalLink className="size-4" />
                 Ver online
@@ -159,9 +168,9 @@ function FeaturedMemoria({ memoria }: { memoria: Memoria }) {
             transition={{ ...easeDramatic, delay: 0.4 }}
             className="hidden sm:flex items-center justify-center"
           >
-            <div className="relative size-32 lg:size-40 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 flex items-center justify-center">
+            <div className="relative size-32 lg:size-40 bg-white/5 backdrop-blur-sm border border-white/10 flex items-center justify-center">
               <FileText className="size-16 lg:size-20 text-dorado-300/40" />
-              <div className="absolute -top-2 -right-2 size-6 rounded-full bg-dorado-300 flex items-center justify-center">
+              <div className="absolute -top-2 -right-2 size-6 bg-dorado-300 flex items-center justify-center">
                 <Star className="size-3 text-bordo-950 fill-bordo-950" />
               </div>
             </div>
@@ -178,15 +187,15 @@ function MemoriaCard({ memoria }: { memoria: Memoria }) {
       variants={fadeInUp}
       whileHover={{ y: -3 }}
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-      className="group relative bg-white rounded-2xl overflow-hidden shadow-card hover:shadow-card-hover transition-shadow duration-300"
+      className="group relative bg-white overflow-hidden border border-bordo-800/5 hover:border-bordo-800/15 transition-all duration-300"
     >
-      {/* Top accent on hover */}
-      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-bordo-800 to-dorado-400 scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left z-10" />
+      {/* Gold accent bar on hover */}
+      <div className="absolute top-0 left-0 right-0 h-[2px] bg-dorado-400 scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left z-10" />
 
       <div className="p-6 sm:p-7">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1">
-            <div className="size-10 rounded-xl bg-bordo-50 flex items-center justify-center mb-4 group-hover:bg-bordo-100 group-hover:scale-110 transition-all duration-300">
+            <div className="size-10 bg-bordo-50 flex items-center justify-center mb-4 group-hover:bg-bordo-100 group-hover:scale-110 transition-all duration-300">
               <FileText className="size-5 text-bordo-800" />
             </div>
 
@@ -194,22 +203,22 @@ function MemoriaCard({ memoria }: { memoria: Memoria }) {
               {memoria.year}
             </span>
 
-            <span className="mt-1 font-body text-xs text-muted-foreground flex items-center gap-1.5">
+            <span className="mt-1 font-heading text-[10px] uppercase tracking-editorial text-muted-foreground flex items-center gap-1.5">
               <Calendar className="size-3" />
               Memoria anual
             </span>
           </div>
         </div>
 
-        <div className="mt-5 pt-4 border-t border-gray-100 flex items-center gap-3">
+        <div className="mt-5 pt-4 border-t border-bordo-800/5 flex items-center gap-3">
           <motion.a
             href={memoria.pdfUrl}
             target="_blank"
             rel="noopener noreferrer"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
             transition={springBouncy}
-            className="inline-flex items-center gap-1.5 rounded-full bg-bordo-800 px-4 py-2 font-heading text-[11px] uppercase tracking-editorial text-white hover:bg-bordo-900 transition-colors"
+            className="inline-flex items-center gap-1.5 bg-bordo-800 px-4 py-2 font-heading text-[11px] uppercase tracking-editorial text-white hover:bg-bordo-900 transition-colors"
           >
             <ExternalLink className="size-3.5" />
             Ver PDF
@@ -217,10 +226,10 @@ function MemoriaCard({ memoria }: { memoria: Memoria }) {
           <motion.a
             href={memoria.pdfUrl}
             download
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
             transition={springBouncy}
-            className="inline-flex items-center gap-1.5 rounded-full border border-bordo-200 px-4 py-2 font-heading text-[11px] uppercase tracking-editorial text-bordo-800 hover:bg-bordo-50 transition-colors"
+            className="inline-flex items-center gap-1.5 border border-bordo-200 px-4 py-2 font-heading text-[11px] uppercase tracking-editorial text-bordo-800 hover:bg-bordo-50 transition-colors"
           >
             <Download className="size-3.5" />
             Descargar
@@ -244,24 +253,28 @@ export function MemoriasClient() {
         variant="full"
       />
 
+      {/* Gold accent bar — matching tienda marquee bars */}
+      <div className="h-[3px] bg-dorado-400" />
+
       <section className="py-16 sm:py-24 bg-fondo">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           {/* Featured — most recent */}
           <FeaturedMemoria memoria={featured} />
 
           {/* Section title */}
           <AnimateOnScroll variant="fadeInUp" className="mt-16 sm:mt-20 mb-8 sm:mb-10">
-            <div className="flex items-center gap-4">
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-bordo-200 to-transparent" />
-              <h2 className="font-heading text-xs uppercase tracking-editorial text-muted-foreground">
-                Memorias anteriores
+            <div className="flex items-end justify-between">
+              <h2 className="font-display text-title-1 sm:text-display uppercase tracking-tightest text-bordo-950">
+                Anteriores
               </h2>
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-bordo-200 to-transparent" />
+              <span className="font-heading text-[10px] uppercase tracking-editorial text-muted-foreground">
+                {rest.length} memorias
+              </span>
             </div>
           </AnimateOnScroll>
 
           {/* Grid of remaining years */}
-          <AnimateStaggerGroup className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+          <AnimateStaggerGroup className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-[2px] sm:gap-4">
             {rest.map((memoria) => (
               <MemoriaCard key={memoria.year} memoria={memoria} />
             ))}
