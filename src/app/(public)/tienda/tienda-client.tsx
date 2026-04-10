@@ -396,7 +396,21 @@ export function TiendaClient({
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-[2px] md:gap-4 auto-rows-[180px] sm:auto-rows-[300px] md:auto-rows-[400px]">
-              {categorias.map((cat, idx) => {
+              {(() => {
+                // Sort categories so the large one comes first for proper mosaic layout
+                const maxCount = Math.max(
+                  ...categorias.map(
+                    (c) => productos.filter((p) => p.categorias_producto?.slug === c.slug).length
+                  )
+                );
+                const largeIdx = categorias.findIndex((c) =>
+                  productos.filter((p) => p.categorias_producto?.slug === c.slug).length === maxCount && maxCount > 0
+                );
+                const sorted = largeIdx > 0
+                  ? [categorias[largeIdx], ...categorias.filter((_, i) => i !== largeIdx)]
+                  : [...categorias];
+
+                return sorted.map((cat, idx) => {
                 const catProducts = productos.filter(
                   (p) => p.categorias_producto?.slug === cat.slug
                 );
@@ -411,16 +425,7 @@ export function TiendaClient({
                   return null;
                 })();
 
-                // Category with most products gets large card
-                const maxCount = Math.max(
-                  ...categorias.map(
-                    (c) => productos.filter((p) => p.categorias_producto?.slug === c.slug).length
-                  )
-                );
-                const isLarge = count === maxCount && count > 0 &&
-                  idx === categorias.findIndex((c) =>
-                    productos.filter((p) => p.categorias_producto?.slug === c.slug).length === maxCount
-                  );
+                const isLarge = count === maxCount && count > 0 && idx === 0;
 
                 return (
                   <motion.button
@@ -500,7 +505,8 @@ export function TiendaClient({
                     </div>
                   </motion.button>
                 );
-              })}
+              });
+              })()}
 
               {/* "Ver todo" card — hidden on mobile */}
               <motion.button
