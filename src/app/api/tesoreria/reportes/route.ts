@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       case "estado-resultados": {
         const { data: movimientos } = await supabase
           .from("movimientos_financieros")
-          .select("tipo, monto, categoria:categorias_financieras(id, nombre, tipo, color, padre_id)")
+          .select("tipo, monto, categoria:categorias_financieras!categoria_id(id, nombre, tipo, color, padre_id)")
           .gte("fecha", desde)
           .lte("fecha", hasta)
           .order("fecha");
@@ -169,13 +169,13 @@ export async function GET(request: NextRequest) {
       case "presupuesto-real": {
         const { data: presupuestos } = await supabase
           .from("presupuestos")
-          .select("*, categoria:categorias_financieras(id, nombre, tipo, color)")
+          .select("*, categoria:categorias_financieras!categoria_id(id, nombre, tipo, color)")
           .eq("anio", anio)
           .eq("mes", mes);
 
         const { data: movimientos } = await supabase
           .from("movimientos_financieros")
-          .select("monto, categoria:categorias_financieras(id, nombre, tipo)")
+          .select("monto, categoria:categorias_financieras!categoria_id(id, nombre, tipo)")
           .gte("fecha", desde)
           .lte("fecha", hasta);
 

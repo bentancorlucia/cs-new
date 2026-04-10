@@ -1140,6 +1140,7 @@ export interface Database {
           descripcion: string | null;
           color: string | null;
           activa: boolean;
+          modulo: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1155,6 +1156,7 @@ export interface Database {
           descripcion?: string | null;
           color?: string | null;
           activa?: boolean;
+          modulo?: string | null;
         };
         Update: {
           nombre?: string;
@@ -1167,6 +1169,7 @@ export interface Database {
           descripcion?: string | null;
           color?: string | null;
           activa?: boolean;
+          modulo?: string | null;
         };
         Relationships: [];
       };

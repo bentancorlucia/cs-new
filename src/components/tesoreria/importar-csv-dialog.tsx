@@ -215,7 +215,7 @@ export function ImportarCSVDialog({
         content = await file.text();
       }
 
-      const parsed = parsearExtracto(content, file.name, "generico");
+      const parsed = await parsearExtracto(content, file.name, "generico");
 
       if (parsed.length === 0) {
         toast.error(

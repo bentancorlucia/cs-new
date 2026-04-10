@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
       // Totales por tipo
       const { data: movimientos } = await supabase
         .from("movimientos_financieros")
-        .select("tipo, monto, categoria:categorias_financieras(id, nombre, tipo)")
+        .select("tipo, monto, categoria:categorias_financieras!categoria_id(id, nombre, tipo)")
         .gte("fecha", desde)
         .lte("fecha", hasta);
 
@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
 
     const { data: movimientos } = await supabase
       .from("movimientos_financieros")
-      .select("tipo, monto, categoria:categorias_financieras(id, nombre)")
+      .select("tipo, monto, categoria:categorias_financieras!categoria_id(id, nombre)")
       .gte("fecha", desde)
       .lte("fecha", hasta);
 

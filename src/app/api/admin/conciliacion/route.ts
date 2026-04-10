@@ -7,17 +7,29 @@ import {
   type MovimientoBanco,
   type MovimientoSistema,
 } from "@/lib/tesoreria/parsear-extracto";
+import { getCuentasTienda } from "@/lib/tienda/cuentas";
 
-const TESORERIA_ROLES = ["super_admin", "tesorero"];
+const TIENDA_ROLES = ["super_admin", "tienda"];
 
-/** GET — Lista de conciliaciones o detalle de una */
+/** Helper — obtener la cuenta bancaria de tienda (para conciliación) */
+async function getCuentaBancariaTienda(supabase: any) {
+  const cuentas = await getCuentasTienda(supabase);
+  const bancaria = cuentas.find((c: any) => c.tipo === "bancaria");
+  if (!bancaria) {
+    throw new Error("No se encontró cuenta bancaria de tienda configurada. Contacte al administrador.");
+  }
+  return bancaria;
+}
+
+/** GET — Lista de conciliaciones de la tienda o detalle de una */
 export async function GET(request: NextRequest) {
   try {
-    await requireRole(TESORERIA_ROLES);
+    await requireRole(TIENDA_ROLES);
     const supabase = await createServerClient();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
-    const cuentaId = searchParams.get("cuenta_id");
+
+    const cuenta = await getCuentaBancariaTienda(supabase);
 
     if (id) {
       // Detalle de conciliación con sus items
@@ -25,6 +37,7 @@ export async function GET(request: NextRequest) {
         .from("conciliaciones")
         .select("*")
         .eq("id", parseInt(id))
+        .eq("cuenta_id", cuenta.id)
         .single();
 
       if (error) throw error;
@@ -40,20 +53,26 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ data: { ...conciliacion, items } });
     }
 
-    // Lista de conciliaciones
-    let query = supabase
+    // Lista de conciliaciones filtrada por cuenta tienda
+    const { data, error } = await supabase
       .from("conciliaciones")
       .select("*, cuenta:cuentas_financieras(nombre, moneda)")
+      .eq("cuenta_id", cuenta.id)
       .order("created_at", { ascending: false });
 
-    if (cuentaId) {
-      query = query.eq("cuenta_id", parseInt(cuentaId));
-    }
-
-    const { data, error } = await query;
     if (error) throw error;
 
-    return NextResponse.json({ data });
+    return NextResponse.json({
+      data,
+      cuenta: {
+        id: cuenta.id,
+        nombre: cuenta.nombre,
+        moneda: cuenta.moneda,
+        saldo_actual: cuenta.saldo_actual,
+        banco: cuenta.banco,
+        numero_cuenta: cuenta.numero_cuenta,
+      },
+    });
   } catch (error: any) {
     if (error.message === "No autorizado") {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
@@ -65,32 +84,26 @@ export async function GET(request: NextRequest) {
 /** POST — Crear conciliación y procesar archivo de extracto */
 export async function POST(request: NextRequest) {
   try {
-    await requireRole(TESORERIA_ROLES);
+    await requireRole(TIENDA_ROLES);
     const supabase = await createServerClient();
 
+    const cuenta = await getCuentaBancariaTienda(supabase);
+    const cuentaId = cuenta.id;
+
     const formData = await request.formData();
-    const cuentaId = parseInt(formData.get("cuenta_id") as string);
     const periodoDesde = formData.get("periodo_desde") as string;
     const periodoHasta = formData.get("periodo_hasta") as string;
     const saldoBanco = parseFloat(formData.get("saldo_banco") as string);
     const formato = formData.get("formato") as string;
     const file = formData.get("archivo") as File | null;
 
-    if (!cuentaId || !periodoDesde || !periodoHasta || isNaN(saldoBanco)) {
+    if (!periodoDesde || !periodoHasta || isNaN(saldoBanco)) {
       return NextResponse.json(
         { error: "Faltan datos requeridos" },
         { status: 400 }
       );
     }
 
-    // Obtener saldo del sistema para la cuenta
-    const { data: cuenta, error: cuentaError } = await supabase
-      .from("cuentas_financieras")
-      .select("saldo_actual")
-      .eq("id", cuentaId)
-      .single();
-
-    if (cuentaError) throw cuentaError;
     const saldoSistema = cuenta.saldo_actual;
 
     // Subir archivo al storage si existe
@@ -249,13 +262,15 @@ export async function POST(request: NextRequest) {
 /** PUT — Actualizar item de conciliación o finalizar conciliación */
 export async function PUT(request: NextRequest) {
   try {
-    await requireRole(TESORERIA_ROLES);
+    await requireRole(TIENDA_ROLES);
     const supabase = await createServerClient();
+
+    // Verificar que la conciliación pertenece a la cuenta tienda
+    const cuenta = await getCuentaBancariaTienda(supabase);
     const body = await request.json();
     const { action } = body;
 
     if (action === "confirmar_item") {
-      // Confirmar un match o cambiar estado de un item
       const { item_id, estado, movimiento_id } = body;
 
       const updateData: any = { estado };
@@ -270,7 +285,6 @@ export async function PUT(request: NextRequest) {
 
       if (error) throw error;
 
-      // Si se confirmó un match, marcar el movimiento como conciliado
       if (estado === "matcheado" && movimiento_id) {
         await supabase
           .from("movimientos_financieros")
@@ -282,14 +296,24 @@ export async function PUT(request: NextRequest) {
     }
 
     if (action === "finalizar") {
-      // Finalizar conciliación
       const { conciliacion_id } = body;
+
+      // Verificar que la conciliación pertenece a la cuenta tienda
+      const { data: conc, error: concCheckError } = await supabase
+        .from("conciliaciones")
+        .select("cuenta_id")
+        .eq("id", conciliacion_id)
+        .single();
+
+      if (concCheckError) throw concCheckError;
+      if (conc.cuenta_id !== cuenta.id) {
+        return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+      }
 
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
-      // Contar items por estado
       const { data: items, error: itemsError } = await supabase
         .from("conciliacion_items")
         .select("estado")
@@ -301,7 +325,6 @@ export async function PUT(request: NextRequest) {
       const pendBanco = items?.filter((i) => i.estado === "pendiente_banco").length || 0;
       const pendSistema = items?.filter((i) => i.estado === "pendiente_sistema").length || 0;
 
-      // Marcar todos los movimientos matcheados como conciliados
       const { data: matchedItems } = await supabase
         .from("conciliacion_items")
         .select("movimiento_id")
@@ -322,7 +345,6 @@ export async function PUT(request: NextRequest) {
         }
       }
 
-      // Actualizar conciliación
       const { error: updateError } = await supabase
         .from("conciliaciones")
         .update({

@@ -2,7 +2,7 @@ import Papa from "papaparse";
 import * as XLSX from "xlsx";
 
 // ============================================
-// Parseo de extractos bancarios (CSV / Excel)
+// Parseo de extractos bancarios (CSV / Excel / PDF)
 // y matching automático con movimientos del sistema
 // ============================================
 
@@ -59,9 +59,10 @@ const FORMATOS: Record<FormatoBanco, ColumnaConfig> = {
   },
   itau: {
     fecha: "Fecha",
-    descripcion: "Descripción",
-    monto: "Importe",
-    referencia: "Nro. Comprobante",
+    descripcion: "Concepto",
+    egreso: "Débitos",
+    ingreso: "Créditos",
+    referencia: "Referencia",
     formatoFecha: "DD/MM/YYYY",
   },
   santander: {
@@ -219,17 +220,145 @@ function parsearExcel(buffer: ArrayBuffer, formato: FormatoBanco): MovimientoBan
   return parsearCSVConFormato(csv, formato);
 }
 
+// --- Parseo PDF ---
+
+// Meses abreviados en extractos Itaú: 05MAR, 16MAR, etc.
+const MESES_ABBR: Record<string, string> = {
+  ENE: "01", JAN: "01",
+  FEB: "02",
+  MAR: "03",
+  ABR: "04", APR: "04",
+  MAY: "05",
+  JUN: "06",
+  JUL: "07",
+  AGO: "08", AUG: "08",
+  SEP: "09", SET: "09",
+  OCT: "10",
+  NOV: "11",
+  DIC: "12", DEC: "12",
+};
+
+// Regex: línea que empieza con DDMMM (ej: 05MAR, 16MAR)
+const REGEX_DDMMM = /^(\d{2})([A-Z]{3})\s+/;
+
+// Regex para extraer el año del header: 31MAR2026
+const REGEX_FECHA_CIERRE = /(\d{2}[A-Z]{3})(\d{4})/;
+
+// Regex para montos en formato uruguayo al final de línea: 1.309,00 o 31,11-
+const REGEX_MONTO_PDF = /[\d.]+,\d{2}-?/g;
+
+// Conceptos que indican crédito (ingreso)
+const CONCEPTOS_CREDITO = /^(CRE\.|REDIVA|TRASPASO DE|ABONO|DEP[OÓ]S|TRANSFERENCIA REC)/i;
+
+/**
+ * Parsear extracto bancario PDF de Itaú Uruguay.
+ *
+ * Formato texto extraído (pdf-parse):
+ * 05MAR DEB. CAMBIOS TOLD28911582 322,00 104,82
+ * 05MAR CRE. CAMBIOS TOLC19430523 200,00 304,82
+ * 06MAR COMPRA LAS DELICIAS 280,00 29,41
+ * 20MAR COMPRA LA CAMPEONA 1.309,00 1.011,16-
+ *
+ * Cada línea: DDMMM concepto+referencia monto saldo
+ * - El último número es siempre el saldo (se ignora)
+ * - El penúltimo es el monto del movimiento
+ * - Saldos negativos usan "-" al final: 31,11-
+ * - El tipo (ingreso/egreso) se determina por el concepto
+ */
+async function parsearPDF(
+  buffer: ArrayBuffer,
+  _formato: FormatoBanco
+): Promise<MovimientoBanco[]> {
+  const { PDFParse } = await import("pdf-parse");
+  const parser = new PDFParse({ data: new Uint8Array(buffer) });
+  const result = await parser.getText();
+  await parser.destroy();
+  const text: string = result.text;
+  const lines = text.split("\n").map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+
+  // Extraer el año del encabezado (ej: "31MAR2026")
+  let year = new Date().getFullYear().toString();
+  for (const line of lines) {
+    const yearMatch = line.match(REGEX_FECHA_CIERRE);
+    if (yearMatch) {
+      year = yearMatch[2];
+      break;
+    }
+  }
+
+  const movimientos: MovimientoBanco[] = [];
+
+  for (const line of lines) {
+    // Debe empezar con DDMMM (ej: 05MAR)
+    const fechaMatch = line.match(REGEX_DDMMM);
+    if (!fechaMatch) continue;
+
+    const dia = fechaMatch[1];
+    const mesAbr = fechaMatch[2].toUpperCase();
+    const mes = MESES_ABBR[mesAbr];
+    if (!mes) continue;
+
+    const fecha = `${year}-${mes}-${dia}`;
+
+    // Resto de la línea después de la fecha
+    const resto = line.substring(fechaMatch[0].length);
+
+    // Ignorar líneas de saldo apertura/cierre
+    if (/^SDO\.|^SIN MOVIMIENTO/i.test(resto)) continue;
+
+    // Extraer todos los montos (formato: 322,00 o 1.309,00 o 31,11-)
+    const montosRaw = resto.match(REGEX_MONTO_PDF);
+    if (!montosRaw || montosRaw.length < 2) continue; // necesitamos al menos monto + saldo
+
+    // Extraer descripción: todo antes del primer monto
+    const primerMontoIdx = resto.indexOf(montosRaw[0]);
+    const descripcion = resto.substring(0, primerMontoIdx).trim();
+
+    if (!descripcion) continue;
+
+    // Parsear montos: el último es saldo, el penúltimo es el monto del movimiento
+    const montos = montosRaw.map((m: string) => {
+      const esNegativo = m.endsWith("-");
+      const limpio = m.replace(/-$/, "");
+      const valor = parsearMonto(limpio);
+      return esNegativo ? -valor : valor;
+    });
+
+    // Monto = penúltimo, saldo = último
+    const monto = montos[montos.length - 2];
+
+    // Determinar tipo por el concepto
+    const esCredito = CONCEPTOS_CREDITO.test(descripcion);
+    const tipo: "ingreso" | "egreso" = esCredito ? "ingreso" : "egreso";
+
+    movimientos.push({
+      fecha,
+      descripcion,
+      monto: Math.abs(monto),
+      tipo,
+      referencia: undefined,
+    });
+  }
+
+  return movimientos.filter((m) => m.monto > 0);
+}
+
 // --- Función principal de parseo ---
 
-export function parsearExtracto(
+export async function parsearExtracto(
   fileContent: string | ArrayBuffer,
   fileName: string,
   formato: FormatoBanco
-): MovimientoBanco[] {
+): Promise<MovimientoBanco[]> {
+  const isPDF = fileName.endsWith(".pdf");
   const isExcel =
     fileName.endsWith(".xlsx") ||
     fileName.endsWith(".xls") ||
     fileName.endsWith(".xlsm");
+
+  if (isPDF && fileContent instanceof ArrayBuffer) {
+    return parsearPDF(fileContent, formato);
+  }
 
   if (isExcel && fileContent instanceof ArrayBuffer) {
     return parsearExcel(fileContent, formato);

@@ -18,6 +18,8 @@ import {
   CheckCircle2,
   Clock,
   Search,
+  Landmark,
+  HelpCircle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,17 +49,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { staggerContainer, fadeInUp, springSmooth } from "@/lib/motion";
-import { formatMonto, formatFecha, nombreMes } from "@/lib/tesoreria/format";
+import { formatMonto, formatFecha } from "@/lib/tesoreria/format";
 import { FORMATO_OPTIONS } from "@/lib/tesoreria/parsear-extracto";
 import { toast } from "sonner";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 
-interface CuentaFinanciera {
+interface CuentaTienda {
   id: number;
   nombre: string;
-  tipo: string;
   moneda: "UYU" | "USD";
   saldo_actual: number;
+  banco: string | null;
+  numero_cuenta: string | null;
 }
 
 interface Conciliacion {
@@ -95,11 +98,14 @@ interface ConciliacionItem {
   } | null;
 }
 
-export default function ConciliacionPage() {
-  useDocumentTitle("Conciliación");
-  const [cuentas, setCuentas] = useState<CuentaFinanciera[]>([]);
+const API_BASE = "/api/admin/conciliacion";
+
+export default function ConciliacionTiendaClient() {
+  useDocumentTitle("Conciliación - Tienda");
+  const [cuenta, setCuenta] = useState<CuentaTienda | null>(null);
   const [conciliaciones, setConciliaciones] = useState<Conciliacion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [noCuenta, setNoCuenta] = useState(false);
   const [showNueva, setShowNueva] = useState(false);
   const [processing, setProcessing] = useState(false);
 
@@ -108,7 +114,6 @@ export default function ConciliacionPage() {
   const [showDetalle, setShowDetalle] = useState(false);
 
   // Form nueva conciliación
-  const [cuentaId, setCuentaId] = useState("");
   const [periodoDesde, setPeriodoDesde] = useState("");
   const [periodoHasta, setPeriodoHasta] = useState("");
   const [saldoBanco, setSaldoBanco] = useState("");
@@ -120,17 +125,23 @@ export default function ConciliacionPage() {
   const [expandMatcheados, setExpandMatcheados] = useState(true);
   const [expandPendSistema, setExpandPendSistema] = useState(true);
   const [expandPendBanco, setExpandPendBanco] = useState(true);
+  const [showHelp, setShowHelp] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
-      const [cuentasRes, concRes] = await Promise.all([
-        fetch("/api/tesoreria/cuentas?activas=true"),
-        fetch("/api/tesoreria/conciliacion"),
-      ]);
-      const cuentasData = await cuentasRes.json();
-      const concData = await concRes.json();
-      setCuentas(cuentasData.data || []);
-      setConciliaciones(concData.data || []);
+      const res = await fetch(API_BASE);
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.error?.includes("No se encontró cuenta")) {
+          setNoCuenta(true);
+          return;
+        }
+        throw new Error(data.error);
+      }
+
+      setCuenta(data.cuenta || null);
+      setConciliaciones(data.data || []);
     } catch {
       toast.error("Error al cargar datos");
     } finally {
@@ -143,7 +154,7 @@ export default function ConciliacionPage() {
   }, [fetchData]);
 
   const handleNuevaConciliacion = async () => {
-    if (!cuentaId || !periodoDesde || !periodoHasta || !saldoBanco) {
+    if (!periodoDesde || !periodoHasta || !saldoBanco) {
       toast.error("Completá todos los campos requeridos");
       return;
     }
@@ -151,7 +162,6 @@ export default function ConciliacionPage() {
     setProcessing(true);
     try {
       const formData = new FormData();
-      formData.append("cuenta_id", cuentaId);
       formData.append("periodo_desde", periodoDesde);
       formData.append("periodo_hasta", periodoHasta);
       formData.append("saldo_banco", saldoBanco);
@@ -160,7 +170,7 @@ export default function ConciliacionPage() {
         formData.append("archivo", archivo);
       }
 
-      const res = await fetch("/api/tesoreria/conciliacion", {
+      const res = await fetch(API_BASE, {
         method: "POST",
         body: formData,
       });
@@ -187,12 +197,12 @@ export default function ConciliacionPage() {
 
   const loadDetalle = async (id: number) => {
     try {
-      const res = await fetch(`/api/tesoreria/conciliacion?id=${id}`);
+      const res = await fetch(`${API_BASE}?id=${id}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setDetalle(data.data);
       setShowDetalle(true);
-    } catch (err: any) {
+    } catch {
       toast.error("Error al cargar detalle");
     }
   };
@@ -212,7 +222,7 @@ export default function ConciliacionPage() {
         body.movimiento_id = movimientoId;
       }
 
-      const res = await fetch("/api/tesoreria/conciliacion", {
+      const res = await fetch(API_BASE, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -220,7 +230,6 @@ export default function ConciliacionPage() {
 
       if (!res.ok) throw new Error("Error al actualizar");
 
-      // Recargar detalle
       if (detalle) loadDetalle(detalle.id);
       toast.success(action === "confirmar" ? "Match confirmado" : "Item ignorado");
     } catch {
@@ -231,7 +240,7 @@ export default function ConciliacionPage() {
   const handleFinalizar = async () => {
     if (!detalle) return;
     try {
-      const res = await fetch("/api/tesoreria/conciliacion", {
+      const res = await fetch(API_BASE, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -252,7 +261,6 @@ export default function ConciliacionPage() {
   };
 
   const resetForm = () => {
-    setCuentaId("");
     setPeriodoDesde("");
     setPeriodoHasta("");
     setSaldoBanco("");
@@ -260,7 +268,7 @@ export default function ConciliacionPage() {
     setArchivo(null);
   };
 
-  const cuentaSeleccionada = cuentas.find((c) => c.id === parseInt(cuentaId));
+  const moneda = cuenta?.moneda || "UYU";
 
   if (loading) {
     return (
@@ -275,13 +283,35 @@ export default function ConciliacionPage() {
     );
   }
 
+  if (noCuenta) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="p-4 lg:p-8"
+      >
+        <Card>
+          <CardContent className="py-16 text-center">
+            <Landmark className="size-16 mx-auto text-muted-foreground/30 mb-4" />
+            <h2 className="text-lg font-semibold text-foreground mb-2">
+              Sin cuenta bancaria configurada
+            </h2>
+            <p className="text-muted-foreground max-w-md mx-auto">
+              No se encontró una cuenta financiera vinculada a la tienda.
+              Pedí al administrador que configure una cuenta con módulo &quot;tienda&quot; en Tesorería.
+            </p>
+          </CardContent>
+        </Card>
+      </motion.div>
+    );
+  }
+
   // Detalle view
   if (showDetalle && detalle) {
     const matcheados = detalle.items.filter((i) => i.estado === "matcheado");
     const pendSistema = detalle.items.filter((i) => i.estado === "pendiente_sistema");
     const pendBanco = detalle.items.filter((i) => i.estado === "pendiente_banco");
     const ignorados = detalle.items.filter((i) => i.estado === "ignorado");
-    const moneda = (detalle as any).cuenta?.moneda || "UYU";
 
     return (
       <motion.div
@@ -360,7 +390,7 @@ export default function ConciliacionPage() {
           ))}
         </motion.div>
 
-        {/* Sección: Matcheados automáticamente */}
+        {/* Sección: Matcheados */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
           <Card>
             <CardHeader
@@ -456,7 +486,7 @@ export default function ConciliacionPage() {
           </Card>
         </motion.div>
 
-        {/* Sección: Sin match en sistema (del banco sin par) */}
+        {/* Sección: Sin match en sistema */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
           <Card>
             <CardHeader
@@ -540,7 +570,7 @@ export default function ConciliacionPage() {
           </Card>
         </motion.div>
 
-        {/* Sección: Sin match en banco (del sistema sin par) */}
+        {/* Sección: Sin match en banco */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
           <Card>
             <CardHeader
@@ -656,24 +686,109 @@ export default function ConciliacionPage() {
       animate={{ opacity: 1, y: 0 }}
       className="p-4 lg:p-8 space-y-6"
     >
-      {/* Header */}
+      {/* Header con info de cuenta */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground">
             Conciliación Bancaria
           </h1>
           <p className="text-muted-foreground text-sm">
-            Verificá que los movimientos del sistema coincidan con los del banco
+            {cuenta?.nombre}
+            {cuenta?.banco && ` — ${cuenta.banco}`}
+            {cuenta?.numero_cuenta && ` (${cuenta.numero_cuenta})`}
           </p>
         </div>
-        <Button
-          onClick={() => setShowNueva(true)}
-          className="bg-bordo-800 hover:bg-bordo-900"
-        >
-          <Plus className="size-4 mr-2" />
-          Nueva conciliación
-        </Button>
+        <div className="flex items-center gap-3">
+          {cuenta && (
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground">Saldo sistema</p>
+              <p className="font-mono font-semibold text-bordo-800">
+                {formatMonto(cuenta.saldo_actual, cuenta.moneda)}
+              </p>
+            </div>
+          )}
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setShowHelp(!showHelp)}
+            className={showHelp ? "bg-bordo-50 border-bordo-200" : ""}
+          >
+            <HelpCircle className="size-4" />
+          </Button>
+          <Button
+            onClick={() => setShowNueva(true)}
+            className="bg-bordo-800 hover:bg-bordo-900"
+          >
+            <Plus className="size-4 mr-2" />
+            Nueva conciliación
+          </Button>
+        </div>
       </div>
+
+      {/* Instrucciones */}
+      <AnimatePresence>
+        {showHelp && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={springSmooth}
+          >
+            <Card className="border-bordo-200 bg-bordo-50/30">
+              <CardContent className="pt-5 pb-5">
+                <div className="space-y-4 text-sm text-foreground/80">
+                  <div>
+                    <h3 className="font-semibold text-foreground mb-1">
+                      ¿Cómo funciona la conciliación?
+                    </h3>
+                    <p>
+                      La conciliación bancaria verifica que los movimientos registrados en el sistema
+                      coincidan con los del extracto del banco. Cada vez que se verifica una transferencia
+                      de un pedido (online o POS), se registra automáticamente un movimiento financiero
+                      en esta cuenta.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-foreground">Para crear una conciliación:</h4>
+                      <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                        <li>Descargá el extracto bancario desde el homebanking (CSV o Excel)</li>
+                        <li>Hacé click en &quot;Nueva conciliación&quot;</li>
+                        <li>Seleccioná el período y el formato del banco</li>
+                        <li>Ingresá el saldo final según el extracto</li>
+                        <li>Subí el archivo y hacé click en &quot;Conciliar&quot;</li>
+                      </ol>
+                    </div>
+
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-foreground">El sistema automáticamente:</h4>
+                      <ul className="space-y-1 text-muted-foreground">
+                        <li className="flex items-start gap-2">
+                          <CheckCircle2 className="size-4 text-green-600 mt-0.5 shrink-0" />
+                          <span>Cruza los movimientos del banco con los del sistema por monto y fecha</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <AlertTriangle className="size-4 text-amber-500 mt-0.5 shrink-0" />
+                          <span>Identifica movimientos del banco que no están en el sistema</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Search className="size-4 text-blue-500 mt-0.5 shrink-0" />
+                          <span>Identifica movimientos del sistema que no están en el banco</span>
+                        </li>
+                      </ul>
+                      <p className="text-muted-foreground text-xs mt-2">
+                        Revisá los pendientes, ignorá los que no correspondan, y finalizá la conciliación
+                        para marcar todo como conciliado.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Lista de conciliaciones */}
       <motion.div
@@ -721,10 +836,11 @@ export default function ConciliacionPage() {
                       </div>
                       <div>
                         <p className="font-medium text-sm">
-                          {(conc as any).cuenta?.nombre || `Cuenta #${conc.cuenta_id}`}
+                          {formatFecha(conc.periodo_desde)} — {formatFecha(conc.periodo_hasta)}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {formatFecha(conc.periodo_desde)} — {formatFecha(conc.periodo_hasta)}
+                          {conc.estado === "completada" ? "Completada" : "En proceso"}
+                          {conc.completada_at && ` — ${formatFecha(conc.completada_at)}`}
                         </p>
                       </div>
                     </div>
@@ -738,7 +854,7 @@ export default function ConciliacionPage() {
                               : "text-amber-600"
                           }`}
                         >
-                          {formatMonto(conc.diferencia, (conc as any).cuenta?.moneda || "UYU", true)}
+                          {formatMonto(conc.diferencia, moneda as any, true)}
                         </p>
                       </div>
                       <div className="flex gap-1.5">
@@ -768,23 +884,18 @@ export default function ConciliacionPage() {
             <DialogTitle>Nueva conciliación bancaria</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div>
-              <Label>Cuenta</Label>
-              <Select value={cuentaId} onValueChange={(v) => setCuentaId(v || "")}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar cuenta..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {cuentas
-                    .filter((c) => c.tipo === "bancaria")
-                    .map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>
-                        {c.nombre} ({c.moneda})
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Info de cuenta (no editable) */}
+            {cuenta && (
+              <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                <Landmark className="size-5 text-bordo-800" />
+                <div>
+                  <p className="text-sm font-medium">{cuenta.nombre}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {cuenta.banco && `${cuenta.banco} — `}Saldo: {formatMonto(cuenta.saldo_actual, cuenta.moneda)}
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -814,11 +925,6 @@ export default function ConciliacionPage() {
                 value={saldoBanco}
                 onChange={(e) => setSaldoBanco(e.target.value)}
               />
-              {cuentaSeleccionada && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Saldo sistema: {formatMonto(cuentaSeleccionada.saldo_actual, cuentaSeleccionada.moneda)}
-                </p>
-              )}
             </div>
 
             <div>

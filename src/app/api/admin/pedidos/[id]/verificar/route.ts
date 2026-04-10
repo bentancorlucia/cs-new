@@ -245,6 +245,42 @@ export async function POST(
         console.error("Error al enviar email de confirmación:", emailError);
       }
 
+      // Register financial movement in tienda bank account
+      try {
+        const { data: cuentaTienda } = await db
+          .from("cuentas_financieras")
+          .select("id")
+          .eq("modulo", "tienda")
+          .single();
+
+        if (cuentaTienda) {
+          const categoriaSlug = pedido.numero_pedido?.startsWith("POS") ? "ventas-pos" : "ventas-online";
+          const { data: categoria } = await db
+            .from("categorias_financieras")
+            .select("id")
+            .eq("slug", categoriaSlug)
+            .single();
+
+          if (categoria) {
+            await db.from("movimientos_financieros").insert({
+              cuenta_id: cuentaTienda.id,
+              tipo: "ingreso",
+              categoria_id: categoria.id,
+              monto: pedido.total,
+              moneda: "UYU",
+              fecha: new Date().toISOString().split("T")[0],
+              descripcion: `Transferencia verificada — Pedido #${pedido.numero_pedido}`,
+              origen_tipo: "pedido",
+              origen_id: pedidoId,
+              referencia: `TRANSF-${pedido.numero_pedido}`,
+              conciliado: false,
+            });
+          }
+        }
+      } catch (movError) {
+        console.error("Error al registrar movimiento financiero:", movError);
+      }
+
       return NextResponse.json({ success: true, estado: "preparando" });
     } else {
       // RECHAZAR

@@ -148,6 +148,7 @@ export async function POST(request: NextRequest) {
           registrado_por: user?.id,
         });
       }
+
     }
 
     return NextResponse.json({ data: pedido });
