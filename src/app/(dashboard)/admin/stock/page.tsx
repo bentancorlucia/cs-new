@@ -83,6 +83,7 @@ export default function AdminStockPage() {
   const [soloStockBajo, setSoloStockBajo] = useState(false);
 
   const [ajusteProduct, setAjusteProduct] = useState<ProductoStock | null>(null);
+  const [ajusteVarianteId, setAjusteVarianteId] = useState<number | null>(null);
   const [ajusteCantidad, setAjusteCantidad] = useState("");
   const [ajusteMotivo, setAjusteMotivo] = useState("");
   const [saving, setSaving] = useState(false);
@@ -131,15 +132,8 @@ export default function AdminStockPage() {
       }
     }
 
-    let result: ProductoStock[] = ((data as any[]) || []).map((p) => ({
-      id: p.id,
-      nombre: p.nombre,
-      sku: p.sku,
-      stock_actual: p.stock_actual,
-      stock_minimo: p.stock_minimo,
-      stock_reservado: reservadoMap[p.id] || 0,
-      activo: p.activo,
-      variantes: (p.producto_variantes || [])
+    let result: ProductoStock[] = ((data as any[]) || []).map((p) => {
+      const variantes = (p.producto_variantes || [])
         .filter((v: any) => v.activo)
         .map((v: any) => ({
           id: v.id,
@@ -148,8 +142,22 @@ export default function AdminStockPage() {
           stock_actual: v.stock_actual,
           stock_reservado: reservadoVarianteMap[v.id] || 0,
           atributos: v.atributos || {},
-        })),
-    }));
+        }));
+      // Si tiene variantes, el stock del producto es la suma de variantes
+      const stockActual = variantes.length > 0
+        ? variantes.reduce((sum: number, v: any) => sum + v.stock_actual, 0)
+        : p.stock_actual;
+      return {
+        id: p.id,
+        nombre: p.nombre,
+        sku: p.sku,
+        stock_actual: stockActual,
+        stock_minimo: p.stock_minimo,
+        stock_reservado: reservadoMap[p.id] || 0,
+        activo: p.activo,
+        variantes,
+      };
+    });
 
     if (soloStockBajo) {
       result = result.filter((p) => p.stock_actual <= p.stock_minimo);
@@ -173,6 +181,11 @@ export default function AdminStockPage() {
       toast.error("Completá todos los campos");
       return;
     }
+    const hasVariantes = ajusteProduct.variantes.length > 0;
+    if (hasVariantes && !ajusteVarianteId) {
+      toast.error("Seleccioná una variante");
+      return;
+    }
     setSaving(true);
 
     const res = await fetch("/api/admin/stock/ajuste", {
@@ -180,6 +193,7 @@ export default function AdminStockPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         producto_id: ajusteProduct.id,
+        variante_id: ajusteVarianteId || null,
         cantidad: parseInt(ajusteCantidad),
         motivo: ajusteMotivo,
       }),
@@ -188,6 +202,7 @@ export default function AdminStockPage() {
     if (res.ok) {
       toast.success("Stock ajustado");
       setAjusteProduct(null);
+      setAjusteVarianteId(null);
       setAjusteCantidad("");
       setAjusteMotivo("");
       fetchProductos();
@@ -486,6 +501,7 @@ export default function AdminStockPage() {
                               size="xs"
                               onClick={() => {
                                 setAjusteProduct(prod);
+                                setAjusteVarianteId(null);
                                 setAjusteCantidad("");
                                 setAjusteMotivo("");
                               }}
@@ -571,9 +587,40 @@ export default function AdminStockPage() {
           <DialogHeader>
             <DialogTitle>Ajustar stock: {ajusteProduct?.nombre}</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Stock actual: <strong>{ajusteProduct?.stock_actual}</strong>
-          </p>
+          {ajusteProduct && ajusteProduct.variantes.length > 0 ? (
+            <>
+              <div>
+                <Label>Variante *</Label>
+                <select
+                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  value={ajusteVarianteId ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setAjusteVarianteId(val ? parseInt(val) : null);
+                  }}
+                >
+                  <option value="">Seleccionar variante...</option>
+                  {ajusteProduct.variantes.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.nombre} — Stock: {v.stock_actual}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {ajusteVarianteId && (
+                <p className="text-sm text-muted-foreground">
+                  Stock actual:{" "}
+                  <strong>
+                    {ajusteProduct.variantes.find((v) => v.id === ajusteVarianteId)?.stock_actual ?? 0}
+                  </strong>
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Stock actual: <strong>{ajusteProduct?.stock_actual}</strong>
+            </p>
+          )}
           <div className="space-y-3">
             <div>
               <Label>Cantidad (positivo = entrada, negativo = salida)</Label>
@@ -583,14 +630,17 @@ export default function AdminStockPage() {
                 onChange={(e) => setAjusteCantidad(e.target.value)}
                 placeholder="ej: 10 o -5"
               />
-              {ajusteCantidad && ajusteProduct && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Nuevo stock:{" "}
-                  <strong>
-                    {ajusteProduct.stock_actual + parseInt(ajusteCantidad || "0")}
-                  </strong>
-                </p>
-              )}
+              {ajusteCantidad && ajusteProduct && (() => {
+                const currentStock = ajusteVarianteId
+                  ? (ajusteProduct.variantes.find((v) => v.id === ajusteVarianteId)?.stock_actual ?? 0)
+                  : ajusteProduct.stock_actual;
+                const newStock = currentStock + parseInt(ajusteCantidad || "0");
+                return (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Nuevo stock: <strong className={cn(newStock < 0 && "text-destructive")}>{newStock}</strong>
+                  </p>
+                );
+              })()}
             </div>
             <div>
               <Label>Motivo *</Label>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
@@ -41,6 +41,7 @@ interface Props {
   productoId: number;
   productoSku: string | null;
   initialVariantes: Variante[];
+  onStockChange?: (totalStock: number) => void;
 }
 
 // --- Presets ---
@@ -94,7 +95,7 @@ function atributosMatch(a: Record<string, string>, b: Record<string, string>): b
 
 // --- Component ---
 
-export function VariantesSection({ productoId, productoSku, initialVariantes }: Props) {
+export function VariantesSection({ productoId, productoSku, initialVariantes, onStockChange }: Props) {
   // Reconstruct ejes from existing variantes
   const initialEjes = useMemo(() => {
     if (initialVariantes.length === 0) return [];
@@ -251,6 +252,10 @@ export function VariantesSection({ productoId, productoSku, initialVariantes }: 
     (sum, v) => sum + (v.activo ? v.stock_actual : 0),
     0
   );
+
+  useEffect(() => {
+    onStockChange?.(totalStock);
+  }, [totalStock, onStockChange]);
 
   return (
     <div className="space-y-5">

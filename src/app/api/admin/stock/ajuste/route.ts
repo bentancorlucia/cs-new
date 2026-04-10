@@ -24,7 +24,86 @@ export async function POST(request: NextRequest) {
     // Cast for admin operations
     const db = supabase as any;
 
-    // Obtener stock actual
+    if (parsed.variante_id) {
+      // --- Ajuste a nivel de variante ---
+      const { data: variante, error: varError } = await db
+        .from("producto_variantes")
+        .select("stock_actual, producto_id")
+        .eq("id", parsed.variante_id)
+        .eq("producto_id", parsed.producto_id)
+        .single();
+
+      if (varError || !variante) {
+        return NextResponse.json(
+          { error: "Variante no encontrada" },
+          { status: 404 }
+        );
+      }
+
+      const stockAnterior = variante.stock_actual as number;
+      const stockNuevo = stockAnterior + parsed.cantidad;
+
+      if (stockNuevo < 0) {
+        return NextResponse.json(
+          { error: "El stock no puede ser negativo" },
+          { status: 400 }
+        );
+      }
+
+      // Actualizar stock de la variante
+      const { error: updateError } = await db
+        .from("producto_variantes")
+        .update({ stock_actual: stockNuevo })
+        .eq("id", parsed.variante_id);
+
+      if (updateError) throw updateError;
+
+      // Recalcular stock total del producto como suma de variantes activas
+      const { data: variantes } = await db
+        .from("producto_variantes")
+        .select("stock_actual")
+        .eq("producto_id", parsed.producto_id)
+        .eq("activo", true);
+
+      const totalStock = (variantes || []).reduce(
+        (sum: number, v: any) => sum + (v.stock_actual as number),
+        0
+      );
+
+      await db
+        .from("productos")
+        .update({ stock_actual: totalStock, updated_at: new Date().toISOString() })
+        .eq("id", parsed.producto_id);
+
+      // Registrar movimiento
+      const { error: movError } = await db
+        .from("stock_movimientos")
+        .insert({
+          producto_id: parsed.producto_id,
+          variante_id: parsed.variante_id,
+          tipo: "ajuste",
+          cantidad: parsed.cantidad,
+          stock_anterior: stockAnterior,
+          stock_nuevo: stockNuevo,
+          referencia_tipo: "ajuste_manual",
+          motivo: parsed.motivo,
+          registrado_por: user?.id,
+        });
+
+      if (movError) throw movError;
+
+      return NextResponse.json({
+        data: {
+          producto_id: parsed.producto_id,
+          variante_id: parsed.variante_id,
+          stock_anterior: stockAnterior,
+          stock_nuevo: stockNuevo,
+          ajuste: parsed.cantidad,
+        },
+      });
+    }
+
+    // --- Ajuste a nivel de producto (sin variante) ---
     const { data: producto, error: prodError } = await db
       .from("productos")
       .select("stock_actual")
@@ -61,7 +140,7 @@ export async function POST(request: NextRequest) {
       .from("stock_movimientos")
       .insert({
         producto_id: parsed.producto_id,
-        variante_id: parsed.variante_id,
+        variante_id: null,
         tipo: "ajuste",
         cantidad: parsed.cantidad,
         stock_anterior: stockAnterior,

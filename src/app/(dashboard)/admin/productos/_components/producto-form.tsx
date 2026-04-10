@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
 import {
   Save,
@@ -960,6 +961,7 @@ export function ProductoForm({ producto }: Props) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [newProveedores, setNewProveedores] = useState<ProductoProveedor[]>([]);
+  const hasVariantes = isEdit && (producto.producto_variantes?.length ?? 0) > 0;
 
   const {
     register,
@@ -1397,8 +1399,14 @@ export function ProductoForm({ producto }: Props) {
                     type="number"
                     min="0"
                     {...register("stock_actual")}
-                    className="mt-1.5"
+                    readOnly={hasVariantes}
+                    className={cn("mt-1.5", hasVariantes && "bg-muted cursor-not-allowed")}
                   />
+                  {hasVariantes && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Calculado desde variantes
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -1478,6 +1486,7 @@ export function ProductoForm({ producto }: Props) {
                 productoId={producto.id}
                 productoSku={producto.sku}
                 initialVariantes={producto.producto_variantes || []}
+                onStockChange={(total) => setValue("stock_actual", total.toString(), { shouldDirty: false })}
               />
             </FormSection>
           )}

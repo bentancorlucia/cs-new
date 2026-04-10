@@ -41,7 +41,8 @@ export async function GET(request: NextRequest) {
         `
         *,
         categorias_producto(id, nombre, slug),
-        producto_imagenes(id, url, alt_text, orden, es_principal, focal_point)
+        producto_imagenes(id, url, alt_text, orden, es_principal, focal_point),
+        producto_variantes(id, stock_actual, activo)
       `,
         { count: "exact" }
       )
@@ -83,10 +84,18 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const dataConReservado = (data || []).map((p: any) => ({
-      ...p,
-      stock_reservado: reservadoMap[p.id] || 0,
-    }));
+    const dataConReservado = (data || []).map((p: any) => {
+      const variantesActivas = (p.producto_variantes || []).filter((v: any) => v.activo);
+      const stockActual = variantesActivas.length > 0
+        ? variantesActivas.reduce((sum: number, v: any) => sum + v.stock_actual, 0)
+        : p.stock_actual;
+      const { producto_variantes, ...rest } = p;
+      return {
+        ...rest,
+        stock_actual: stockActual,
+        stock_reservado: reservadoMap[p.id] || 0,
+      };
+    });
 
     return NextResponse.json({
       data: dataConReservado,
