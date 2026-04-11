@@ -52,6 +52,16 @@ import {
 
 // ─── Types ───────────────────────────────────────────────────
 
+interface ProductoVariante {
+  id: number;
+  nombre: string;
+  sku: string | null;
+  precio_override: number | null;
+  stock_actual: number;
+  atributos: Record<string, string>;
+  activo: boolean;
+}
+
 interface Producto {
   id: number;
   nombre: string;
@@ -63,6 +73,7 @@ interface Producto {
   activo: boolean;
   imagen_url: string | null;
   imagen_focal_point: string | null;
+  variantes: ProductoVariante[];
 }
 
 interface Categoria {
@@ -73,6 +84,7 @@ interface Categoria {
 
 interface POSCartItem {
   producto_id: number;
+  variante_id: number | null;
   nombre: string;
   precio: number;
   precio_socio: number | null;
@@ -183,6 +195,13 @@ function POSProductCard({
         Stock: {producto.stock_actual}
       </span>
 
+      {/* Variants indicator */}
+      {producto.variantes.length > 0 && (
+        <Badge variant="outline" className="mt-1 text-[9px] px-1.5 py-0 border-bordo-200 text-bordo-600">
+          {producto.variantes.length} variantes
+        </Badge>
+      )}
+
       {/* Add overlay */}
       {!sinStock && (
         <motion.div
@@ -209,8 +228,8 @@ function CartItemRow({
 }: {
   item: POSCartItem;
   usarPrecioSocio: boolean;
-  onUpdateQty: (id: number, qty: number) => void;
-  onRemove: (id: number) => void;
+  onUpdateQty: (productoId: number, varianteId: number | null, qty: number) => void;
+  onRemove: (productoId: number, varianteId: number | null) => void;
 }) {
   const precio = usarPrecioSocio && item.precio_socio
     ? item.precio_socio
@@ -257,7 +276,7 @@ function CartItemRow({
       <div className="flex items-center gap-1">
         <motion.button
           whileTap={{ scale: 0.85 }}
-          onClick={() => onUpdateQty(item.producto_id, item.cantidad - 1)}
+          onClick={() => onUpdateQty(item.producto_id, item.variante_id, item.cantidad - 1)}
           className="size-7 rounded-md bg-superficie flex items-center justify-center text-foreground hover:bg-gray-200 transition-colors"
         >
           <Minus className="size-3.5" />
@@ -267,7 +286,7 @@ function CartItemRow({
         </span>
         <motion.button
           whileTap={{ scale: 0.85 }}
-          onClick={() => onUpdateQty(item.producto_id, item.cantidad + 1)}
+          onClick={() => onUpdateQty(item.producto_id, item.variante_id, item.cantidad + 1)}
           disabled={item.cantidad >= item.stock_actual}
           className="size-7 rounded-md bg-superficie flex items-center justify-center text-foreground hover:bg-gray-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
@@ -283,7 +302,7 @@ function CartItemRow({
       {/* Remove */}
       <motion.button
         whileTap={{ scale: 0.85 }}
-        onClick={() => onRemove(item.producto_id)}
+        onClick={() => onRemove(item.producto_id, item.variante_id)}
         className="size-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
       >
         <Trash2 className="size-3.5" />
@@ -328,6 +347,8 @@ export function POSClient() {
   const [subiendoComprobante, setSubiendoComprobante] = useState(false);
   const [transferExitosa, setTransferExitosa] = useState(false);
   const [cuentaCopiada, setCuentaCopiada] = useState(false);
+  const [showVariantePicker, setShowVariantePicker] = useState(false);
+  const [productoVarianteSeleccion, setProductoVarianteSeleccion] = useState<Producto | null>(null);
   const comprobanteInputRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -377,7 +398,7 @@ export function POSClient() {
 
     const { data: prods } = await db
       .from("productos")
-      .select("id, nombre, slug, precio, precio_socio, stock_actual, categoria_id, activo, producto_imagenes(url, es_principal, focal_point)")
+      .select("id, nombre, slug, precio, precio_socio, stock_actual, categoria_id, activo, producto_imagenes(url, es_principal, focal_point), producto_variantes(id, nombre, sku, precio_override, stock_actual, atributos, activo)")
       .eq("activo", true)
       .order("nombre");
 
@@ -389,6 +410,7 @@ export function POSClient() {
 
     const mapped = (prods || []).map((p: any) => {
       const img = p.producto_imagenes?.find((i: any) => i.es_principal) || p.producto_imagenes?.[0];
+      const variantes = (p.producto_variantes || []).filter((v: any) => v.activo);
       return {
         id: p.id,
         nombre: p.nombre,
@@ -400,6 +422,7 @@ export function POSClient() {
         activo: p.activo,
         imagen_url: img?.url || null,
         imagen_focal_point: img?.focal_point || null,
+        variantes,
       };
     });
 
@@ -428,13 +451,26 @@ export function POSClient() {
 
   // ─── Cart actions ─────────────────────────────────────────
 
-  const addToCart = useCallback((producto: Producto) => {
+  // Cart key for uniqueness: producto_id + variante_id
+  const cartKey = (productoId: number, varianteId: number | null) =>
+    `${productoId}-${varianteId ?? "base"}`;
+
+  const addToCartDirect = useCallback((producto: Producto, variante: ProductoVariante | null) => {
+    const key = cartKey(producto.id, variante?.id ?? null);
+    const stock = variante ? variante.stock_actual : producto.stock_actual;
+    const precio = variante?.precio_override ?? producto.precio;
+    const nombre = variante
+      ? `${producto.nombre} - ${variante.nombre}`
+      : producto.nombre;
+
     setCart((prev) => {
-      const existing = prev.find((i) => i.producto_id === producto.id);
+      const existing = prev.find(
+        (i) => cartKey(i.producto_id, i.variante_id) === key
+      );
       if (existing) {
-        if (existing.cantidad >= producto.stock_actual) return prev;
+        if (existing.cantidad >= stock) return prev;
         return prev.map((i) =>
-          i.producto_id === producto.id
+          cartKey(i.producto_id, i.variante_id) === key
             ? { ...i, cantidad: i.cantidad + 1 }
             : i
         );
@@ -443,31 +479,47 @@ export function POSClient() {
         ...prev,
         {
           producto_id: producto.id,
-          nombre: producto.nombre,
-          precio: producto.precio,
+          variante_id: variante?.id ?? null,
+          nombre,
+          precio,
           precio_socio: producto.precio_socio,
           cantidad: 1,
-          stock_actual: producto.stock_actual,
+          stock_actual: stock,
           imagen_url: producto.imagen_url,
           imagen_focal_point: producto.imagen_focal_point,
         },
       ];
     });
+
+    // Close variant picker if open
+    setShowVariantePicker(false);
+    setProductoVarianteSeleccion(null);
   }, []);
 
-  const updateCartQty = useCallback((productoId: number, qty: number) => {
+  const handleProductClick = useCallback((producto: Producto) => {
+    if (producto.variantes.length > 0) {
+      setProductoVarianteSeleccion(producto);
+      setShowVariantePicker(true);
+    } else {
+      addToCartDirect(producto, null);
+    }
+  }, [addToCartDirect]);
+
+  const updateCartQty = useCallback((productoId: number, varianteId: number | null, qty: number) => {
+    const key = cartKey(productoId, varianteId);
     setCart((prev) => {
-      if (qty <= 0) return prev.filter((i) => i.producto_id !== productoId);
+      if (qty <= 0) return prev.filter((i) => cartKey(i.producto_id, i.variante_id) !== key);
       return prev.map((i) =>
-        i.producto_id === productoId
+        cartKey(i.producto_id, i.variante_id) === key
           ? { ...i, cantidad: Math.min(qty, i.stock_actual) }
           : i
       );
     });
   }, []);
 
-  const removeFromCart = useCallback((productoId: number) => {
-    setCart((prev) => prev.filter((i) => i.producto_id !== productoId));
+  const removeFromCart = useCallback((productoId: number, varianteId: number | null) => {
+    const key = cartKey(productoId, varianteId);
+    setCart((prev) => prev.filter((i) => cartKey(i.producto_id, i.variante_id) !== key));
   }, []);
 
   const clearCart = useCallback(() => {
@@ -511,6 +563,7 @@ export function POSClient() {
       try {
         const items = cart.map((item) => ({
           producto_id: item.producto_id,
+          variante_id: item.variante_id,
           cantidad: item.cantidad,
           precio_unitario:
             usarPrecioSocio && item.precio_socio
@@ -574,6 +627,7 @@ export function POSClient() {
       // 1. Create order with transferencia
       const items = cart.map((item) => ({
         producto_id: item.producto_id,
+        variante_id: item.variante_id,
         cantidad: item.cantidad,
         precio_unitario:
           usarPrecioSocio && item.precio_socio
@@ -783,7 +837,7 @@ export function POSClient() {
                 <POSProductCard
                   key={producto.id}
                   producto={producto}
-                  onAdd={addToCart}
+                  onAdd={handleProductClick}
                   usarPrecioSocio={usarPrecioSocio}
                 />
               ))}
@@ -874,7 +928,7 @@ export function POSClient() {
             <AnimatePresence mode="popLayout">
               {cart.map((item) => (
                 <CartItemRow
-                  key={item.producto_id}
+                  key={`${item.producto_id}-${item.variante_id ?? "base"}`}
                   item={item}
                   usarPrecioSocio={usarPrecioSocio}
                   onUpdateQty={updateCartQty}
@@ -1185,6 +1239,77 @@ export function POSClient() {
 
       {/* ═══ MODALS ═══ */}
 
+      {/* Variant Picker Modal */}
+      <Dialog
+        open={showVariantePicker}
+        onOpenChange={(open) => {
+          setShowVariantePicker(open);
+          if (!open) setProductoVarianteSeleccion(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">
+              {productoVarianteSeleccion?.nombre}
+            </DialogTitle>
+            <DialogDescription>
+              Elegí la variante para agregar al carrito.
+            </DialogDescription>
+          </DialogHeader>
+          {productoVarianteSeleccion && (
+            <motion.div
+              variants={staggerContainerFast}
+              initial="hidden"
+              animate="visible"
+              className="grid gap-2 py-2 max-h-[60vh] overflow-y-auto"
+            >
+              {productoVarianteSeleccion.variantes.map((v) => {
+                const precio = v.precio_override ?? productoVarianteSeleccion.precio;
+                const sinStock = v.stock_actual <= 0;
+                const attrLabel = Object.values(v.atributos || {}).join(" / ") || v.nombre;
+                return (
+                  <motion.button
+                    key={v.id}
+                    variants={fadeInUp}
+                    whileHover={sinStock ? {} : { scale: 1.01 }}
+                    whileTap={sinStock ? {} : { scale: 0.98 }}
+                    disabled={sinStock}
+                    onClick={() => addToCartDirect(productoVarianteSeleccion, v)}
+                    className={`
+                      flex items-center justify-between gap-3 rounded-xl border p-3 text-left transition-all
+                      ${sinStock
+                        ? "opacity-40 cursor-not-allowed border-gray-200 bg-gray-50"
+                        : "border-linea hover:border-bordo-300 hover:bg-bordo-50/50 cursor-pointer"
+                      }
+                    `}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-body font-medium text-sm">{attrLabel}</p>
+                      {v.sku && (
+                        <p className="text-[11px] text-muted-foreground font-mono">{v.sku}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-xs text-muted-foreground">
+                        Stock: {v.stock_actual}
+                      </span>
+                      <span className="font-heading font-bold text-sm text-bordo-700">
+                        ${precio.toLocaleString("es-UY")}
+                      </span>
+                      {!sinStock && (
+                        <div className="size-7 rounded-lg bg-bordo-800 text-white flex items-center justify-center">
+                          <Plus className="size-4" />
+                        </div>
+                      )}
+                    </div>
+                  </motion.button>
+                );
+              })}
+            </motion.div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Socio Search Modal */}
       <Dialog open={showSocioSearch} onOpenChange={setShowSocioSearch}>
         <DialogContent className="sm:max-w-md">
@@ -1255,7 +1380,7 @@ export function POSClient() {
                         ? item.precio_socio
                         : item.precio;
                       return (
-                        <div key={item.producto_id} className="flex justify-between text-sm font-body">
+                        <div key={`${item.producto_id}-${item.variante_id ?? "base"}`} className="flex justify-between text-sm font-body">
                           <span>
                             {item.nombre} × {item.cantidad}
                           </span>

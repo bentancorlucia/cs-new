@@ -32,28 +32,53 @@ export async function POST(request: NextRequest) {
 
     const db = supabase as any;
 
-    // 1. Validar stock de cada item
+    // 1. Validar stock de cada item (por variante si aplica)
     for (const item of parsed.items) {
-      const { data: producto, error } = await db
-        .from("productos")
-        .select("stock_actual, nombre")
-        .eq("id", item.producto_id)
-        .single();
+      if (item.variante_id) {
+        const { data: variante, error } = await db
+          .from("producto_variantes")
+          .select("stock_actual, nombre, producto_id")
+          .eq("id", item.variante_id)
+          .eq("producto_id", item.producto_id)
+          .single();
 
-      if (error || !producto) {
-        return NextResponse.json(
-          { error: `Producto ${item.producto_id} no encontrado` },
-          { status: 404 }
-        );
-      }
+        if (error || !variante) {
+          return NextResponse.json(
+            { error: `Variante ${item.variante_id} no encontrada` },
+            { status: 404 }
+          );
+        }
 
-      if ((producto.stock_actual as number) < item.cantidad) {
-        return NextResponse.json(
-          {
-            error: `Stock insuficiente para "${producto.nombre}". Disponible: ${producto.stock_actual}`,
-          },
-          { status: 400 }
-        );
+        if ((variante.stock_actual as number) < item.cantidad) {
+          return NextResponse.json(
+            {
+              error: `Stock insuficiente para variante "${variante.nombre}". Disponible: ${variante.stock_actual}`,
+            },
+            { status: 400 }
+          );
+        }
+      } else {
+        const { data: producto, error } = await db
+          .from("productos")
+          .select("stock_actual, nombre")
+          .eq("id", item.producto_id)
+          .single();
+
+        if (error || !producto) {
+          return NextResponse.json(
+            { error: `Producto ${item.producto_id} no encontrado` },
+            { status: 404 }
+          );
+        }
+
+        if ((producto.stock_actual as number) < item.cantidad) {
+          return NextResponse.json(
+            {
+              error: `Stock insuficiente para "${producto.nombre}". Disponible: ${producto.stock_actual}`,
+            },
+            { status: 400 }
+          );
+        }
       }
     }
 
@@ -118,37 +143,87 @@ export async function POST(request: NextRequest) {
     // 5. Si es efectivo, descontar stock inmediatamente
     if (parsed.metodo_pago === "efectivo") {
       for (const item of parsed.items) {
-        const { data: producto } = await db
-          .from("productos")
-          .select("stock_actual")
-          .eq("id", item.producto_id)
-          .single();
+        if (item.variante_id) {
+          // Descontar stock de la variante
+          const { data: variante } = await db
+            .from("producto_variantes")
+            .select("stock_actual")
+            .eq("id", item.variante_id)
+            .single();
 
-        const stockAnterior = producto.stock_actual as number;
-        const stockNuevo = stockAnterior - item.cantidad;
+          const stockAnterior = variante.stock_actual as number;
+          const stockNuevo = stockAnterior - item.cantidad;
 
-        await db
-          .from("productos")
-          .update({
-            stock_actual: stockNuevo,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", item.producto_id);
+          await db
+            .from("producto_variantes")
+            .update({ stock_actual: stockNuevo })
+            .eq("id", item.variante_id);
 
-        await db.from("stock_movimientos").insert({
-          producto_id: item.producto_id,
-          variante_id: item.variante_id || null,
-          tipo: "venta",
-          cantidad: -item.cantidad,
-          stock_anterior: stockAnterior,
-          stock_nuevo: stockNuevo,
-          referencia_tipo: "pedido",
-          referencia_id: pedido.id,
-          motivo: `Venta POS #${pedido.numero_pedido}`,
-          registrado_por: user?.id,
-        });
+          // Recalcular stock total del producto (suma de variantes activas)
+          const { data: todasVariantes } = await db
+            .from("producto_variantes")
+            .select("stock_actual")
+            .eq("producto_id", item.producto_id)
+            .eq("activo", true);
+
+          const stockTotal = (todasVariantes || []).reduce(
+            (sum: number, v: any) => sum + (v.stock_actual as number),
+            0
+          );
+
+          await db
+            .from("productos")
+            .update({
+              stock_actual: stockTotal,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", item.producto_id);
+
+          await db.from("stock_movimientos").insert({
+            producto_id: item.producto_id,
+            variante_id: item.variante_id,
+            tipo: "venta",
+            cantidad: -item.cantidad,
+            stock_anterior: stockAnterior,
+            stock_nuevo: stockNuevo,
+            referencia_tipo: "pedido",
+            referencia_id: pedido.id,
+            motivo: `Venta POS #${pedido.numero_pedido}`,
+            registrado_por: user?.id,
+          });
+        } else {
+          // Producto sin variantes — descontar directo
+          const { data: producto } = await db
+            .from("productos")
+            .select("stock_actual")
+            .eq("id", item.producto_id)
+            .single();
+
+          const stockAnterior = producto.stock_actual as number;
+          const stockNuevo = stockAnterior - item.cantidad;
+
+          await db
+            .from("productos")
+            .update({
+              stock_actual: stockNuevo,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", item.producto_id);
+
+          await db.from("stock_movimientos").insert({
+            producto_id: item.producto_id,
+            variante_id: null,
+            tipo: "venta",
+            cantidad: -item.cantidad,
+            stock_anterior: stockAnterior,
+            stock_nuevo: stockNuevo,
+            referencia_tipo: "pedido",
+            referencia_id: pedido.id,
+            motivo: `Venta POS #${pedido.numero_pedido}`,
+            registrado_por: user?.id,
+          });
+        }
       }
-
     }
 
     return NextResponse.json({ data: pedido });
