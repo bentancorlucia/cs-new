@@ -18,6 +18,7 @@ import {
   Plus,
   Users,
   Dumbbell,
+  UserCog,
   UserCircle,
   LogOut,
   Menu,
@@ -93,6 +94,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/secretaria/socios", label: "Socios", icon: Users },
       { href: "/secretaria/disciplinas", label: "Disciplinas", icon: Dumbbell },
+      { href: "/secretaria/staff", label: "Staff", icon: UserCog },
     ],
   },
   {
