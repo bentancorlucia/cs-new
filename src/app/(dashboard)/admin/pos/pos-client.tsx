@@ -17,7 +17,6 @@ import {
   Loader2,
   ArrowLeft,
   Percent,
-  Lock,
   Building2,
   Upload,
   Copy,
@@ -336,11 +335,6 @@ export function POSClient() {
   const [descuentoManualTipo, setDescuentoManualTipo] = useState<"porcentaje" | "fijo">("porcentaje");
   const [descuentoManualValor, setDescuentoManualValor] = useState("");
   const [descuentoManualMotivo, setDescuentoManualMotivo] = useState("");
-  const [descuentoAutorizado, setDescuentoAutorizado] = useState(false);
-  const [descuentoAutorizadoPor, setDescuentoAutorizadoPor] = useState<string | null>(null);
-  const [pinInput, setPinInput] = useState("");
-  const [verificandoPin, setVerificandoPin] = useState(false);
-  const [requierePin, setRequierePin] = useState(false);
   const [showTransferenciaModal, setShowTransferenciaModal] = useState(false);
   const [comprobanteFile, setComprobanteFile] = useState<File | null>(null);
   const [comprobantePreview, setComprobantePreview] = useState<string | null>(null);
@@ -583,7 +577,6 @@ export function POSClient() {
             descuento_tipo: descuentoManualMonto > 0 ? descuentoManualTipo : (descuentoSocio > 0 ? "socio" : null),
             descuento_porcentaje: descuentoManualPct > 0 ? descuentoManualPct : null,
             descuento_motivo: descuentoManualMotivo || null,
-            descuento_autorizado_por: descuentoAutorizadoPor || null,
             notas: null,
           }),
         });
@@ -614,7 +607,7 @@ export function POSClient() {
         setProcesando(false);
       }
     },
-    [cart, nombreCliente, socio, usarPrecioSocio, descuentoSocio, descuentoManualMonto, descuentoManualTipo, descuentoManualPct, descuentoManualMotivo, descuentoAutorizadoPor, clearCart, fetchProductos]
+    [cart, nombreCliente, socio, usarPrecioSocio, descuentoSocio, descuentoManualMonto, descuentoManualTipo, descuentoManualPct, descuentoManualMotivo, clearCart, fetchProductos]
   );
 
   // ─── Process transfer sale ───────────────────────────────
@@ -647,7 +640,6 @@ export function POSClient() {
           descuento_tipo: descuentoManualMonto > 0 ? descuentoManualTipo : (descuentoSocio > 0 ? "socio" : null),
           descuento_porcentaje: descuentoManualPct > 0 ? descuentoManualPct : null,
           descuento_motivo: descuentoManualMotivo || null,
-          descuento_autorizado_por: descuentoAutorizadoPor || null,
           notas: null,
         }),
       });
@@ -694,7 +686,7 @@ export function POSClient() {
     } finally {
       setSubiendoComprobante(false);
     }
-  }, [cart, comprobanteFile, nombreCliente, socio, usarPrecioSocio, descuentoSocio, descuentoManualMonto, descuentoManualTipo, descuentoManualPct, descuentoManualMotivo, descuentoAutorizadoPor, clearCart, fetchProductos]);
+  }, [cart, comprobanteFile, nombreCliente, socio, usarPrecioSocio, descuentoSocio, descuentoManualMonto, descuentoManualTipo, descuentoManualPct, descuentoManualMotivo, clearCart, fetchProductos]);
 
   // Handle file selection for comprobante
   const handleComprobanteSelect = useCallback((file: File | null) => {
@@ -1000,9 +992,6 @@ export function POSClient() {
                       setShowDescuento(false);
                       setDescuentoManualValor("");
                       setDescuentoManualMotivo("");
-                      setDescuentoAutorizado(false);
-                      setDescuentoAutorizadoPor(null);
-                      setRequierePin(false);
                     }}
                     className="text-muted-foreground hover:text-foreground"
                   >
@@ -1040,21 +1029,7 @@ export function POSClient() {
                   min="0"
                   max={descuentoManualTipo === "porcentaje" ? "100" : undefined}
                   value={descuentoManualValor}
-                  onChange={(e) => {
-                    setDescuentoManualValor(e.target.value);
-                    const val = parseFloat(e.target.value) || 0;
-                    // Require PIN for discounts > 15%
-                    if (descuentoManualTipo === "porcentaje" && val > 15) {
-                      setRequierePin(true);
-                      setDescuentoAutorizado(false);
-                    } else if (descuentoManualTipo === "fijo" && subtotal > 0 && (val / subtotal) * 100 > 15) {
-                      setRequierePin(true);
-                      setDescuentoAutorizado(false);
-                    } else {
-                      setRequierePin(false);
-                      setDescuentoAutorizado(true);
-                    }
-                  }}
+                  onChange={(e) => setDescuentoManualValor(e.target.value)}
                   placeholder={descuentoManualTipo === "porcentaje" ? "Ej: 10" : "Ej: 500"}
                   className="h-8 text-sm"
                 />
@@ -1066,91 +1041,7 @@ export function POSClient() {
                   className="h-8 text-xs"
                 />
 
-                {/* PIN authorization */}
-                <AnimatePresence>
-                  {requierePin && !descuentoAutorizado && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="space-y-1.5"
-                    >
-                      <p className="text-[11px] text-amber-700 flex items-center gap-1">
-                        <Lock className="size-3" />
-                        Descuento &gt;15% requiere PIN de supervisor
-                      </p>
-                      <div className="flex gap-1.5">
-                        <Input
-                          type="password"
-                          maxLength={6}
-                          value={pinInput}
-                          onChange={(e) => setPinInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              // Verify PIN
-                              setVerificandoPin(true);
-                              fetch("/api/admin/pos/verificar-pin", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ pin: pinInput }),
-                              })
-                                .then((r) => r.json())
-                                .then((data) => {
-                                  if (data.valid) {
-                                    setDescuentoAutorizado(true);
-                                    setDescuentoAutorizadoPor(data.perfil_id);
-                                    toast.success(`Autorizado por ${data.nombre}`);
-                                  } else {
-                                    toast.error(data.error || "PIN inválido");
-                                  }
-                                })
-                                .catch(() => toast.error("Error al verificar PIN"))
-                                .finally(() => {
-                                  setVerificandoPin(false);
-                                  setPinInput("");
-                                });
-                            }
-                          }}
-                          placeholder="PIN"
-                          className="h-7 text-xs flex-1"
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs px-2"
-                          disabled={verificandoPin || pinInput.length < 4}
-                          onClick={() => {
-                            setVerificandoPin(true);
-                            fetch("/api/admin/pos/verificar-pin", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ pin: pinInput }),
-                            })
-                              .then((r) => r.json())
-                              .then((data) => {
-                                if (data.valid) {
-                                  setDescuentoAutorizado(true);
-                                  setDescuentoAutorizadoPor(data.perfil_id);
-                                  toast.success(`Autorizado por ${data.nombre}`);
-                                } else {
-                                  toast.error(data.error || "PIN inválido");
-                                }
-                              })
-                              .catch(() => toast.error("Error al verificar PIN"))
-                              .finally(() => {
-                                setVerificandoPin(false);
-                                setPinInput("");
-                              });
-                          }}
-                        >
-                          {verificandoPin ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
-                        </Button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {descuentoAutorizado && descuentoManualMonto > 0 && (
+                {descuentoManualMonto > 0 && (
                   <motion.p
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -1216,7 +1107,7 @@ export function POSClient() {
             <motion.div whileTap={{ scale: 0.97 }}>
               <Button
                 onClick={() => setShowEfectivoModal(true)}
-                disabled={cart.length === 0 || procesando || (requierePin && !descuentoAutorizado)}
+                disabled={cart.length === 0 || procesando}
                 className="w-full h-14 bg-green-600 hover:bg-green-700 text-white rounded-xl font-heading font-bold text-sm gap-1.5"
               >
                 <Banknote className="size-5" />
@@ -1226,7 +1117,7 @@ export function POSClient() {
             <motion.div whileTap={{ scale: 0.97 }}>
               <Button
                 onClick={() => setShowTransferenciaModal(true)}
-                disabled={cart.length === 0 || procesando || (requierePin && !descuentoAutorizado)}
+                disabled={cart.length === 0 || procesando}
                 className="w-full h-14 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-heading font-bold text-sm gap-1.5"
               >
                 <Building2 className="size-5" />
