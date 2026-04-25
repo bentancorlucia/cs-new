@@ -4,7 +4,15 @@ import { SportPage } from "@/components/shared/sport-page";
 export const metadata: Metadata = {
   title: "Básquetbol",
   description:
-    "Papi Basket y Mami Basket del Club Seminario. Horarios, categorías y contacto.",
+    "Básquetbol en Club Seminario: Basket Universitario, Papi Basket y Mami Basket en el Polideportivo Gonzaga, Montevideo. Horarios, categorías y contacto.",
+  alternates: { canonical: "/deportes/basquetbol" },
+  openGraph: {
+    title: "Básquetbol — Club Seminario",
+    description:
+      "Basket Universitario, Papi Basket y Mami Basket en el Polideportivo Gonzaga.",
+    url: "/deportes/basquetbol",
+    images: [{ url: "/images/deportes/PapiBasket.JPG", width: 1200, height: 630 }],
+  },
 };
 
 export default function BasquetbolPage() {

@@ -4,7 +4,13 @@ import { DocumentPageClient } from "@/components/shared/document-page";
 export const metadata: Metadata = {
   title: "Estatuto",
   description:
-    "Estatuto del Club Seminario. Consultá el documento completo contactando a secretaría.",
+    "Estatuto del Club Seminario. Principios fundacionales, estructura organizativa y normas que rigen la institución.",
+  alternates: { canonical: "/club/estatuto" },
+  openGraph: {
+    title: "Estatuto — Club Seminario",
+    description: "Estatuto del Club Seminario — documento oficial.",
+    url: "/club/estatuto",
+  },
 };
 
 export default function EstatutoPage() {

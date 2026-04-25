@@ -4,7 +4,15 @@ import { SportPage } from "@/components/shared/sport-page";
 export const metadata: Metadata = {
   title: "Hockey",
   description:
-    "Hockey y Mami Hockey del Club Seminario. Horarios, categorías y contacto.",
+    "Hockey y Mami Hockey del Club Seminario. Hockey competitivo y recreativo en Parque Loyola, Montevideo. Categorías del Torneo de Mami Hockey de LID.",
+  alternates: { canonical: "/deportes/hockey" },
+  openGraph: {
+    title: "Hockey — Club Seminario",
+    description:
+      "Hockey competitivo y recreativo en Parque Loyola. Esfuerzo, compromiso y espíritu de equipo.",
+    url: "/deportes/hockey",
+    images: [{ url: "/images/deportes/Hockey.jpg", width: 1200, height: 630 }],
+  },
 };
 
 export default function HockeyPage() {

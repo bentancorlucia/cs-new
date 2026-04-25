@@ -6,13 +6,11 @@ export async function generateMetadata({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const { slug } = await params;
+  await params;
   return {
     title: "Evento",
-    description: `Detalle del evento en Club Seminario`,
-    openGraph: {
-      title: "Evento",
-    },
+    description: "Detalle del evento en Club Seminario",
+    robots: { index: false, follow: false },
   };
 }
 

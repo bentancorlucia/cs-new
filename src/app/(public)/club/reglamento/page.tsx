@@ -4,7 +4,13 @@ import { DocumentPageClient } from "@/components/shared/document-page";
 export const metadata: Metadata = {
   title: "Reglamento",
   description:
-    "Reglamento del Club Seminario. Consultá el documento completo contactando a secretaría.",
+    "Reglamento interno del Club Seminario: normas de convivencia, uso de instalaciones y participación en actividades deportivas.",
+  alternates: { canonical: "/club/reglamento" },
+  openGraph: {
+    title: "Reglamento — Club Seminario",
+    description: "Reglamento interno del Club Seminario — documento oficial.",
+    url: "/club/reglamento",
+  },
 };
 
 export default function ReglamentoPage() {

@@ -4,7 +4,15 @@ import { SportPage } from "@/components/shared/sport-page";
 export const metadata: Metadata = {
   title: "Handball",
   description:
-    "Handball femenino, masculino y mami handball del Club Seminario. Horarios y contacto.",
+    "Handball femenino, masculino y Mami Handball del Club Seminario. Competimos en la Superliga ACB. Entrenamientos en Parque Loyola y Polideportivo Gonzaga.",
+  alternates: { canonical: "/deportes/handball" },
+  openGraph: {
+    title: "Handball — Club Seminario",
+    description:
+      "Equipos de handball femenino, masculino y Mami Handball compitiendo en la Liga ACB.",
+    url: "/deportes/handball",
+    images: [{ url: "/images/deportes/hb-femenino.jpg", width: 1200, height: 630 }],
+  },
 };
 
 export default function HandballPage() {

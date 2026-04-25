@@ -134,7 +134,7 @@ export function HomeClient() {
           <SectionHeader
             eyebrow="Nuestras disciplinas"
             title="El deporte nos une"
-            description="Más de 600 partidos anuales a través de LUD, ADIC, URU, AUF, FUHC y la Asociación Uruguaya de Handball."
+            description="Más de 600 partidos anuales a través de MGC, LUD, ADIC, URU, AUF, FUH y más."
           />
 
           <AnimateStaggerGroup className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">

@@ -4,7 +4,15 @@ import { SportPage } from "@/components/shared/sport-page";
 export const metadata: Metadata = {
   title: "Vóleibol",
   description:
-    "Papi Volley y Mami Volley del Club Seminario. Horarios y contacto en el Polideportivo Gonzaga.",
+    "Vóleibol en Club Seminario: Papi Volley y Mami Volley en el Polideportivo Gonzaga, Montevideo. Equipos para hombres y mujeres compitiendo en ADIC.",
+  alternates: { canonical: "/deportes/voley" },
+  openGraph: {
+    title: "Vóleibol — Club Seminario",
+    description:
+      "Papi Volley y Mami Volley en el Polideportivo Gonzaga. Aprender, divertirse y competir en ADIC.",
+    url: "/deportes/voley",
+    images: [{ url: "/images/deportes/Papivolley.jpeg", width: 1200, height: 630 }],
+  },
 };
 
 export default function VoleyPage() {

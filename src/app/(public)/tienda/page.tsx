@@ -3,9 +3,16 @@ import { createServerClient } from "@/lib/supabase/server";
 import { TiendaClient } from "./tienda-client";
 
 export const metadata: Metadata = {
-  title: "Tienda",
+  title: "Tienda Oficial",
   description:
-    "Tienda oficial de Club Seminario. Encontrá indumentaria, accesorios y más.",
+    "Tienda online oficial del Club Seminario. Indumentaria deportiva, camisetas, accesorios y merchandising. Envíos a todo Uruguay y retiro en Montevideo.",
+  alternates: { canonical: "/tienda" },
+  openGraph: {
+    title: "Tienda Oficial — Club Seminario",
+    description:
+      "Indumentaria deportiva, camisetas y accesorios del Club Seminario. Envíos a todo Uruguay.",
+    url: "/tienda",
+  },
 };
 
 export default async function TiendaPage() {

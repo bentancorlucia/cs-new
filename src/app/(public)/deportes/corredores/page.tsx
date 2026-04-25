@@ -4,7 +4,15 @@ import { SportPage } from "@/components/shared/sport-page";
 export const metadata: Metadata = {
   title: "Corredores",
   description:
-    "Grupo de corredores del Club Seminario. De 5K al maratón. Entrenamientos en Rambla de Punta Carretas.",
+    "Grupo de corredores del Club Seminario. Running grupal de 5K al maratón. Entrenamientos en la Rambla de Punta Carretas, Montevideo.",
+  alternates: { canonical: "/deportes/corredores" },
+  openGraph: {
+    title: "Corredores — Club Seminario",
+    description:
+      "Running grupal en la Rambla. De los 5K al maratón, disfrutando y cumpliendo metas en grupo.",
+    url: "/deportes/corredores",
+    images: [{ url: "/images/deportes/Corredores.jpg", width: 1200, height: 630 }],
+  },
 };
 
 export default function CorredoresPage() {

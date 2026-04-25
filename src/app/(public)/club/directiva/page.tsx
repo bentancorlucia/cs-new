@@ -2,9 +2,15 @@ import { Metadata } from "next";
 import { DirectivaClient } from "./directiva-client";
 
 export const metadata: Metadata = {
-  title: "Directiva",
+  title: "Comisión Directiva",
   description:
-    "Comisión Directiva y Comisión Fiscal del Club Seminario. Conocé a quienes lideran nuestro club.",
+    "Conocé a la Comisión Directiva y Comisión Fiscal del Club Seminario. Las personas que lideran y supervisan la gestión del club.",
+  alternates: { canonical: "/club/directiva" },
+  openGraph: {
+    title: "Comisión Directiva — Club Seminario",
+    description: "Comisión Directiva y Comisión Fiscal del Club Seminario.",
+    url: "/club/directiva",
+  },
 };
 
 export default function DirectivaPage() {

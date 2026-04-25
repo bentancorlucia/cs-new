@@ -4,7 +4,15 @@ import { SportPage } from "@/components/shared/sport-page";
 export const metadata: Metadata = {
   title: "Rugby",
   description:
-    "Rugby del Club Seminario. Categorías M19, Intermedia y Primera en la Unión de Rugby del Uruguay.",
+    "Rugby del Club Seminario en Montevideo. Categorías M19, Intermedia y Primera compitiendo en la Unión de Rugby del Uruguay. Entrenamientos en Parque CUPRA.",
+  alternates: { canonical: "/deportes/rugby" },
+  openGraph: {
+    title: "Rugby — Club Seminario",
+    description:
+      "Tres categorías compitiendo en la Unión de Rugby del Uruguay. Entrenamientos en Parque CUPRA.",
+    url: "/deportes/rugby",
+    images: [{ url: "/images/deportes/Rugby.jpg", width: 1200, height: 630 }],
+  },
 };
 
 export default function RugbyPage() {

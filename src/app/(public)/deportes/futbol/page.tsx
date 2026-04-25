@@ -4,7 +4,15 @@ import { SportPage } from "@/components/shared/sport-page";
 export const metadata: Metadata = {
   title: "Fútbol",
   description:
-    "Fútbol femenino, masculino y mami fútbol del Club Seminario. 10 planteles en 7 categorías.",
+    "Fútbol femenino, masculino y Mami Fútbol del Club Seminario en Montevideo. 10 planteles, 7 categorías en la Liga Universitaria de Deportes y MGC.",
+  alternates: { canonical: "/deportes/futbol" },
+  openGraph: {
+    title: "Fútbol — Club Seminario",
+    description:
+      "Equipos de fútbol femenino, masculino y Mami Fútbol para todas las edades en Parque CUPRA y Polideportivo Gonzaga.",
+    url: "/deportes/futbol",
+    images: [{ url: "/images/deportes/futbol-masculino.jpg", width: 1200, height: 630 }],
+  },
 };
 
 export default function FutbolPage() {

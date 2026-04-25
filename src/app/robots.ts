@@ -12,10 +12,12 @@ export default function robots(): MetadataRoute.Robots {
         disallow: [
           "/admin/",
           "/secretaria/",
+          "/tesoreria/",
           "/mi-cuenta/",
-          "/eventos/crear",
-          "/eventos/scanner",
-          "/eventos/admin",
+          "/eventos",
+          "/eventos/",
+          "/socio/",
+          "/auth/",
           "/api/",
           "/login",
           "/registro",
@@ -23,5 +25,6 @@ export default function robots(): MetadataRoute.Robots {
       },
     ],
     sitemap: `${BASE_URL}/sitemap.xml`,
+    host: BASE_URL,
   };
 }

@@ -54,6 +54,82 @@ export function InstalacionesClient() {
       />
 
       {/* ============================================ */}
+      {/* MAPA — Location with map embed               */}
+      {/* ============================================ */}
+      <section className="py-16 sm:py-24 bg-fondo">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-10 gap-4">
+            <AnimateOnScroll variant="fadeInUp">
+              <span className="font-heading uppercase tracking-editorial text-xs text-bordo-800 block mb-3">
+                Ubicación
+              </span>
+              <h2 className="font-display text-title-2 sm:text-title-1 uppercase tracking-tightest text-foreground">
+                Cómo llegar
+              </h2>
+            </AnimateOnScroll>
+            <AnimateOnScroll variant="fadeInUp" delay={0.1}>
+              <div className="inline-flex items-center gap-2 text-muted-foreground font-body">
+                <MapPin className="size-4 text-bordo-800" />
+                <span>Cochabamba 2882, Montevideo</span>
+              </div>
+            </AnimateOnScroll>
+          </div>
+
+          <AnimateOnScroll variant="scaleIn">
+            <motion.div
+              whileHover={{ scale: 1.003 }}
+              transition={{ duration: 0.4 }}
+              className="relative overflow-hidden shadow-card aspect-[16/9] sm:aspect-[2/1] lg:aspect-[5/2]"
+            >
+              <iframe
+                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d1636.2!2d-56.1092333!3d-34.8528471!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x959f87a9637f1767%3A0xea1ebc05c867c9c4!2sClub+Seminario!5e0!3m2!1ses-419!2suy!4v1710000000000!5m2!1ses-419!2suy"
+                className="absolute inset-0 w-full h-full border-0"
+                allowFullScreen
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                title="Ubicación Parque CUPRA — Cochabamba 2882, Montevideo"
+              />
+            </motion.div>
+          </AnimateOnScroll>
+
+          <AnimateOnScroll delay={0.2} className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <a
+              href="https://www.google.com/maps/place/Club+Seminario./@-34.8523961,-56.1102264,17z/data=!4m14!1m7!3m6!1s0x959f874d70b16b89:0xcc6fe5bc4cef43ef!2sCochabamba+2882,+13000+Montevideo,+Departamento+de+Montevideo!3b1!8m2!3d-34.8520968!4d-56.1117284!3m5!1s0x959f87a9637f1767:0xea1ebc05c867c9c4!8m2!3d-34.8528471!4d-56.1092333!16s%2Fg%2F11h07dkdxq?entry=ttu"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full sm:w-56"
+            >
+              <motion.span
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                transition={springBouncy}
+                className="w-full inline-flex items-center justify-center gap-2 bg-bordo-800 px-6 py-3 font-heading text-xs uppercase tracking-editorial text-white hover:bg-bordo-900 transition-colors"
+              >
+                <MapPin className="size-4" />
+                Ir con Google Maps
+              </motion.span>
+            </a>
+            <a
+              href="https://www.waze.com/ul?ll=-34.8528471,-56.1092333&navigate=yes&zoom=17"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full sm:w-56"
+            >
+              <motion.span
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                transition={springBouncy}
+                className="w-full inline-flex items-center justify-center gap-2 border border-bordo-800 px-6 py-3 font-heading text-xs uppercase tracking-editorial text-bordo-800 hover:bg-bordo-800 hover:text-white transition-colors"
+              >
+                <Navigation className="size-4" />
+                Ir con Waze
+              </motion.span>
+            </a>
+          </AnimateOnScroll>
+        </div>
+      </section>
+
+      {/* ============================================ */}
       {/* CANCHAS — Premium card grid                  */}
       {/* ============================================ */}
       <section className="py-16 sm:py-24 bg-white border-b border-linea">
@@ -193,82 +269,6 @@ export function InstalacionesClient() {
                 deportistas.
               </blockquote>
             </div>
-          </AnimateOnScroll>
-        </div>
-      </section>
-
-      {/* ============================================ */}
-      {/* MAPA — Location with map embed               */}
-      {/* ============================================ */}
-      <section className="py-16 sm:py-24 bg-fondo">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-10 gap-4">
-            <AnimateOnScroll variant="fadeInUp">
-              <span className="font-heading uppercase tracking-editorial text-xs text-bordo-800 block mb-3">
-                Ubicación
-              </span>
-              <h2 className="font-display text-title-2 sm:text-title-1 uppercase tracking-tightest text-foreground">
-                Cómo llegar
-              </h2>
-            </AnimateOnScroll>
-            <AnimateOnScroll variant="fadeInUp" delay={0.1}>
-              <div className="inline-flex items-center gap-2 text-muted-foreground font-body">
-                <MapPin className="size-4 text-bordo-800" />
-                <span>Cochabamba 2882, Montevideo</span>
-              </div>
-            </AnimateOnScroll>
-          </div>
-
-          <AnimateOnScroll variant="scaleIn">
-            <motion.div
-              whileHover={{ scale: 1.003 }}
-              transition={{ duration: 0.4 }}
-              className="relative overflow-hidden shadow-card aspect-[16/9] sm:aspect-[2/1] lg:aspect-[5/2]"
-            >
-              <iframe
-                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d1636.2!2d-56.1092333!3d-34.8528471!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x959f87a9637f1767%3A0xea1ebc05c867c9c4!2sClub+Seminario!5e0!3m2!1ses-419!2suy!4v1710000000000!5m2!1ses-419!2suy"
-                className="absolute inset-0 w-full h-full border-0"
-                allowFullScreen
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                title="Ubicación Parque CUPRA — Cochabamba 2882, Montevideo"
-              />
-            </motion.div>
-          </AnimateOnScroll>
-
-          <AnimateOnScroll delay={0.2} className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <a
-              href="https://www.google.com/maps/place/Club+Seminario./@-34.8523961,-56.1102264,17z/data=!4m14!1m7!3m6!1s0x959f874d70b16b89:0xcc6fe5bc4cef43ef!2sCochabamba+2882,+13000+Montevideo,+Departamento+de+Montevideo!3b1!8m2!3d-34.8520968!4d-56.1117284!3m5!1s0x959f87a9637f1767:0xea1ebc05c867c9c4!8m2!3d-34.8528471!4d-56.1092333!16s%2Fg%2F11h07dkdxq?entry=ttu"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full sm:w-56"
-            >
-              <motion.span
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                transition={springBouncy}
-                className="w-full inline-flex items-center justify-center gap-2 bg-bordo-800 px-6 py-3 font-heading text-xs uppercase tracking-editorial text-white hover:bg-bordo-900 transition-colors"
-              >
-                <MapPin className="size-4" />
-                Ir con Google Maps
-              </motion.span>
-            </a>
-            <a
-              href="https://www.waze.com/ul?ll=-34.8528471,-56.1092333&navigate=yes&zoom=17"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full sm:w-56"
-            >
-              <motion.span
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                transition={springBouncy}
-                className="w-full inline-flex items-center justify-center gap-2 border border-bordo-800 px-6 py-3 font-heading text-xs uppercase tracking-editorial text-bordo-800 hover:bg-bordo-800 hover:text-white transition-colors"
-              >
-                <Navigation className="size-4" />
-                Ir con Waze
-              </motion.span>
-            </a>
           </AnimateOnScroll>
         </div>
       </section>

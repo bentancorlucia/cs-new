@@ -2,9 +2,16 @@ import { Metadata } from "next";
 import { BeneficiosClient } from "./beneficios-client";
 
 export const metadata: Metadata = {
-  title: "Beneficios",
+  title: "Beneficios para Socios",
   description:
-    "Beneficios exclusivos para socios del Club Seminario. Descuentos del 5% al 50% en múltiples categorías.",
+    "Beneficios y descuentos exclusivos para socios del Club Seminario: del 5% al 50% en gastronomía, salud, indumentaria, educación y más comercios adheridos.",
+  alternates: { canonical: "/beneficios" },
+  openGraph: {
+    title: "Beneficios para Socios — Club Seminario",
+    description:
+      "Descuentos exclusivos del 5% al 50% en comercios adheridos para socios del Club.",
+    url: "/beneficios",
+  },
 };
 
 export default function BeneficiosPage() {
