@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
@@ -177,6 +178,7 @@ export default function RootLayout({
           }}
           visibleToasts={3}
         />
+        <Analytics />
       </body>
     </html>
   );
