@@ -2,6 +2,7 @@
 
 import { HeroSection } from "@/components/shared/hero-section";
 import { motion } from "framer-motion";
+import Image from "next/image";
 import { MapPin, Clock, Phone, User } from "lucide-react";
 
 interface Category {
@@ -57,10 +58,13 @@ export function SportPage({
                 {/* Image section */}
                 {cat.image && (
                   <div className="relative aspect-[16/9] overflow-hidden">
-                    <img
+                    <Image
                       src={cat.image}
                       alt={cat.name}
-                      className="absolute inset-0 w-full h-full object-cover mix-blend-multiply transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-105"
+                      fill
+                      sizes="(min-width: 768px) 50vw, 100vw"
+                      loading={idx === 0 ? "eager" : "lazy"}
+                      className="object-cover mix-blend-multiply transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-105"
                     />
                     {/* Gradient overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-bordo-950/60 via-bordo-950/10 to-transparent transition-colors duration-700 ease-out group-hover:from-bordo-800/50" />
