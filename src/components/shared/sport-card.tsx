@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { fadeInUp } from "@/lib/motion";
@@ -23,10 +24,12 @@ export function SportCard({ nombre, slug, imagen, descripcion }: SportCardProps)
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         >
           {imagen ? (
-            <img
+            <Image
               src={imagen}
               alt={nombre}
-              className="absolute inset-0 w-full h-full object-cover"
+              fill
+              sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+              className="object-cover"
             />
           ) : (
             <div className="absolute inset-0 bg-gradient-to-br from-bordo-800 to-bordo-950" />

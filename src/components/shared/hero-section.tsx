@@ -1,7 +1,8 @@
 "use client";
 
 import { motion, useScroll, useTransform } from "framer-motion";
-import { useRef } from "react";
+import { useRef, useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { springBouncy } from "@/lib/motion";
@@ -14,7 +15,55 @@ interface HeroProps {
   secondaryCta?: { label: string; href: string };
   backgroundImage?: string;
   backgroundVideo?: string;
+  backgroundVideoPoster?: string;
   variant?: "full" | "split" | "minimal";
+}
+
+function LazyHeroVideo({ src, poster }: { src: string; poster: string }) {
+  const [shouldLoad, setShouldLoad] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const trigger = () => setShouldLoad(true);
+    if (typeof window === "undefined") return;
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number };
+    if (w.requestIdleCallback) {
+      w.requestIdleCallback(trigger, { timeout: 1500 });
+    } else {
+      const t = window.setTimeout(trigger, 600);
+      return () => window.clearTimeout(t);
+    }
+  }, []);
+
+  const baseSrc = src.replace(/\.(mp4|webm)$/i, "");
+
+  return (
+    <>
+      <Image
+        src={poster}
+        alt=""
+        fill
+        priority
+        sizes="100vw"
+        className="object-cover"
+      />
+      {shouldLoad && (
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="none"
+          poster={poster}
+          className="absolute inset-0 w-full h-full object-cover"
+        >
+          <source src={`${baseSrc}.webm`} type="video/webm" />
+          <source src={`${baseSrc}.mp4`} type="video/mp4" />
+        </video>
+      )}
+    </>
+  );
 }
 
 export function HeroSection({
@@ -25,6 +74,7 @@ export function HeroSection({
   secondaryCta,
   backgroundImage,
   backgroundVideo,
+  backgroundVideoPoster,
   variant = "full",
 }: HeroProps) {
   const ref = useRef<HTMLDivElement>(null);
@@ -154,10 +204,12 @@ export function HeroSection({
                 transition={{ duration: 0.8, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
                 className="relative aspect-[4/3] rounded-2xl overflow-hidden"
               >
-                <img
+                <Image
                   src={backgroundImage}
                   alt=""
-                  className="absolute inset-0 w-full h-full object-cover"
+                  fill
+                  sizes="(min-width: 1024px) 50vw, 100vw"
+                  className="object-cover"
                 />
               </motion.div>
             )}
@@ -171,27 +223,22 @@ export function HeroSection({
   return (
     <section ref={ref} className="relative min-h-[85vh] -mt-20 flex items-end overflow-hidden noise-overlay">
       {/* Background Video / Image with Parallax */}
-      {backgroundVideo ? (
+      {backgroundVideo && backgroundVideoPoster ? (
         <div className="absolute inset-0">
-          <video
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="absolute inset-0 w-full h-full object-cover"
-          >
-            <source src={backgroundVideo} type="video/mp4" />
-          </video>
+          <LazyHeroVideo src={backgroundVideo} poster={backgroundVideoPoster} />
         </div>
       ) : backgroundImage ? (
         <motion.div
           style={{ y: imageY, scale: imageScale }}
           className="absolute inset-0"
         >
-          <img
+          <Image
             src={backgroundImage}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover"
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover"
           />
         </motion.div>
       ) : (

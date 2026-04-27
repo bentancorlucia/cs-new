@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["tesseract.js", "pdf-parse"],
+  experimental: {
+    optimizePackageImports: ["lucide-react", "framer-motion", "date-fns"],
+  },
   images: {
     remotePatterns: [
       {
@@ -11,6 +14,7 @@ const nextConfig: NextConfig = {
       },
     ],
     formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 31536000,
   },
   async redirects() {
     return [

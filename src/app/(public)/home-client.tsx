@@ -44,7 +44,8 @@ export function HomeClient() {
         subtitle="Club deportivo, social y cultural que reúne a la comunidad jesuita en Uruguay"
         cta={{ label: "Hacete socio", href: "/socios" }}
         secondaryCta={{ label: "Conocé más", href: "/club/quienes-somos" }}
-        backgroundVideo="/images/hero/video-inicio-15-reducido.mp4"
+        backgroundVideo="/images/hero/video-inicio.mp4"
+        backgroundVideoPoster="/images/hero/video-inicio-poster.jpg"
         variant="full"
       />
 
