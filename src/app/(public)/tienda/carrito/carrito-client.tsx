@@ -96,10 +96,9 @@ export function CarritoClient() {
           >
             <AnimatePresence mode="popLayout">
               {items.map((item) => {
-                const key = `${item.productoId}-${item.varianteId ?? ""}`;
                 return (
                   <motion.div
-                    key={key}
+                    key={item.lineId}
                     variants={fadeInUp}
                     exit={{ opacity: 0, x: -50, transition: { duration: 0.2 } }}
                     layout
@@ -138,14 +137,36 @@ export function CarritoClient() {
 
                       <div className="flex flex-col gap-0.5">
                         <span className="font-bold text-[15px] text-bordo-800 leading-none">
-                          ${item.precio.toLocaleString("es-UY")}
+                          ${(item.precio + (item.precioExtra ?? 0)).toLocaleString("es-UY")}
                         </span>
                         {item.precioSocio && item.precioSocio < item.precio && (
                           <span className="text-[11px] text-bordo-800/50 font-medium leading-none">
-                            Socio: ${item.precioSocio.toLocaleString("es-UY")}
+                            Socio: ${(item.precioSocio + (item.precioExtra ?? 0)).toLocaleString("es-UY")}
                           </span>
                         )}
+                        {item.precioExtra ? (
+                          <span className="text-[10px] text-bordo-800/50 leading-none">
+                            Incluye +${item.precioExtra.toLocaleString("es-UY")} personalización
+                          </span>
+                        ) : null}
                       </div>
+
+                      {item.esEncargue && item.resumenPersonalizacion?.length ? (
+                        <div className="flex flex-col gap-0.5 rounded-md bg-dorado-300/15 px-2 py-1.5 text-[11px] text-bordo-800">
+                          <span className="font-heading uppercase tracking-editorial text-[9px] text-bordo-800/70">
+                            Por encargue
+                            {item.tiempoFabricacionDias
+                              ? ` · ${item.tiempoFabricacionDias} días`
+                              : ""}
+                          </span>
+                          {item.resumenPersonalizacion.map((r) => (
+                            <span key={r.key} className="leading-tight">
+                              <span className="text-bordo-800/60">{r.label}:</span>{" "}
+                              <span className="font-medium">{r.valor}</span>
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
 
                       <div className="mt-auto flex items-center justify-between pt-1.5">
                         {/* Quantity */}
@@ -153,11 +174,7 @@ export function CarritoClient() {
                           <motion.button
                             whileTap={{ scale: 0.85 }}
                             onClick={() =>
-                              updateQuantity(
-                                item.productoId,
-                                item.varianteId,
-                                item.cantidad - 1
-                              )
+                              updateQuantity(item.lineId, item.cantidad - 1)
                             }
                             className="flex size-9 items-center justify-center text-bordo-800/50 transition-colors active:bg-bordo-800/10 active:text-bordo-950"
                           >
@@ -175,11 +192,7 @@ export function CarritoClient() {
                           <motion.button
                             whileTap={{ scale: 0.85 }}
                             onClick={() =>
-                              updateQuantity(
-                                item.productoId,
-                                item.varianteId,
-                                item.cantidad + 1
-                              )
+                              updateQuantity(item.lineId, item.cantidad + 1)
                             }
                             disabled={item.cantidad >= item.maxStock}
                             className="flex size-9 items-center justify-center text-bordo-800/50 transition-colors active:bg-bordo-800/10 active:text-bordo-950 disabled:opacity-30"
@@ -190,18 +203,16 @@ export function CarritoClient() {
 
                         <div className="flex items-center gap-3">
                           <motion.span
-                            key={item.precio * item.cantidad}
+                            key={(item.precio + (item.precioExtra ?? 0)) * item.cantidad}
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             className="text-sm font-bold text-bordo-950"
                           >
-                            ${(item.precio * item.cantidad).toLocaleString("es-UY")}
+                            ${((item.precio + (item.precioExtra ?? 0)) * item.cantidad).toLocaleString("es-UY")}
                           </motion.span>
                           <motion.button
                             whileTap={{ scale: 0.8 }}
-                            onClick={() =>
-                              removeItem(item.productoId, item.varianteId)
-                            }
+                            onClick={() => removeItem(item.lineId)}
                             className="flex size-9 items-center justify-center text-bordo-800/30 transition-colors active:text-red-600"
                           >
                             <Trash2 className="size-4" />

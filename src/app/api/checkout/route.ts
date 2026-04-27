@@ -3,11 +3,19 @@ import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { APP_URL } from "@/lib/mercadopago/client";
 import { z } from "zod";
+import {
+  validarValoresMto,
+  validarRestriccionSocios,
+} from "@/lib/mto/schema";
+import { calcularPrecioExtra } from "@/lib/mto/pricing";
+import type { MtoCampo } from "@/types/mto";
 
 const checkoutItemSchema = z.object({
   productoId: z.number().int().positive(),
   varianteId: z.number().int().positive().optional(),
   cantidad: z.number().int().positive(),
+  esEncargue: z.boolean().optional(),
+  personalizacion: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
 });
 
 const checkoutSchema = z.object({
@@ -16,7 +24,18 @@ const checkoutSchema = z.object({
   metodo_pago: z.enum(["transferencia"]).default("transferencia"),
 });
 
-// POST /api/checkout — Crear pedido + preferencia MercadoPago
+interface ItemConPrecio {
+  productoId: number;
+  varianteId?: number;
+  nombre: string;
+  cantidad: number;
+  precioUnitario: number;
+  precioExtra: number;
+  esEncargue: boolean;
+  personalizacion: Record<string, string | number>;
+  subtotal: number;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerClient();
@@ -64,18 +83,14 @@ export async function POST(request: NextRequest) {
     const esSocio = perfil.es_socio === true;
 
     // 4. Validate stock and calculate prices
-    const itemsConPrecio: {
-      productoId: number;
-      varianteId?: number;
-      nombre: string;
-      cantidad: number;
-      precioUnitario: number;
-    }[] = [];
+    const itemsConPrecio: ItemConPrecio[] = [];
 
     for (const item of items) {
       const { data: prod } = await db
         .from("productos")
-        .select("id, nombre, precio, precio_socio, stock_actual")
+        .select(
+          "id, nombre, precio, precio_socio, stock_actual, mto_disponible, mto_solo, mto_campos"
+        )
         .eq("id", item.productoId)
         .eq("activo", true)
         .single();
@@ -86,6 +101,32 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+
+      const esEncargue = item.esEncargue === true;
+
+      // Enforcement mto_solo: no se permite venta de stock si está activo.
+      if (prod.mto_solo && !esEncargue) {
+        return NextResponse.json(
+          {
+            error: `${prod.nombre} solo se vende bajo encargue. Personalizalo desde la tienda.`,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Enforcement mto_disponible: si llega esEncargue=true pero no tiene MTO, rechazar.
+      if (esEncargue && !prod.mto_disponible) {
+        return NextResponse.json(
+          { error: `${prod.nombre} no admite encargue` },
+          { status: 400 }
+        );
+      }
+
+      let precioBase = prod.precio;
+      let precioUnitario =
+        esSocio && prod.precio_socio ? prod.precio_socio : prod.precio;
+      let nombreItem = prod.nombre;
+      let varianteId: number | undefined;
 
       if (item.varianteId) {
         const { data: vari } = await db
@@ -103,7 +144,8 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        if (vari.stock_actual < item.cantidad) {
+        // Para encargue, no validar stock de variante.
+        if (!esEncargue && vari.stock_actual < item.cantidad) {
           return NextResponse.json(
             {
               error: `Stock insuficiente para ${prod.nombre} (${vari.nombre}). Disponible: ${vari.stock_actual}`,
@@ -112,47 +154,79 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        const precioBase = vari.precio_override ?? prod.precio;
-        const precioUnitario =
+        precioBase = vari.precio_override ?? prod.precio;
+        precioUnitario =
           esSocio && prod.precio_socio ? prod.precio_socio : precioBase;
+        nombreItem = `${prod.nombre} - ${vari.nombre}`;
+        varianteId = vari.id;
+      } else if (!esEncargue && prod.stock_actual < item.cantidad) {
+        return NextResponse.json(
+          {
+            error: `Stock insuficiente para ${prod.nombre}. Disponible: ${prod.stock_actual}`,
+          },
+          { status: 400 }
+        );
+      }
 
-        itemsConPrecio.push({
-          productoId: item.productoId,
-          varianteId: item.varianteId,
-          nombre: `${prod.nombre} - ${vari.nombre}`,
-          cantidad: item.cantidad,
-          precioUnitario,
-        });
-      } else {
-        if (prod.stock_actual < item.cantidad) {
+      // Validar personalización
+      let precioExtra = 0;
+      let personalizacion: Record<string, string | number> = {};
+
+      if (esEncargue) {
+        const campos = (Array.isArray(prod.mto_campos)
+          ? prod.mto_campos
+          : []) as MtoCampo[];
+        const valores = item.personalizacion ?? {};
+
+        const validacion = validarValoresMto(campos, valores);
+        if (!validacion.valid) {
+          const firstErr = Object.values(validacion.errors)[0];
           return NextResponse.json(
-            {
-              error: `Stock insuficiente para ${prod.nombre}. Disponible: ${prod.stock_actual}`,
-            },
+            { error: `${prod.nombre}: ${firstErr}` },
             { status: 400 }
           );
         }
 
-        const precioUnitario =
-          esSocio && prod.precio_socio ? prod.precio_socio : prod.precio;
+        const bloqueosSocios = validarRestriccionSocios(
+          campos,
+          validacion.cleaned,
+          esSocio
+        );
+        if (bloqueosSocios.length > 0) {
+          return NextResponse.json(
+            {
+              error: `${prod.nombre}: la personalización seleccionada es exclusiva de socios`,
+            },
+            { status: 403 }
+          );
+        }
 
-        itemsConPrecio.push({
-          productoId: item.productoId,
-          nombre: prod.nombre,
-          cantidad: item.cantidad,
-          precioUnitario,
-        });
+        personalizacion = validacion.cleaned;
+        precioExtra = calcularPrecioExtra(campos, validacion.cleaned);
       }
+
+      itemsConPrecio.push({
+        productoId: item.productoId,
+        varianteId,
+        nombre: nombreItem,
+        cantidad: item.cantidad,
+        precioUnitario,
+        precioExtra,
+        esEncargue,
+        personalizacion,
+        subtotal: (precioUnitario + precioExtra) * item.cantidad,
+      });
     }
 
     // 5. Calculate totals
-    const subtotal = itemsConPrecio.reduce(
-      (sum, i) => sum + i.precioUnitario * i.cantidad,
-      0
-    );
+    const subtotal = itemsConPrecio.reduce((sum, i) => sum + i.subtotal, 0);
     const total = subtotal;
 
     // 6. Create order (transferencia only — MercadoPago disabled)
+    // Si hay algún encargue, no reservamos stock.
+    const tieneEncargues = itemsConPrecio.some((i) => i.esEncargue);
+    const todosEncargues = itemsConPrecio.every((i) => i.esEncargue);
+
     const { data: pedido, error: pedidoError } = await db
       .from("pedidos")
       .insert({
@@ -166,8 +240,9 @@ export async function POST(request: NextRequest) {
         nombre_cliente: `${perfil.nombre} ${perfil.apellido}`,
         telefono_cliente: perfil.telefono,
         notas: notas || null,
-        stock_reservado: true,
-        stock_reservado_at: new Date().toISOString(),
+        // Solo reservar stock si hay items que no son encargues
+        stock_reservado: !todosEncargues,
+        stock_reservado_at: !todosEncargues ? new Date().toISOString() : null,
       })
       .select("id, numero_pedido")
       .single();
@@ -187,7 +262,10 @@ export async function POST(request: NextRequest) {
       variante_id: item.varianteId || null,
       cantidad: item.cantidad,
       precio_unitario: item.precioUnitario,
-      subtotal: item.precioUnitario * item.cantidad,
+      subtotal: item.subtotal,
+      es_encargue: item.esEncargue,
+      personalizacion: item.personalizacion,
+      precio_extra_personalizacion: item.precioExtra,
     }));
 
     const { error: itemsError } = await db
@@ -214,7 +292,7 @@ export async function POST(request: NextRequest) {
         items: itemsConPrecio.map((i) => ({
           nombre: i.nombre,
           cantidad: i.cantidad,
-          precioUnitario: i.precioUnitario,
+          precioUnitario: i.precioUnitario + i.precioExtra,
         })),
         total,
         pedidoUrl: `${APP_URL}/tienda/pedido/${pedido.id}`,
@@ -227,6 +305,7 @@ export async function POST(request: NextRequest) {
       pedido_id: pedido.id,
       numero_pedido: pedido.numero_pedido,
       metodo_pago: "transferencia",
+      tiene_encargues: tieneEncargues,
     });
   } catch (error: any) {
     console.error("Error en checkout:", error?.message || error, error?.stack);

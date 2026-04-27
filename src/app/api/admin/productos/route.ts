@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/roles";
 import { z } from "zod";
+import { mtoCamposSchema } from "@/lib/mto/schema";
 
 const TIENDA_ROLES = ["super_admin", "tienda"];
 
@@ -19,6 +20,10 @@ const productoSchema = z.object({
   activo: z.boolean().default(true),
   destacado: z.boolean().default(false),
   unidad: z.enum(["un", "kg", "lt", "mt", "par", "docena"]).default("un"),
+  mto_disponible: z.boolean().default(false),
+  mto_solo: z.boolean().default(false),
+  mto_tiempo_fabricacion_dias: z.number().int().positive().optional().nullable(),
+  mto_campos: mtoCamposSchema.default([]),
 });
 
 // GET /api/admin/productos — listar todos los productos para admin

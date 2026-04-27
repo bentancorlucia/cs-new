@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/supabase/roles";
 import { z } from "zod";
+import { mtoCamposSchema } from "@/lib/mto/schema";
 
 const TIENDA_ROLES = ["super_admin", "tienda"];
 
@@ -19,6 +20,10 @@ const productoUpdateSchema = z.object({
   activo: z.boolean().optional(),
   destacado: z.boolean().optional(),
   unidad: z.enum(["un", "kg", "lt", "mt", "par", "docena"]).optional(),
+  mto_disponible: z.boolean().optional(),
+  mto_solo: z.boolean().optional(),
+  mto_tiempo_fabricacion_dias: z.number().int().positive().optional().nullable(),
+  mto_campos: mtoCamposSchema.optional(),
 });
 
 // GET /api/admin/productos/[id]

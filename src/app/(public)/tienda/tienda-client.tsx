@@ -502,6 +502,8 @@ export function TiendaClient({
                       stock={producto.stock_actual}
                       destacado={producto.destacado}
                       categoria={producto.categorias_producto?.nombre}
+                      mtoDisponible={producto.mto_disponible}
+                      mtoSolo={producto.mto_solo}
                       onAddToCart={() => handleAddToCart(producto)}
                     />
                   </div>
@@ -671,6 +673,8 @@ export function TiendaClient({
                       stock={producto.stock_actual}
                       destacado={producto.destacado}
                       categoria={producto.categorias_producto?.nombre}
+                      mtoDisponible={producto.mto_disponible}
+                      mtoSolo={producto.mto_solo}
                       onAddToCart={() => handleAddToCart(producto)}
                     />
                   );

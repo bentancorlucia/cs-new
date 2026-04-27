@@ -18,7 +18,7 @@ export async function POST(
   try {
     await requireRole(TIENDA_ROLES);
     const user = await getCurrentUser();
-    const db = createAdminClient();
+    const db = createAdminClient() as any;
 
     const { id } = await params;
     const pedidoId = parseInt(id);
@@ -61,11 +61,15 @@ export async function POST(
       );
     }
 
-    // 2. Fetch pedido items
-    const { data: pedidoItems } = await db
+    // 2. Fetch pedido items (excluyendo encargues — esos no descuentan stock)
+    const { data: pedidoItemsRaw } = await db
       .from("pedido_items")
-      .select("producto_id, variante_id, cantidad")
+      .select("producto_id, variante_id, cantidad, es_encargue")
       .eq("pedido_id", pedidoId);
+
+    const pedidoItems = (pedidoItemsRaw || []).filter(
+      (i: any) => !i.es_encargue
+    );
 
     if (accion === "aprobar") {
       // 3a. Re-validate stock before approving
