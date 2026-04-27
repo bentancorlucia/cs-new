@@ -244,22 +244,22 @@ function SelectField({
 
   return (
     <Select value={valor || undefined} onValueChange={(v) => onChange(v ?? "")}>
-      <SelectTrigger className="h-12 border-bordo-800/20 bg-white text-base focus:border-bordo-800 data-[placeholder]:text-bordo-800/50">
+      <SelectTrigger className="h-12 w-full border-bordo-800/20 bg-white text-base focus:border-bordo-800 data-[placeholder]:text-bordo-800/50">
         <SelectValue placeholder={placeholder}>
           {selected?.label}
         </SelectValue>
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="min-w-[var(--anchor-width)] w-auto">
         {ordered.disponibles.map((opcion) => (
           <SelectItem
             key={opcion.valor}
             value={opcion.valor}
-            className="py-2.5"
+            className="py-2.5 pr-10"
           >
-            <span className="flex items-center justify-between gap-3 w-full">
+            <span className="flex items-center justify-between gap-6 w-full whitespace-nowrap">
               <span className="text-base">{opcion.label}</span>
               {opcion.precio_extra ? (
-                <span className="text-xs text-bordo-800/60">
+                <span className="text-xs text-bordo-800/60 shrink-0">
                   +${opcion.precio_extra.toLocaleString("es-UY")}
                 </span>
               ) : null}
