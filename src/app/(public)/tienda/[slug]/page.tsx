@@ -69,6 +69,24 @@ export default async function ProductoDetallePage({ params }: Props) {
   if (!rawProducto) notFound();
   const producto = rawProducto as any;
 
+  // Detectar si el usuario actual es socio (server-side, sin race condition)
+  let esSocio = false;
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data: perfil } = await supabase
+        .from("perfiles")
+        .select("es_socio")
+        .eq("id", user.id)
+        .single();
+      esSocio = (perfil as { es_socio?: boolean } | null)?.es_socio === true;
+    }
+  } catch {
+    // sin sesión / fallo silencioso → esSocio queda en false
+  }
+
   // Stock reservado (pedidos pendientes de verificación)
   const { data: reservados } = await supabase
     .from("pedido_items")
@@ -144,6 +162,7 @@ export default async function ProductoDetallePage({ params }: Props) {
           producto: stockReservadoProducto,
           variantes: stockReservadoVariantes,
         }}
+        esSocio={esSocio}
       />
     </>
   );

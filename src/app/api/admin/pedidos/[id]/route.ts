@@ -38,7 +38,7 @@ export async function GET(
         pedido_items(
           id, cantidad, precio_unitario, subtotal,
           es_encargue, personalizacion, precio_extra_personalizacion,
-          productos(id, nombre, slug),
+          productos(id, nombre, slug, mto_campos),
           producto_variantes(id, nombre)
         ),
         comprobantes(

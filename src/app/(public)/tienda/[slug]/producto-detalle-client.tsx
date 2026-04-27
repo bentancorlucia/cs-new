@@ -21,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { ProductCard } from "@/components/tienda/product-card";
 import { MtoForm, calcularExtraSeguro } from "@/components/tienda/mto-form";
 import { useCart } from "@/hooks/use-cart";
-import { createBrowserClient } from "@/lib/supabase/client";
 import { validarValoresMto, validarRestriccionSocios } from "@/lib/mto/schema";
 import { resumirPersonalizacion } from "@/lib/mto/pricing";
 import type { MtoCampo, MtoValores } from "@/types/mto";
@@ -95,9 +94,10 @@ interface Props {
   producto: Producto;
   relacionados: RelacionadoSimple[];
   stockReservado: StockReservado;
+  esSocio: boolean;
 }
 
-export function ProductoDetalleClient({ producto, relacionados, stockReservado }: Props) {
+export function ProductoDetalleClient({ producto, relacionados, stockReservado, esSocio }: Props) {
   const imagenes = [...producto.producto_imagenes].sort((a, b) => a.orden - b.orden);
   const variantes = producto.producto_variantes?.filter((v) => v.activo) ?? [];
   const tieneVariantes = variantes.length > 0;
@@ -115,33 +115,7 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
   );
   const mtoDisponible = !!producto.mto_disponible;
   const mtoSolo = !!producto.mto_solo;
-  const [esSocio, setEsSocio] = useState(false);
   const [mtoValores, setMtoValores] = useState<MtoValores>({});
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadSocio() {
-      try {
-        const supabase = createBrowserClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return;
-        const { data } = await supabase
-          .from("perfiles")
-          .select("es_socio")
-          .eq("id", user.id)
-          .single();
-        if (!cancelled) setEsSocio(((data as any)?.es_socio) === true);
-      } catch {
-        // silent — sin socio por defecto
-      }
-    }
-    loadSocio();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   // Swipe gesture for mobile gallery
   const dragX = useMotionValue(0);
@@ -291,11 +265,10 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
       addItem(
         {
           productoId: producto.id,
-          varianteId: varianteActual?.id,
-          nombre: varianteActual
-            ? `${producto.nombre} - ${varianteActual.nombre}`
-            : producto.nombre,
-          precio: precioActual,
+          // MTO: no asociar variante del stock — el "talle" o equivalente
+          // viene en la personalización si así lo definió el admin.
+          nombre: producto.nombre,
+          precio: producto.precio,
           precioSocio: producto.precio_socio ?? undefined,
           imagenUrl: imagen?.url ?? "",
           maxStock: 99,
@@ -599,7 +572,19 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
                       Precio Socio
                     </span>
                   )}
-                  {agotado ? (
+                  {modoEncargue ? (
+                    producto.mto_tiempo_fabricacion_dias ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-dorado-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-dorado-300" />
+                        </span>
+                        <span className="text-xs font-semibold text-bordo-800 uppercase tracking-wider">
+                          Demora {producto.mto_tiempo_fabricacion_dias} días
+                        </span>
+                      </div>
+                    ) : null
+                  ) : agotado ? (
                     <div className="flex items-center gap-1.5">
                       <span className="relative flex h-2 w-2">
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />

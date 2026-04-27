@@ -81,15 +81,15 @@ export function MtoForm({
       variants={staggerContainer}
       initial="hidden"
       animate="visible"
-      className="flex flex-col gap-4"
+      className="flex flex-col gap-6"
     >
       {tiempoFabricacionDias ? (
         <motion.div
           variants={fadeInUp}
           transition={springSmooth}
-          className="flex items-center gap-2 rounded-md bg-dorado-300/15 px-3 py-2 text-xs text-bordo-800"
+          className="flex items-center gap-2 rounded-md bg-dorado-300/15 px-3.5 py-2.5 text-xs text-bordo-800"
         >
-          <Clock className="size-3.5" />
+          <Clock className="size-4" />
           <span>
             Demora aprox. <strong>{tiempoFabricacionDias} días</strong> de
             fabricación
@@ -124,11 +124,11 @@ function MtoCampoInput({ campo, valor, onChange, esSocio, error }: CampoProps) {
   const isSelectLike = campo.tipo === "select" || campo.tipo === "talle";
 
   return (
-    <motion.div variants={fadeInUp} transition={springSmooth} className="flex flex-col gap-1.5">
+    <motion.div variants={fadeInUp} transition={springSmooth} className="flex flex-col gap-2.5">
       <div className="flex items-center justify-between gap-2">
         <Label
           className={cn(
-            "font-heading text-[11px] uppercase tracking-editorial",
+            "font-heading text-xs uppercase tracking-editorial font-semibold",
             blocked ? "text-bordo-800/40" : "text-bordo-950"
           )}
         >
@@ -158,9 +158,9 @@ function MtoCampoInput({ campo, valor, onChange, esSocio, error }: CampoProps) {
             <Input
               value={String(valor ?? "")}
               onChange={(e) => onChange(e.target.value)}
-              placeholder={campo.placeholder}
+              placeholder={campo.placeholder ?? `Escribí ${campo.label.toLowerCase()}`}
               maxLength={campo.max_length}
-              className="border-bordo-800/15 focus:border-bordo-800"
+              className="h-12 border-bordo-800/20 bg-white text-base focus:border-bordo-800"
             />
           )}
           {campo.tipo === "numero" && (
@@ -173,8 +173,8 @@ function MtoCampoInput({ campo, valor, onChange, esSocio, error }: CampoProps) {
               }}
               min={campo.min}
               max={campo.max}
-              placeholder={campo.placeholder}
-              className="border-bordo-800/15 focus:border-bordo-800"
+              placeholder={campo.placeholder ?? `Número de ${campo.label.toLowerCase()}`}
+              className="h-12 border-bordo-800/20 bg-white text-base focus:border-bordo-800"
             />
           )}
           {isSelectLike && campo.opciones && (
@@ -191,14 +191,14 @@ function MtoCampoInput({ campo, valor, onChange, esSocio, error }: CampoProps) {
 
       {/* Sobrecargo info */}
       {!blocked && !isSelectLike && campo.precio_extra ? (
-        <p className="text-[11px] text-bordo-800/60">
+        <p className="text-xs text-bordo-800/60">
           + ${campo.precio_extra.toLocaleString("es-UY")} si lo completás
         </p>
       ) : null}
 
       {error && !blocked ? (
-        <p className="flex items-center gap-1 text-[11px] text-red-600">
-          <AlertCircle className="size-3" />
+        <p className="flex items-center gap-1 text-xs text-red-600">
+          <AlertCircle className="size-3.5" />
           {error}
         </p>
       ) : null}
@@ -240,16 +240,24 @@ function SelectField({
     return { disponibles, bloqueadas };
   }, [opciones, esSocio]);
 
+  const selected = opciones.find((o) => o.valor === valor);
+
   return (
-    <Select value={valor} onValueChange={(v) => onChange(v ?? "")}>
-      <SelectTrigger className="border-bordo-800/15 focus:border-bordo-800">
-        <SelectValue placeholder={placeholder} />
+    <Select value={valor || undefined} onValueChange={(v) => onChange(v ?? "")}>
+      <SelectTrigger className="h-12 border-bordo-800/20 bg-white text-base focus:border-bordo-800 data-[placeholder]:text-bordo-800/50">
+        <SelectValue placeholder={placeholder}>
+          {selected?.label}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         {ordered.disponibles.map((opcion) => (
-          <SelectItem key={opcion.valor} value={opcion.valor}>
+          <SelectItem
+            key={opcion.valor}
+            value={opcion.valor}
+            className="py-2.5"
+          >
             <span className="flex items-center justify-between gap-3 w-full">
-              <span>{opcion.label}</span>
+              <span className="text-base">{opcion.label}</span>
               {opcion.precio_extra ? (
                 <span className="text-xs text-bordo-800/60">
                   +${opcion.precio_extra.toLocaleString("es-UY")}

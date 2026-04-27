@@ -28,6 +28,10 @@ interface PedidoItem {
   cantidad: number;
   precioUnitario: number;
   subtotal: number;
+  esEncargue?: boolean;
+  personalizacion?: Array<{ key: string; label: string; valor: string }>;
+  precioExtra?: number;
+  tiempoFabricacionDias?: number | null;
 }
 
 interface Pedido {
@@ -87,6 +91,12 @@ const ESTADO_CONFIG: Record<
     color: "text-amber-600",
     label: "Verificación pendiente",
     bg: "bg-amber-50",
+  },
+  encargado: {
+    icon: Clock,
+    color: "text-blue-600",
+    label: "Encargado al proveedor",
+    bg: "bg-blue-50",
   },
   cancelado: {
     icon: XCircle,
@@ -312,23 +322,55 @@ export function PedidoConfirmacionClient({ pedido, paymentStatus }: Props) {
             {pedido.items.map((item) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between py-2.5 text-sm first:pt-0 last:pb-0"
+                className="py-3 text-sm first:pt-0 last:pb-0"
               >
-                <div>
-                  <p className="font-medium">{item.nombre}</p>
-                  {item.variante && (
-                    <p className="text-xs text-muted-foreground">
-                      {item.variante}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium">
+                      {item.nombre}
+                      {item.esEncargue && (
+                        <span className="ml-2 inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-700">
+                          Encargue
+                        </span>
+                      )}
                     </p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    {item.cantidad} &times; $
-                    {item.precioUnitario.toLocaleString("es-UY")}
-                  </p>
+                    {item.variante && (
+                      <p className="text-xs text-muted-foreground">
+                        {item.variante}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      {item.cantidad} &times; $
+                      {item.precioUnitario.toLocaleString("es-UY")}
+                    </p>
+                  </div>
+                  <span className="font-bold shrink-0">
+                    ${item.subtotal.toLocaleString("es-UY")}
+                  </span>
                 </div>
-                <span className="font-bold">
-                  ${item.subtotal.toLocaleString("es-UY")}
-                </span>
+                {item.esEncargue && item.personalizacion && item.personalizacion.length > 0 && (
+                  <div className="mt-2 flex flex-col gap-0.5 rounded-md bg-blue-50/60 px-3 py-2 text-[11px] text-blue-900">
+                    {item.personalizacion.map((r) => (
+                      <div key={r.key} className="flex justify-between gap-3">
+                        <span className="text-blue-800/70">{r.label}</span>
+                        <span className="font-medium">{r.valor}</span>
+                      </div>
+                    ))}
+                    {item.precioExtra ? (
+                      <div className="flex justify-between gap-3 border-t border-blue-200 pt-0.5 mt-0.5">
+                        <span className="text-blue-800/70">Sobrecargo</span>
+                        <span className="font-medium">
+                          +${item.precioExtra.toLocaleString("es-UY")}
+                        </span>
+                      </div>
+                    ) : null}
+                    {item.tiempoFabricacionDias ? (
+                      <p className="text-[10px] text-blue-800/60 mt-0.5">
+                        Demora aprox. {item.tiempoFabricacionDias} días
+                      </p>
+                    ) : null}
+                  </div>
+                )}
               </div>
             ))}
           </div>

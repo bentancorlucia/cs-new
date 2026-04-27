@@ -169,11 +169,15 @@ export async function POST(
         }
       }
 
-      // 5a. Update pedido → preparando (verificar = confirmar pago)
+      // 5a. Update pedido → encargado (si hay encargues) o preparando
+      const tieneEncargues = (pedidoItemsRaw || []).some(
+        (i: any) => i.es_encargue
+      );
+      const nuevoEstado = tieneEncargues ? "encargado" : "preparando";
       await db
         .from("pedidos")
         .update({
-          estado: "preparando",
+          estado: nuevoEstado,
           updated_at: new Date().toISOString(),
         })
         .eq("id", pedidoId);

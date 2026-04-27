@@ -403,21 +403,15 @@ function OpcionesEditor({
               className="flex items-center gap-1.5"
             >
               <Input
-                value={opcion.valor}
+                value={opcion.label}
                 onChange={(e) => {
-                  const valor = e.target.value;
+                  const label = e.target.value;
                   updateOpcion(i, {
-                    valor,
-                    label: opcion.label || valor,
+                    label,
+                    valor: slugify(label) || label,
                   });
                 }}
-                placeholder="Valor"
-                className="h-7 text-xs"
-              />
-              <Input
-                value={opcion.label}
-                onChange={(e) => updateOpcion(i, { label: e.target.value })}
-                placeholder="Etiqueta"
+                placeholder="Ej: Fútbol Femenino"
                 className="h-7 text-xs"
               />
               <div className="relative w-20 shrink-0">
