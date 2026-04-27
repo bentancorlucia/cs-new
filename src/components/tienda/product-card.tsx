@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShoppingCart, Check, Plus } from "lucide-react";
-import { fadeInUp, springBouncy } from "@/lib/motion";
+import { springBouncy } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 export interface ProductCardProps {
@@ -49,10 +49,7 @@ export function ProductCard({
   }
 
   return (
-    <motion.div
-      variants={fadeInUp}
-      className="group relative flex flex-col cursor-pointer"
-    >
+    <div className="group relative flex flex-col cursor-pointer">
       {/* Image */}
       <Link href={`/tienda/${slug}`} className="relative aspect-[4/5] overflow-hidden bg-superficie border border-bordo-800/5">
         {imagenUrl && !imgError ? (
@@ -60,7 +57,7 @@ export function ProductCard({
             src={imagenUrl}
             alt={nombre}
             fill
-            className="object-cover transition-transform duration-500 group-hover:scale-105 mix-blend-multiply"
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
             style={{ objectPosition: imagenFocalPoint || "50% 50%" }}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
             onError={() => setImgError(true)}
@@ -191,6 +188,6 @@ export function ProductCard({
         </div>
 
       </Link>
-    </motion.div>
+    </div>
   );
 }

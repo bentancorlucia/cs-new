@@ -301,3 +301,44 @@
 .sponsor-logo-footer:hover {
   background-color: rgba(247, 182, 67, 0.7);
 }
+
+/* Lightweight CSS animations replacing framer-motion infinite loops */
+@keyframes marquee {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
+}
+.animate-marquee {
+  animation: marquee 25s linear infinite;
+  will-change: transform;
+}
+
+@keyframes bounceSlow {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50%      { transform: translate3d(0, 8px, 0); }
+}
+.animate-bounce-slow {
+  animation: bounceSlow 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee,
+  .animate-bounce-slow {
+    animation: none !important;
+  }
+}
+
+/* Hero entry — animates only transform (text remains painted from frame 1, LCP-safe) */
+@keyframes heroRise {
+  from { transform: translate3d(0, 28px, 0); }
+  to   { transform: translate3d(0, 0, 0); }
+}
+.animate-hero-rise {
+  animation: heroRise 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-hero-rise {
+    animation: none !important;
+  }
+}
