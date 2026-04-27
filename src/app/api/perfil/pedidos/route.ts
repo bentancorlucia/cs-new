@@ -19,7 +19,9 @@ export async function GET() {
       metodo_pago, notas, created_at, updated_at,
       pedido_items(
         id, cantidad, precio_unitario, subtotal,
-        productos(nombre, slug)
+        es_encargue, personalizacion, precio_extra_personalizacion,
+        productos(nombre, slug, mto_campos, mto_tiempo_fabricacion_dias),
+        producto_variantes(nombre)
       )
     `
     )

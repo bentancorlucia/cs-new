@@ -67,6 +67,9 @@ interface Producto {
   activo: boolean;
   destacado: boolean;
   created_at: string;
+  mto_disponible: boolean;
+  mto_solo: boolean;
+  mto_tiempo_fabricacion_dias: number | null;
   categorias_producto: { id: number; nombre: string } | null;
   producto_imagenes: { url: string; es_principal: boolean; focal_point: string }[];
 }
@@ -270,12 +273,28 @@ export default function AdminProductosPage() {
                         </TableCell>
                         <TableCell className="py-3">
                           <div className="min-w-0">
-                            <Link
-                              href={`/admin/productos/${prod.id}`}
-                              className="font-body text-sm font-medium hover:text-bordo-700 transition-colors line-clamp-1"
-                            >
-                              {prod.nombre}
-                            </Link>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Link
+                                href={`/admin/productos/${prod.id}`}
+                                className="font-body text-sm font-medium hover:text-bordo-700 transition-colors line-clamp-1"
+                              >
+                                {prod.nombre}
+                              </Link>
+                              {prod.mto_disponible && (
+                                <span
+                                  className="inline-flex items-center rounded-full bg-dorado-300/20 text-bordo-800 px-1.5 py-0.5 text-[9px] font-display uppercase tracking-widest border border-dorado-300/40"
+                                  title={
+                                    prod.mto_tiempo_fabricacion_dias
+                                      ? `${prod.mto_solo ? "Solo encargue" : "Por encargue"} · ${prod.mto_tiempo_fabricacion_dias} días`
+                                      : prod.mto_solo
+                                        ? "Solo encargue"
+                                        : "Por encargue"
+                                  }
+                                >
+                                  {prod.mto_solo ? "Solo encargue" : "Encargue"}
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center gap-2 mt-0.5">
                               {prod.sku && (
                                 <span className="text-xs text-muted-foreground font-body">

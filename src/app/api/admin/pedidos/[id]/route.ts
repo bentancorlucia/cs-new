@@ -37,7 +37,8 @@ export async function GET(
         perfiles!perfil_id(id, nombre, apellido, telefono, cedula, es_socio),
         pedido_items(
           id, cantidad, precio_unitario, subtotal,
-          productos(id, nombre, slug),
+          es_encargue, personalizacion, precio_extra_personalizacion,
+          productos(id, nombre, slug, mto_campos),
           producto_variantes(id, nombre)
         ),
         comprobantes(
@@ -89,11 +90,11 @@ export async function PUT(
       if (pedido && pedido.estado !== "cancelado") {
         const { data: items } = await db
           .from("pedido_items")
-          .select("producto_id, variante_id, cantidad")
+          .select("producto_id, variante_id, cantidad, es_encargue")
           .eq("pedido_id", parseInt(id));
 
         if (items) {
-          for (const item of items as any[]) {
+          for (const item of (items as any[]).filter((i) => !i.es_encargue)) {
             const { data: prod } = await db
               .from("productos")
               .select("stock_actual")

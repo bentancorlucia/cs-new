@@ -49,10 +49,19 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 
-type EstadoPedido = "pendiente" | "pendiente_verificacion" | "pagado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
+type EstadoPedido = "pendiente" | "pendiente_verificacion" | "pagado" | "encargado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
 
 const estadoSteps: { estado: EstadoPedido; label: string; icon: any }[] = [
   { estado: "pendiente_verificacion", label: "Verificación", icon: Building2 },
+  { estado: "preparando", label: "Preparando", icon: Package },
+  { estado: "listo_retiro", label: "Listo para retiro", icon: Truck },
+  { estado: "retirado", label: "Retirado", icon: CheckCircle },
+];
+
+// Pasos cuando el pedido tiene encargues (inserta "Encargado" antes de "Preparando")
+const estadoStepsEncargue: { estado: EstadoPedido; label: string; icon: any }[] = [
+  { estado: "pendiente_verificacion", label: "Verificación", icon: Building2 },
+  { estado: "encargado", label: "Encargado", icon: Clock },
   { estado: "preparando", label: "Preparando", icon: Package },
   { estado: "listo_retiro", label: "Listo para retiro", icon: Truck },
   { estado: "retirado", label: "Retirado", icon: CheckCircle },
@@ -69,12 +78,14 @@ const estadoStepsNormal: { estado: EstadoPedido; label: string; icon: any }[] = 
 
 const nextEstado: Record<string, EstadoPedido> = {
   pagado: "preparando",
+  encargado: "preparando",
   preparando: "listo_retiro",
   listo_retiro: "retirado",
 };
 
 const nextLabel: Record<string, string> = {
   pagado: "Marcar como Preparando",
+  encargado: "Llegó el producto — Preparar",
   preparando: "Marcar como Listo para retiro",
   listo_retiro: "Marcar como Retirado",
 };
@@ -363,7 +374,12 @@ export default function DetallePedidoPage() {
 
   const isTransferencia = pedido.metodo_pago === "transferencia";
   const isPendingVerification = pedido.estado === "pendiente_verificacion";
-  const steps = isTransferencia ? estadoSteps : estadoStepsNormal;
+  const tieneEncargues = pedido.pedido_items?.some((it: any) => it.es_encargue) === true;
+  const steps = isTransferencia
+    ? tieneEncargues
+      ? estadoStepsEncargue
+      : estadoSteps
+    : estadoStepsNormal;
   const estadoActualIdx = steps.findIndex((s) => s.estado === pedido.estado);
   const cancelado = pedido.estado === "cancelado";
   const completado = pedido.estado === "retirado";
@@ -685,24 +701,83 @@ export default function DetallePedidoPage() {
             Productos ({pedido.pedido_items?.length || 0})
           </h2>
           <div className="space-y-2.5">
-            {pedido.pedido_items?.map((item: any) => (
-              <div key={item.id} className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 text-sm min-w-0">
-                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                    x{item.cantidad}
-                  </span>
-                  <div className="min-w-0">
-                    <span className="truncate block">{item.productos?.nombre}</span>
-                    {item.producto_variantes?.nombre && (
-                      <span className="text-xs text-muted-foreground">{item.producto_variantes.nombre}</span>
-                    )}
+            {pedido.pedido_items?.map((item: any) => {
+              const personalizacion = (item.personalizacion ?? {}) as Record<
+                string,
+                string | number
+              >;
+              const campos: Array<{
+                key: string;
+                label: string;
+                tipo: string;
+                opciones?: Array<{ valor: string; label: string }>;
+              }> = Array.isArray(item.productos?.mto_campos)
+                ? item.productos.mto_campos
+                : [];
+              // Resolver cada valor a su label (usando definición del producto)
+              const personalizacionEntries = Object.entries(personalizacion)
+                .map(([key, raw]) => {
+                  const campo = campos.find((c) => c.key === key);
+                  let valor = String(raw);
+                  if (campo && (campo.tipo === "select" || campo.tipo === "talle")) {
+                    const opcion = campo.opciones?.find((o) => o.valor === valor);
+                    if (opcion) valor = opcion.label;
+                  }
+                  return {
+                    key,
+                    label: campo?.label ?? key,
+                    valor,
+                  };
+                });
+              return (
+                <div
+                  key={item.id}
+                  className="flex flex-col gap-1 border-b border-border/30 pb-2 last:border-0 last:pb-0"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 text-sm min-w-0">
+                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                        x{item.cantidad}
+                      </span>
+                      <div className="min-w-0">
+                        <span className="truncate block">
+                          {item.productos?.nombre}
+                          {item.es_encargue && (
+                            <span className="ml-2 inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-amber-700">
+                              Encargue
+                            </span>
+                          )}
+                        </span>
+                        {!item.es_encargue && item.producto_variantes?.nombre && (
+                          <span className="text-xs text-muted-foreground">{item.producto_variantes.nombre}</span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-sm font-medium tabular-nums shrink-0">
+                      ${item.subtotal.toLocaleString("es-UY")}
+                    </span>
                   </div>
+                  {item.es_encargue && personalizacionEntries.length > 0 && (
+                    <div className="ml-7 flex flex-col gap-0.5 rounded-md bg-amber-50/80 px-2.5 py-1.5 text-[11px] text-amber-900">
+                      {personalizacionEntries.map((r) => (
+                        <div key={r.key} className="flex justify-between gap-3">
+                          <span className="text-amber-800/70">{r.label}</span>
+                          <span className="font-medium">{r.valor}</span>
+                        </div>
+                      ))}
+                      {item.precio_extra_personalizacion ? (
+                        <div className="flex justify-between gap-3 border-t border-amber-200 pt-0.5 mt-0.5">
+                          <span className="text-amber-800/70">Sobrecargo</span>
+                          <span className="font-medium">
+                            +${Number(item.precio_extra_personalizacion).toLocaleString("es-UY")}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
-                <span className="text-sm font-medium tabular-nums shrink-0">
-                  ${item.subtotal.toLocaleString("es-UY")}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <Separator className="my-3" />

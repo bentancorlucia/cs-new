@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 
-type EstadoPedido = "pendiente" | "pendiente_verificacion" | "pagado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
+type EstadoPedido = "pendiente" | "pendiente_verificacion" | "pagado" | "encargado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
 
 interface Pedido {
   id: number;
@@ -45,12 +45,14 @@ interface Pedido {
   nombre_cliente: string | null;
   created_at: string;
   perfiles: { nombre: string; apellido: string; telefono: string | null } | null;
+  tiene_encargue?: boolean;
 }
 
 const tabs: { key: EstadoPedido | ""; label: string; icon: any; color: string }[] = [
   { key: "", label: "Todos", icon: Package, color: "bg-muted text-foreground" },
   { key: "pendiente_verificacion", label: "Por conciliar", icon: Building2, color: "bg-orange-100 text-orange-700" },
   { key: "pagado", label: "Pagados", icon: CreditCard, color: "bg-emerald-100 text-emerald-700" },
+  { key: "encargado", label: "Encargados", icon: Clock, color: "bg-blue-100 text-blue-700" },
   { key: "preparando", label: "Preparando", icon: Package, color: "bg-amber-100 text-amber-700" },
   { key: "listo_retiro", label: "Listo", icon: Truck, color: "bg-blue-100 text-blue-700" },
   { key: "retirado", label: "Retirados", icon: CheckCircle, color: "bg-muted text-muted-foreground" },
@@ -59,12 +61,14 @@ const tabs: { key: EstadoPedido | ""; label: string; icon: any; color: string }[
 
 const nextEstado: Record<string, EstadoPedido> = {
   pagado: "preparando",
+  encargado: "preparando",
   preparando: "listo_retiro",
   listo_retiro: "retirado",
 };
 
 const nextLabel: Record<string, string> = {
   pagado: "Preparar",
+  encargado: "Llegó",
   preparando: "Listo",
   listo_retiro: "Retirado",
 };
@@ -73,6 +77,7 @@ const estadoBadge: Record<EstadoPedido, { label: string; className: string }> = 
   pendiente: { label: "Pendiente", className: "bg-gray-100 text-gray-600 border-gray-200" },
   pendiente_verificacion: { label: "Por conciliar", className: "bg-orange-50 text-orange-700 border-orange-200" },
   pagado: { label: "Pagado", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  encargado: { label: "Encargado", className: "bg-purple-50 text-purple-700 border-purple-200" },
   preparando: { label: "Preparando", className: "bg-amber-50 text-amber-700 border-amber-200" },
   listo_retiro: { label: "Listo retiro", className: "bg-blue-50 text-blue-700 border-blue-200" },
   retirado: { label: "Retirado", className: "bg-gray-50 text-gray-500 border-gray-200" },
@@ -295,7 +300,7 @@ export default function AdminPedidosPage() {
                       href={`/admin/pedidos/${pedido.id}`}
                       className="flex-1 min-w-0"
                     >
-                      <div className="flex items-center gap-2 mb-0.5">
+                      <div className="flex flex-wrap items-center gap-2 mb-0.5">
                         <span className="font-mono text-sm font-semibold text-foreground truncate">
                           {pedido.numero_pedido}
                         </span>
@@ -307,6 +312,11 @@ export default function AdminPedidosPage() {
                         >
                           {badge.label}
                         </span>
+                        {pedido.tiene_encargue && (
+                          <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider leading-none text-blue-700">
+                            Encargue
+                          </span>
+                        )}
                         {pedido.tipo === "pos" && (
                           <span className="text-[10px] font-medium text-muted-foreground bg-muted rounded px-1 py-0.5">
                             POS

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence, useMotionValue } from "framer-motion";
@@ -15,10 +15,15 @@ import {
   Check,
   Package,
   ArrowRight,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProductCard } from "@/components/tienda/product-card";
+import { MtoForm, calcularExtraSeguro } from "@/components/tienda/mto-form";
 import { useCart } from "@/hooks/use-cart";
+import { validarValoresMto, validarRestriccionSocios } from "@/lib/mto/schema";
+import { resumirPersonalizacion } from "@/lib/mto/pricing";
+import type { MtoCampo, MtoValores } from "@/types/mto";
 import {
   fadeInUp,
   fadeInLeft,
@@ -61,6 +66,10 @@ interface Producto {
   categorias_producto: { id: number; nombre: string; slug: string } | null;
   producto_imagenes: ProductoImagen[];
   producto_variantes: ProductoVariante[];
+  mto_disponible?: boolean;
+  mto_solo?: boolean;
+  mto_tiempo_fabricacion_dias?: number | null;
+  mto_campos?: MtoCampo[];
 }
 
 interface RelacionadoSimple {
@@ -71,6 +80,8 @@ interface RelacionadoSimple {
   precio_socio: number | null;
   stock_actual: number;
   destacado: boolean;
+  mto_disponible?: boolean;
+  mto_solo?: boolean;
   producto_imagenes: { url: string; es_principal: boolean; focal_point: string }[];
 }
 
@@ -83,9 +94,10 @@ interface Props {
   producto: Producto;
   relacionados: RelacionadoSimple[];
   stockReservado: StockReservado;
+  esSocio: boolean;
 }
 
-export function ProductoDetalleClient({ producto, relacionados, stockReservado }: Props) {
+export function ProductoDetalleClient({ producto, relacionados, stockReservado, esSocio }: Props) {
   const imagenes = [...producto.producto_imagenes].sort((a, b) => a.orden - b.orden);
   const variantes = producto.producto_variantes?.filter((v) => v.activo) ?? [];
   const tieneVariantes = variantes.length > 0;
@@ -95,6 +107,15 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
   const [added, setAdded] = useState(false);
   const [failedImgs, setFailedImgs] = useState<Set<number>>(new Set());
   const { addItem } = useCart();
+
+  // --- Made-to-order ---
+  const mtoCampos = useMemo<MtoCampo[]>(
+    () => (Array.isArray(producto.mto_campos) ? producto.mto_campos : []),
+    [producto.mto_campos]
+  );
+  const mtoDisponible = !!producto.mto_disponible;
+  const mtoSolo = !!producto.mto_solo;
+  const [mtoValores, setMtoValores] = useState<MtoValores>({});
 
   // Swipe gesture for mobile gallery
   const dragX = useMotionValue(0);
@@ -193,28 +214,91 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
   const stockActual = varianteActual
     ? getStockDisponible(varianteActual)
     : Math.max(0, producto.stock_actual - stockReservado.producto);
-  const agotado = stockActual <= 0;
+  const stockAgotado = stockActual <= 0;
 
+  // Modo MTO: el cliente decide si comprar stock o personalizar.
+  // - mto_solo: forzado a MTO siempre.
+  // - !mto_solo && stockAgotado && mto_disponible: forzado a MTO.
+  // - !mto_solo && stock>0 && mto_disponible: muestra tabs.
+  const mtoForzado = mtoDisponible && (mtoSolo || stockAgotado);
+  const mtoTabsVisibles = mtoDisponible && !mtoSolo && !stockAgotado;
+  const [modoEncargue, setModoEncargue] = useState<boolean>(mtoForzado);
+  // Si cambia el forzado (p.ej. variant sin stock), seguir forzando MTO
+  useEffect(() => {
+    if (mtoForzado && !modoEncargue) setModoEncargue(true);
+    if (!mtoDisponible && modoEncargue) setModoEncargue(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mtoForzado, mtoDisponible]);
+
+  const precioExtra = useMemo(
+    () => (modoEncargue ? calcularExtraSeguro(mtoCampos, mtoValores, esSocio) : 0),
+    [modoEncargue, mtoCampos, mtoValores, esSocio]
+  );
+
+  const mtoValidacion = useMemo(
+    () => validarValoresMto(mtoCampos, mtoValores),
+    [mtoCampos, mtoValores]
+  );
+  const mtoBloqueosSocios = useMemo(
+    () => validarRestriccionSocios(mtoCampos, mtoValores, esSocio),
+    [mtoCampos, mtoValores, esSocio]
+  );
+  const mtoFormValido =
+    mtoValidacion.valid && mtoBloqueosSocios.length === 0;
+
+  // Bloqueo del CTA:
+  // - En modo stock: bloquea si agotado
+  // - En modo encargue: bloquea si form inválido
+  const ctaDisabled = modoEncargue ? !mtoFormValido : stockAgotado;
+  const agotado = !modoEncargue && stockAgotado;
+
+  const precioConExtra = precioActual + precioExtra;
   const tieneDescuento =
     producto.precio_socio != null && producto.precio_socio < precioActual;
 
   function handleAddToCart() {
     const imagen = imagenes.find((i) => i.es_principal) ?? imagenes[0];
-    addItem(
-      {
-        productoId: producto.id,
-        varianteId: varianteActual?.id,
-        nombre: varianteActual
-          ? `${producto.nombre} - ${varianteActual.nombre}`
-          : producto.nombre,
-        precio: precioActual,
-        precioSocio: producto.precio_socio ?? undefined,
-        imagenUrl: imagen?.url ?? "",
-        maxStock: stockActual,
-        slug: producto.slug,
-      },
-      cantidad
-    );
+
+    if (modoEncargue) {
+      if (!mtoFormValido) return;
+      const resumen = resumirPersonalizacion(mtoCampos, mtoValidacion.cleaned);
+      addItem(
+        {
+          productoId: producto.id,
+          // MTO: no asociar variante del stock — el "talle" o equivalente
+          // viene en la personalización si así lo definió el admin.
+          nombre: producto.nombre,
+          precio: producto.precio,
+          precioSocio: producto.precio_socio ?? undefined,
+          imagenUrl: imagen?.url ?? "",
+          maxStock: 99,
+          slug: producto.slug,
+          esEncargue: true,
+          personalizacion: mtoValidacion.cleaned,
+          precioExtra,
+          tiempoFabricacionDias: producto.mto_tiempo_fabricacion_dias ?? null,
+          resumenPersonalizacion: resumen,
+        },
+        cantidad
+      );
+    } else {
+      addItem(
+        {
+          productoId: producto.id,
+          varianteId: varianteActual?.id,
+          nombre: varianteActual
+            ? `${producto.nombre} - ${varianteActual.nombre}`
+            : producto.nombre,
+          precio: precioActual,
+          precioSocio: producto.precio_socio ?? undefined,
+          imagenUrl: imagen?.url ?? "",
+          maxStock: stockActual,
+          slug: producto.slug,
+        },
+        cantidad
+      );
+    }
+
     setAdded(true);
     toast.success("Agregado al carrito", {
       description: `${cantidad}x ${producto.nombre}`,
@@ -474,11 +558,11 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
                         : "text-4xl text-bordo-950 font-medium"
                     )}
                   >
-                    ${precioActual.toLocaleString("es-UY")}
+                    ${precioConExtra.toLocaleString("es-UY")}
                   </span>
                   {tieneDescuento && (
                     <span className="text-4xl font-display text-bordo-800 font-medium tracking-tight">
-                      ${producto.precio_socio!.toLocaleString("es-UY")}
+                      ${(producto.precio_socio! + precioExtra).toLocaleString("es-UY")}
                     </span>
                   )}
                 </div>
@@ -488,7 +572,19 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
                       Precio Socio
                     </span>
                   )}
-                  {agotado ? (
+                  {modoEncargue ? (
+                    producto.mto_tiempo_fabricacion_dias ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-dorado-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-dorado-300" />
+                        </span>
+                        <span className="text-xs font-semibold text-bordo-800 uppercase tracking-wider">
+                          Demora {producto.mto_tiempo_fabricacion_dias} días
+                        </span>
+                      </div>
+                    ) : null
+                  ) : agotado ? (
                     <div className="flex items-center gap-1.5">
                       <span className="relative flex h-2 w-2">
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
@@ -521,8 +617,87 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
                 </div>
               </div>
 
-              {/* Variants */}
-              {tieneVariantes && esMultiAtributo ? (
+              {/* Modo de compra: stock vs encargue (solo cuando ambos disponibles) */}
+              {mtoTabsVisibles && (
+                <div className="mt-2 flex rounded-md border border-bordo-800/15 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setModoEncargue(false)}
+                    className={cn(
+                      "flex-1 py-2 px-3 text-xs font-heading uppercase tracking-editorial transition-all",
+                      !modoEncargue
+                        ? "bg-bordo-800 text-white"
+                        : "text-bordo-800/60 hover:text-bordo-800"
+                    )}
+                  >
+                    Comprar ahora
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModoEncargue(true)}
+                    className={cn(
+                      "flex-1 py-2 px-3 text-xs font-heading uppercase tracking-editorial transition-all flex items-center justify-center gap-1.5",
+                      modoEncargue
+                        ? "bg-bordo-800 text-dorado-300"
+                        : "text-bordo-800/60 hover:text-bordo-800"
+                    )}
+                  >
+                    <Sparkles className="size-3" />
+                    Personalizar
+                  </button>
+                </div>
+              )}
+
+              {/* Banner si está forzado a MTO por agotado */}
+              {mtoDisponible && stockAgotado && !mtoSolo && (
+                <div className="rounded-md bg-dorado-300/15 border border-dorado-300 px-3 py-2 text-xs text-bordo-800">
+                  Sin stock — pedilo bajo encargue.
+                </div>
+              )}
+
+              {/* Form MTO */}
+              <AnimatePresence mode="wait">
+                {modoEncargue && mtoCampos.length > 0 && (
+                  <motion.div
+                    key="mto"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 8, transition: { duration: 0.15 } }}
+                    transition={springSmooth}
+                    className="mt-2"
+                  >
+                    <MtoForm
+                      campos={mtoCampos}
+                      valores={mtoValores}
+                      onChange={setMtoValores}
+                      esSocio={esSocio}
+                      tiempoFabricacionDias={producto.mto_tiempo_fabricacion_dias}
+                    />
+                    {precioExtra > 0 && (
+                      <p className="mt-3 text-sm font-medium text-bordo-800">
+                        Sobrecargo personalización: +$
+                        {precioExtra.toLocaleString("es-UY")}
+                      </p>
+                    )}
+                  </motion.div>
+                )}
+                {modoEncargue && mtoCampos.length === 0 && (
+                  <motion.div
+                    key="mto-empty"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="rounded-md border border-bordo-800/10 bg-superficie/40 px-3 py-2 text-xs text-bordo-800/60"
+                  >
+                    Pedido bajo encargue sin opciones de personalización.
+                    {producto.mto_tiempo_fabricacion_dias
+                      ? ` Demora ${producto.mto_tiempo_fabricacion_dias} días.`
+                      : ""}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Variants — solo en modo stock */}
+              {!modoEncargue && tieneVariantes && esMultiAtributo ? (
                 /* Multi-attribute mode: separate selector per dimension */
                 <div className="flex flex-col gap-5 mt-2">
                   {atributoKeys.map((key) => (
@@ -569,7 +744,7 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
                     </div>
                   ))}
                 </div>
-              ) : tieneVariantes ? (
+              ) : !modoEncargue && tieneVariantes ? (
                 /* Single-attribute / fallback: flat list */
                 <div className="flex flex-col gap-3 mt-2">
                   <span className="text-xs font-bold uppercase tracking-widest text-bordo-950">
@@ -623,8 +798,12 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
                   </motion.span>
                   <motion.button
                     whileTap={{ scale: 0.85 }}
-                    onClick={() => setCantidad((q) => Math.min(stockActual, q + 1))}
-                    disabled={cantidad >= stockActual}
+                    onClick={() =>
+                      setCantidad((q) =>
+                        Math.min(modoEncargue ? 99 : stockActual, q + 1)
+                      )
+                    }
+                    disabled={!modoEncargue && cantidad >= stockActual}
                     className="flex size-10 items-center justify-center text-bordo-800 hover:bg-bordo-800/10 transition-colors disabled:opacity-30"
                   >
                     <Plus className="size-4" />
@@ -635,16 +814,16 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
                 <motion.button
                   whileTap={{ scale: 0.97 }}
                   onClick={handleAddToCart}
-                  disabled={agotado}
+                  disabled={ctaDisabled}
                   className={cn(
                     "flex-1 h-14 flex items-center justify-center gap-3 font-display text-xl uppercase tracking-wide transition-all overflow-hidden relative group",
-                    agotado
+                    ctaDisabled
                       ? "bg-bordo-800/30 text-bordo-800/50 cursor-not-allowed"
                       : "bg-bordo-800 text-dorado-300 hover:bg-bordo-950"
                   )}
                 >
                   {/* Shine effect */}
-                  {!agotado && (
+                  {!ctaDisabled && (
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
                   )}
                   <AnimatePresence mode="wait">
@@ -661,6 +840,8 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
                       </motion.span>
                     ) : agotado ? (
                       <span className="relative z-10">Sin stock</span>
+                    ) : modoEncargue && !mtoFormValido ? (
+                      <span className="relative z-10">Completá los campos</span>
                     ) : (
                       <motion.span
                         key="add"
@@ -669,7 +850,7 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
                         exit={{ opacity: 0, y: -8 }}
                         className="flex items-center gap-2 relative z-10"
                       >
-                        Agregar al carrito
+                        {modoEncargue ? "Pedir bajo encargue" : "Agregar al carrito"}
                         <ArrowRight className="size-4 group-hover:translate-x-0.5 transition-transform" />
                       </motion.span>
                     )}
@@ -706,26 +887,28 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
           {/* Price row */}
           <div className="mb-2.5 flex items-center justify-between">
             <div className="flex flex-col">
-              {varianteActual && (
+              {(varianteActual || modoEncargue) && (
                 <span className="text-[10px] uppercase tracking-wider font-bold text-bordo-800/60">
-                  {esMultiAtributo
+                  {modoEncargue
+                    ? "Encargue"
+                    : esMultiAtributo
                     ? Object.values(seleccionAtributos).join(" / ")
-                    : varianteActual.nombre}
+                    : varianteActual?.nombre}
                 </span>
               )}
               <div className="flex items-baseline gap-2">
                 {tieneDescuento ? (
                   <>
                     <span className="text-xs text-bordo-950/40 line-through">
-                      ${precioActual.toLocaleString("es-UY")}
+                      ${precioConExtra.toLocaleString("es-UY")}
                     </span>
                     <span className="text-xl font-display font-bold text-bordo-800">
-                      ${producto.precio_socio!.toLocaleString("es-UY")}
+                      ${(producto.precio_socio! + precioExtra).toLocaleString("es-UY")}
                     </span>
                   </>
                 ) : (
                   <span className="text-xl font-display font-bold text-bordo-950">
-                    ${precioActual.toLocaleString("es-UY")}
+                    ${precioConExtra.toLocaleString("es-UY")}
                   </span>
                 )}
               </div>
@@ -752,8 +935,12 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
               </motion.span>
               <motion.button
                 whileTap={{ scale: 0.85 }}
-                onClick={() => setCantidad((q) => Math.min(stockActual, q + 1))}
-                disabled={cantidad >= stockActual}
+                onClick={() =>
+                  setCantidad((q) =>
+                    Math.min(modoEncargue ? 99 : stockActual, q + 1)
+                  )
+                }
+                disabled={!modoEncargue && cantidad >= stockActual}
                 className="flex size-10 items-center justify-center text-bordo-800 active:bg-bordo-800/10 disabled:opacity-30"
               >
                 <Plus className="size-4" />
@@ -765,10 +952,10 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={handleAddToCart}
-            disabled={agotado}
+            disabled={ctaDisabled}
             className={cn(
               "w-full h-12 flex items-center justify-center gap-2 font-display text-base uppercase tracking-wide transition-all",
-              agotado
+              ctaDisabled
                 ? "bg-bordo-800/30 text-bordo-800/50 cursor-not-allowed"
                 : "bg-bordo-800 text-dorado-300 active:bg-bordo-950"
             )}
@@ -787,6 +974,8 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
                 </motion.span>
               ) : agotado ? (
                 <span>Sin stock</span>
+              ) : modoEncargue && !mtoFormValido ? (
+                <span>Completá los campos</span>
               ) : (
                 <motion.span
                   key="add"
@@ -795,8 +984,8 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
                   exit={{ opacity: 0, y: -6 }}
                   className="flex items-center gap-2"
                 >
-                  <ShoppingCart className="size-5" />
-                  Agregar al carrito
+                  {modoEncargue ? <Sparkles className="size-5" /> : <ShoppingCart className="size-5" />}
+                  {modoEncargue ? "Pedir bajo encargue" : "Agregar al carrito"}
                 </motion.span>
               )}
             </AnimatePresence>
@@ -859,6 +1048,8 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
                         imagenFocalPoint={img?.focal_point}
                         stock={rel.stock_actual}
                         destacado={rel.destacado}
+                        mtoDisponible={rel.mto_disponible}
+                        mtoSolo={rel.mto_solo}
                       />
                     </div>
                   );
@@ -890,6 +1081,8 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado }
                     imagenFocalPoint={img?.focal_point}
                     stock={rel.stock_actual}
                     destacado={rel.destacado}
+                    mtoDisponible={rel.mto_disponible}
+                    mtoSolo={rel.mto_solo}
                   />
                 );
               })}

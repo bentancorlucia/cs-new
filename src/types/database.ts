@@ -310,6 +310,10 @@ export interface Database {
           peso: number | null;
           activo: boolean;
           destacado: boolean;
+          mto_disponible: boolean;
+          mto_solo: boolean;
+          mto_tiempo_fabricacion_dias: number | null;
+          mto_campos: Json;
           created_at: string;
           updated_at: string;
         };
@@ -329,6 +333,10 @@ export interface Database {
           peso?: number | null;
           activo?: boolean;
           destacado?: boolean;
+          mto_disponible?: boolean;
+          mto_solo?: boolean;
+          mto_tiempo_fabricacion_dias?: number | null;
+          mto_campos?: Json;
           created_at?: string;
           updated_at?: string;
         };
@@ -347,6 +355,10 @@ export interface Database {
           peso?: number | null;
           activo?: boolean;
           destacado?: boolean;
+          mto_disponible?: boolean;
+          mto_solo?: boolean;
+          mto_tiempo_fabricacion_dias?: number | null;
+          mto_campos?: Json;
           updated_at?: string;
         };
         Relationships: [];
@@ -422,7 +434,7 @@ export interface Database {
           numero_pedido: string;
           perfil_id: string | null;
           tipo: "online" | "pos";
-          estado: "pendiente" | "pendiente_verificacion" | "pagado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
+          estado: "pendiente" | "pendiente_verificacion" | "pagado" | "encargado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
           subtotal: number;
           descuento: number;
           total: number;
@@ -444,7 +456,7 @@ export interface Database {
           numero_pedido?: string;
           perfil_id?: string | null;
           tipo: "online" | "pos";
-          estado?: "pendiente" | "pendiente_verificacion" | "pagado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
+          estado?: "pendiente" | "pendiente_verificacion" | "pagado" | "encargado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
           subtotal: number;
           descuento?: number;
           total: number;
@@ -465,7 +477,7 @@ export interface Database {
           numero_pedido?: string;
           perfil_id?: string | null;
           tipo?: "online" | "pos";
-          estado?: "pendiente" | "pendiente_verificacion" | "pagado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
+          estado?: "pendiente" | "pendiente_verificacion" | "pagado" | "encargado" | "preparando" | "listo_retiro" | "retirado" | "cancelado";
           subtotal?: number;
           descuento?: number;
           total?: number;
@@ -492,6 +504,9 @@ export interface Database {
           cantidad: number;
           precio_unitario: number;
           subtotal: number;
+          es_encargue: boolean;
+          personalizacion: Json;
+          precio_extra_personalizacion: number;
           created_at: string;
         };
         Insert: {
@@ -502,6 +517,9 @@ export interface Database {
           cantidad: number;
           precio_unitario: number;
           subtotal: number;
+          es_encargue?: boolean;
+          personalizacion?: Json;
+          precio_extra_personalizacion?: number;
           created_at?: string;
         };
         Update: {
@@ -511,6 +529,9 @@ export interface Database {
           cantidad?: number;
           precio_unitario?: number;
           subtotal?: number;
+          es_encargue?: boolean;
+          personalizacion?: Json;
+          precio_extra_personalizacion?: number;
         };
         Relationships: [];
       };

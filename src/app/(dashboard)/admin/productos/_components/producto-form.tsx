@@ -25,6 +25,7 @@ import {
   Plus,
   Layers,
   Crosshair,
+  Sparkles,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -51,6 +52,8 @@ import {
 } from "@/components/ui/tooltip";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { VariantesSection } from "./variantes-section";
+import { MtoCamposSection } from "./mto-campos-section";
+import type { MtoCampo } from "@/types/mto";
 import {
   fadeInUp,
   fadeInLeft,
@@ -89,6 +92,9 @@ const schema = z.object({
   unidad: z.string().default("un"),
   activo: z.boolean(),
   destacado: z.boolean(),
+  mto_disponible: z.boolean(),
+  mto_solo: z.boolean(),
+  mto_tiempo_fabricacion_dias: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -961,6 +967,9 @@ export function ProductoForm({ producto }: Props) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [newProveedores, setNewProveedores] = useState<ProductoProveedor[]>([]);
+  const [mtoCampos, setMtoCampos] = useState<MtoCampo[]>(
+    Array.isArray(producto?.mto_campos) ? producto.mto_campos : []
+  );
   const hasVariantes = isEdit && (producto.producto_variantes?.length ?? 0) > 0;
 
   const {
@@ -985,6 +994,10 @@ export function ProductoForm({ producto }: Props) {
       unidad: producto?.unidad || "un",
       activo: producto?.activo ?? true,
       destacado: producto?.destacado ?? false,
+      mto_disponible: producto?.mto_disponible ?? false,
+      mto_solo: producto?.mto_solo ?? false,
+      mto_tiempo_fabricacion_dias:
+        producto?.mto_tiempo_fabricacion_dias?.toString() || "",
     },
   });
 
@@ -995,6 +1008,8 @@ export function ProductoForm({ producto }: Props) {
   const precioSocio = watch("precio_socio");
   const categoriaId = watch("categoria_id");
   const unidad = watch("unidad");
+  const mtoDisponible = watch("mto_disponible");
+  const mtoSolo = watch("mto_solo");
 
   // Auto-generate slug from name (shouldDirty: false to avoid re-render cascade)
   useEffect(() => {
@@ -1035,6 +1050,13 @@ export function ProductoForm({ producto }: Props) {
         unidad: data.unidad,
         activo: data.activo,
         destacado: data.destacado,
+        mto_disponible: data.mto_disponible,
+        mto_solo: data.mto_disponible ? data.mto_solo : false,
+        mto_tiempo_fabricacion_dias:
+          data.mto_disponible && data.mto_tiempo_fabricacion_dias
+            ? parseInt(data.mto_tiempo_fabricacion_dias)
+            : null,
+        mto_campos: data.mto_disponible ? mtoCampos : [],
       };
 
       const url = isEdit
@@ -1490,6 +1512,106 @@ export function ProductoForm({ producto }: Props) {
               />
             </FormSection>
           )}
+
+          {/* Made-to-order */}
+          <FormSection
+            icon={Sparkles}
+            title="Made-to-order"
+            description="Permitir que el cliente personalice el producto bajo encargue"
+            delay={0.25}
+          >
+            <div className="space-y-4">
+              <div
+                className={`flex items-center justify-between rounded-xl border p-3.5 transition-colors ${
+                  mtoDisponible
+                    ? "border-amber-200 bg-amber-50/50"
+                    : "border-border/50 bg-muted/20"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <motion.div
+                    animate={{
+                      backgroundColor: mtoDisponible
+                        ? "rgb(245 158 11 / 0.15)"
+                        : "rgb(156 163 175 / 0.15)",
+                    }}
+                    className="flex size-8 items-center justify-center rounded-lg"
+                  >
+                    <Sparkles
+                      className={`size-4 transition-colors ${
+                        mtoDisponible ? "text-amber-600" : "text-muted-foreground"
+                      }`}
+                    />
+                  </motion.div>
+                  <div>
+                    <p className="text-sm font-medium">Disponible para encargue</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Activá para que se pueda personalizar este producto
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={mtoDisponible}
+                  onCheckedChange={(v) =>
+                    setValue("mto_disponible", v, { shouldDirty: true })
+                  }
+                />
+              </div>
+
+              <AnimatePresence initial={false}>
+                {mtoDisponible && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="space-y-4 pt-1">
+                      <div className="flex items-center justify-between rounded-xl border border-border/50 bg-muted/20 p-3">
+                        <div>
+                          <p className="text-sm font-medium">Solo bajo encargue</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            No vender stock por la web — solo personalizado
+                          </p>
+                        </div>
+                        <Switch
+                          checked={mtoSolo}
+                          onCheckedChange={(v) =>
+                            setValue("mto_solo", v, { shouldDirty: true })
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="mto_tiempo">
+                          Tiempo de fabricación (días)
+                        </Label>
+                        <Input
+                          id="mto_tiempo"
+                          type="number"
+                          min="1"
+                          {...register("mto_tiempo_fabricacion_dias")}
+                          placeholder="Ej: 7"
+                          className="mt-1.5 max-w-[160px]"
+                        />
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          Se muestra al cliente al elegir personalizar
+                        </p>
+                      </div>
+
+                      <div>
+                        <Label className="mb-2 block">
+                          Campos personalizables
+                        </Label>
+                        <MtoCamposSection value={mtoCampos} onChange={setMtoCampos} />
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </FormSection>
         </div>
 
         {/* RIGHT — Sidebar */}

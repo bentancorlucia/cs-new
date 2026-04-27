@@ -13,6 +13,14 @@ interface PageProps {
   searchParams: Promise<{ status?: string }>;
 }
 
+type MtoCampoOpcion = { valor: string; label: string };
+type MtoCampo = {
+  key: string;
+  label: string;
+  tipo: "texto" | "numero" | "select" | "talle";
+  opciones?: MtoCampoOpcion[];
+};
+
 type PedidoResult = {
   id: number;
   numero_pedido: string;
@@ -28,7 +36,16 @@ type PedidoResult = {
     cantidad: number;
     precio_unitario: number;
     subtotal: number;
-    productos: { id: number; nombre: string; slug: string } | null;
+    es_encargue: boolean | null;
+    personalizacion: Record<string, string | number> | null;
+    precio_extra_personalizacion: number | null;
+    productos: {
+      id: number;
+      nombre: string;
+      slug: string;
+      mto_campos: MtoCampo[] | null;
+      mto_tiempo_fabricacion_dias: number | null;
+    } | null;
     producto_variantes: { id: number; nombre: string } | null;
   }[];
 };
@@ -66,7 +83,10 @@ export default async function PedidoPage({ params, searchParams }: PageProps) {
         cantidad,
         precio_unitario,
         subtotal,
-        productos (id, nombre, slug),
+        es_encargue,
+        personalizacion,
+        precio_extra_personalizacion,
+        productos (id, nombre, slug, mto_campos, mto_tiempo_fabricacion_dias),
         producto_variantes (id, nombre)
       )
     `
@@ -89,14 +109,35 @@ export default async function PedidoPage({ params, searchParams }: PageProps) {
     metodo_pago: pedido.metodo_pago,
     notas: pedido.notas,
     created_at: pedido.created_at,
-    items: pedido.pedido_items.map((item) => ({
-      id: item.id,
-      nombre: item.productos?.nombre ?? "Producto",
-      variante: item.producto_variantes?.nombre ?? null,
-      cantidad: item.cantidad,
-      precioUnitario: item.precio_unitario,
-      subtotal: item.subtotal,
-    })),
+    items: pedido.pedido_items.map((item) => {
+      const campos = item.productos?.mto_campos ?? [];
+      const personalizacion = item.personalizacion ?? {};
+      const personalizacionResumen = Object.entries(personalizacion).map(
+        ([key, raw]) => {
+          const campo = campos.find((c) => c.key === key);
+          let valor = String(raw);
+          if (campo && (campo.tipo === "select" || campo.tipo === "talle")) {
+            const opcion = campo.opciones?.find((o) => o.valor === valor);
+            if (opcion) valor = opcion.label;
+          }
+          return { key, label: campo?.label ?? key, valor };
+        }
+      );
+      return {
+        id: item.id,
+        nombre: item.productos?.nombre ?? "Producto",
+        variante: item.es_encargue
+          ? null
+          : item.producto_variantes?.nombre ?? null,
+        cantidad: item.cantidad,
+        precioUnitario: item.precio_unitario,
+        subtotal: item.subtotal,
+        esEncargue: item.es_encargue === true,
+        personalizacion: personalizacionResumen,
+        precioExtra: Number(item.precio_extra_personalizacion ?? 0),
+        tiempoFabricacionDias: item.productos?.mto_tiempo_fabricacion_dias ?? null,
+      };
+    }),
   };
 
   return (

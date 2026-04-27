@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   ShoppingBag,
   ChevronDown,
+  ArrowRight,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,12 +16,33 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { staggerContainer, fadeInUp } from "@/lib/motion";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 
+interface MtoCampoOpcion {
+  valor: string;
+  label: string;
+}
+
+interface MtoCampo {
+  key: string;
+  label: string;
+  tipo: "texto" | "numero" | "select" | "talle";
+  opciones?: MtoCampoOpcion[];
+}
+
 interface PedidoItem {
   id: number;
   cantidad: number;
   precio_unitario: number;
   subtotal: number;
-  productos: { nombre: string; slug: string } | null;
+  es_encargue?: boolean;
+  personalizacion?: Record<string, string | number> | null;
+  precio_extra_personalizacion?: number;
+  productos: {
+    nombre: string;
+    slug: string;
+    mto_campos?: MtoCampo[];
+    mto_tiempo_fabricacion_dias?: number | null;
+  } | null;
+  producto_variantes?: { nombre: string } | null;
 }
 
 interface Pedido {
@@ -40,7 +62,9 @@ interface Pedido {
 
 const ESTADO_CONFIG: Record<string, { label: string; color: string }> = {
   pendiente: { label: "Pendiente", color: "bg-yellow-100 text-yellow-700" },
+  pendiente_verificacion: { label: "Verificando pago", color: "bg-orange-100 text-orange-700" },
   pagado: { label: "Pagado", color: "bg-blue-100 text-blue-700" },
+  encargado: { label: "Encargado al proveedor", color: "bg-blue-100 text-blue-700" },
   preparando: { label: "Preparando", color: "bg-indigo-100 text-indigo-700" },
   listo_retiro: { label: "Listo para retiro", color: "bg-emerald-100 text-emerald-700" },
   retirado: { label: "Retirado", color: "bg-green-100 text-green-700" },
@@ -174,21 +198,72 @@ export default function MisPedidosPage() {
                           className="overflow-hidden"
                         >
                           <Separator className="my-3" />
-                          <div className="space-y-2">
-                            {pedido.pedido_items.map((item) => (
-                              <div
-                                key={item.id}
-                                className="flex items-center justify-between text-sm"
-                              >
-                                <span className="text-muted-foreground">
-                                  {item.productos?.nombre ?? "Producto"}{" "}
-                                  <span className="text-xs">x{item.cantidad}</span>
-                                </span>
-                                <span className="font-mono text-xs">
-                                  ${item.subtotal.toLocaleString("es-UY")}
-                                </span>
-                              </div>
-                            ))}
+                          <div className="space-y-3">
+                            {pedido.pedido_items.map((item) => {
+                              const campos = item.productos?.mto_campos ?? [];
+                              const personalizacion = item.personalizacion ?? {};
+                              const personalizacionEntries = Object.entries(personalizacion).map(
+                                ([key, raw]) => {
+                                  const campo = campos.find((c) => c.key === key);
+                                  let valor = String(raw);
+                                  if (campo && (campo.tipo === "select" || campo.tipo === "talle")) {
+                                    const opcion = campo.opciones?.find((o) => o.valor === valor);
+                                    if (opcion) valor = opcion.label;
+                                  }
+                                  return { key, label: campo?.label ?? key, valor };
+                                }
+                              );
+                              return (
+                                <div key={item.id} className="space-y-1">
+                                  <div className="flex items-start justify-between gap-3 text-sm">
+                                    <div className="min-w-0">
+                                      <span className="text-foreground">
+                                        {item.productos?.nombre ?? "Producto"}{" "}
+                                        <span className="text-xs text-muted-foreground">
+                                          x{item.cantidad}
+                                        </span>
+                                      </span>
+                                      {item.es_encargue && (
+                                        <span className="ml-2 inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-700">
+                                          Encargue
+                                        </span>
+                                      )}
+                                      {!item.es_encargue && item.producto_variantes?.nombre && (
+                                        <p className="text-xs text-muted-foreground">
+                                          {item.producto_variantes.nombre}
+                                        </p>
+                                      )}
+                                    </div>
+                                    <span className="font-mono text-xs shrink-0">
+                                      ${item.subtotal.toLocaleString("es-UY")}
+                                    </span>
+                                  </div>
+                                  {item.es_encargue && personalizacionEntries.length > 0 && (
+                                    <div className="ml-2 flex flex-col gap-0.5 rounded-md bg-blue-50/60 px-2.5 py-1.5 text-[11px] text-blue-900">
+                                      {personalizacionEntries.map((r) => (
+                                        <div key={r.key} className="flex justify-between gap-3">
+                                          <span className="text-blue-800/70">{r.label}</span>
+                                          <span className="font-medium">{r.valor}</span>
+                                        </div>
+                                      ))}
+                                      {item.precio_extra_personalizacion ? (
+                                        <div className="flex justify-between gap-3 border-t border-blue-200 pt-0.5 mt-0.5">
+                                          <span className="text-blue-800/70">Sobrecargo</span>
+                                          <span className="font-medium">
+                                            +${Number(item.precio_extra_personalizacion).toLocaleString("es-UY")}
+                                          </span>
+                                        </div>
+                                      ) : null}
+                                      {item.productos?.mto_tiempo_fabricacion_dias ? (
+                                        <p className="text-[10px] text-blue-800/60 mt-0.5">
+                                          Demora aprox. {item.productos.mto_tiempo_fabricacion_dias} días
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                             {pedido.descuento > 0 && (
                               <div className="flex items-center justify-between text-sm text-emerald-600">
                                 <span>Descuento socio</span>
@@ -203,6 +278,14 @@ export default function MisPedidosPage() {
                               Nota: {pedido.notas}
                             </p>
                           )}
+                          <Link
+                            href={`/tienda/pedido/${pedido.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="mt-3 inline-flex items-center gap-1 text-xs font-heading uppercase tracking-editorial text-bordo-800 hover:text-bordo-950 transition-colors"
+                          >
+                            Ver detalle completo
+                            <ArrowRight className="size-3" />
+                          </Link>
                         </motion.div>
                       )}
                     </AnimatePresence>

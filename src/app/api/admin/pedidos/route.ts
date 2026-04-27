@@ -23,13 +23,14 @@ export async function GET(request: NextRequest) {
       .select(
         `
         *,
-        perfiles!perfil_id(nombre, apellido, telefono)
+        perfiles!perfil_id(nombre, apellido, telefono),
+        pedido_items(es_encargue)
       `,
         { count: "exact" }
       )
       .order("created_at", { ascending: false });
 
-    if (estado) query = query.eq("estado", estado as "pendiente" | "pendiente_verificacion" | "pagado" | "preparando" | "listo_retiro" | "retirado" | "cancelado");
+    if (estado) query = query.eq("estado", estado as "pendiente" | "pendiente_verificacion" | "pagado" | "encargado" | "preparando" | "listo_retiro" | "retirado" | "cancelado");
     if (tipo) query = query.eq("tipo", tipo as "online" | "pos");
     if (search) {
       query = query.or(
@@ -39,11 +40,20 @@ export async function GET(request: NextRequest) {
 
     query = query.range(offset, offset + limit - 1);
 
-    const { data, error, count } = await query;
+    const { data: rawData, error, count } = await query;
     if (error) throw error;
 
+    // Aplanar tiene_encargue por pedido y descartar el array de pedido_items
+    const data = (rawData || []).map((p: any) => {
+      const tiene_encargue = Array.isArray(p.pedido_items)
+        ? p.pedido_items.some((i: any) => i.es_encargue)
+        : false;
+      const { pedido_items, ...rest } = p;
+      return { ...rest, tiene_encargue };
+    });
+
     // Fetch counts per estado for tab badges
-    const estados = ["pagado", "preparando", "listo_retiro", "retirado", "cancelado", "pendiente", "pendiente_verificacion"] as const;
+    const estados = ["pagado", "encargado", "preparando", "listo_retiro", "retirado", "cancelado", "pendiente", "pendiente_verificacion"] as const;
     const counts: Record<string, number> = {};
 
     const countPromises = estados.map(async (est) => {

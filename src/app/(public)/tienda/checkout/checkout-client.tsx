@@ -151,6 +151,8 @@ export function CheckoutClient() {
             productoId: item.productoId,
             varianteId: item.varianteId,
             cantidad: item.cantidad,
+            esEncargue: item.esEncargue ?? false,
+            personalizacion: item.personalizacion ?? {},
           })),
           notas: notas || undefined,
           metodo_pago: metodoPago,
@@ -328,12 +330,12 @@ export function CheckoutClient() {
 
             <div className="space-y-0 divide-y divide-bordo-800/5">
               {items.map((item) => {
-                const key = `${item.productoId}-${item.varianteId ?? ""}`;
-                const precioItem = esSocio && item.precioSocio
+                const precioBase = esSocio && item.precioSocio
                   ? item.precioSocio
                   : item.precio;
+                const precioItem = precioBase + (item.precioExtra ?? 0);
                 return (
-                  <div key={key} className="flex gap-3 py-3 first:pt-0 last:pb-0">
+                  <div key={item.lineId} className="flex gap-3 py-3 first:pt-0 last:pb-0">
                     <div className="relative size-16 sm:size-18 shrink-0 overflow-hidden bg-superficie border border-bordo-800/5">
                       {item.imagenUrl ? (
                         <Image
@@ -359,6 +361,19 @@ export function CheckoutClient() {
                           {item.cantidad} &times; $
                           {precioItem.toLocaleString("es-UY")}
                         </p>
+                        {item.esEncargue && item.resumenPersonalizacion?.length ? (
+                          <div className="mt-1 flex flex-wrap gap-x-2 text-[10px] text-bordo-800/60">
+                            <span className="font-bold uppercase tracking-wider text-amber-700">
+                              Encargue
+                            </span>
+                            {item.resumenPersonalizacion.map((r) => (
+                              <span key={r.key}>
+                                {r.label}:{" "}
+                                <span className="font-medium text-bordo-950">{r.valor}</span>
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                       <span className="text-sm font-bold text-bordo-950 shrink-0">
                         ${(precioItem * item.cantidad).toLocaleString("es-UY")}

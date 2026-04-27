@@ -33,6 +33,10 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# herramientas locales de sync prod → preview (no se commitea a ninguna branch)
+/scripts/sync-prod-to-preview.sh
+/.env.sync
+
 # vercel
 .vercel
 

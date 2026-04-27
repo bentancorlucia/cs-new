@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { ShoppingCart, Check, Plus } from "lucide-react";
+import { ShoppingCart, Check, Plus, Sparkles } from "lucide-react";
 import { springBouncy } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +19,8 @@ export interface ProductCardProps {
   stock: number;
   destacado?: boolean;
   categoria?: string | null;
+  mtoDisponible?: boolean;
+  mtoSolo?: boolean;
   onAddToCart?: () => void;
 }
 
@@ -32,9 +34,17 @@ export function ProductCard({
   stock,
   destacado,
   categoria,
+  mtoDisponible,
+  mtoSolo,
   onAddToCart,
 }: ProductCardProps) {
-  const agotado = stock <= 0;
+  // Si es MTO solo, no se vende stock por la web → nunca está "agotado".
+  // Si es MTO + stock, agotado del stock no bloquea (siempre se puede encargar).
+  const stockAgotado = stock <= 0;
+  const agotado = stockAgotado && !mtoDisponible;
+  const mostrarMtoEnLugarDeAgotado = stockAgotado && mtoDisponible;
+  const noVendeStockEnLinea = mtoSolo;
+  const ocultarBotonAdd = noVendeStockEnLinea || mostrarMtoEnLugarDeAgotado;
   const tieneDescuento = precioSocio != null && precioSocio < precio;
   const [added, setAdded] = useState(false);
   const [imgError, setImgError] = useState(false);
@@ -81,8 +91,21 @@ export function ProductCard({
           </div>
         )}
 
+        {/* Badge "Por encargue" — esquina superior izquierda */}
+        {mtoDisponible && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8, x: -8 }}
+            animate={{ opacity: 1, scale: 1, x: 0 }}
+            transition={springBouncy}
+            className="absolute top-2 left-2 z-20 flex items-center gap-1 bg-dorado-300 text-bordo-950 px-2 py-1 font-display text-[10px] uppercase tracking-widest shadow-sm"
+          >
+            <Sparkles className="size-2.5" strokeWidth={2.5} />
+            Por encargue
+          </motion.div>
+        )}
+
         {/* Slide-up quick-add button — desktop only (hover) */}
-        {!agotado && (
+        {!agotado && !ocultarBotonAdd && (
           <button
             onClick={handleAdd}
             className={cn(
@@ -125,7 +148,7 @@ export function ProductCard({
       </Link>
 
       {/* Always-visible add-to-cart — mobile only */}
-      {!agotado && (
+      {!agotado && !ocultarBotonAdd && (
         <button
           onClick={handleAdd}
           className={cn(

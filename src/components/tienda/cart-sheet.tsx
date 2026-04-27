@@ -132,11 +132,10 @@ export function CartSheet({ trigger }: CartSheetProps = {}) {
               >
                 <AnimatePresence mode="popLayout">
                   {items.map((item, index) => {
-                    const key = `${item.productoId}-${item.varianteId ?? ""}`;
-                    const subtotal = item.precio * item.cantidad;
+                    const subtotal = (item.precio + (item.precioExtra ?? 0)) * item.cantidad;
                     return (
                       <motion.div
-                        key={key}
+                        key={item.lineId}
                         variants={fadeInUp}
                         exit={{
                           opacity: 0,
@@ -182,8 +181,20 @@ export function CartSheet({ trigger }: CartSheetProps = {}) {
                                 {item.nombre}
                               </Link>
                               <p className="mt-0.5 text-sm font-bold text-bordo">
-                                ${item.precio.toLocaleString("es-UY")}
+                                ${(item.precio + (item.precioExtra ?? 0)).toLocaleString("es-UY")}
                               </p>
+                              {item.esEncargue && item.resumenPersonalizacion?.length ? (
+                                <div className="mt-1 flex flex-wrap gap-x-2 text-[10px] leading-tight text-muted-foreground">
+                                  <span className="font-bold uppercase tracking-wider text-amber-700">
+                                    Encargue
+                                  </span>
+                                  {item.resumenPersonalizacion.map((r) => (
+                                    <span key={r.key}>
+                                      {r.label}: <span className="font-medium text-foreground">{r.valor}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
                             </div>
 
                             {/* Quantity controls + delete */}
@@ -191,13 +202,7 @@ export function CartSheet({ trigger }: CartSheetProps = {}) {
                               <div className="flex items-center rounded-lg bg-muted/60 ring-1 ring-foreground/[0.06]">
                                 <motion.button
                                   whileTap={{ scale: 0.85 }}
-                                  onClick={() =>
-                                    updateQuantity(
-                                      item.productoId,
-                                      item.varianteId,
-                                      item.cantidad - 1
-                                    )
-                                  }
+                                  onClick={() => updateQuantity(item.lineId, item.cantidad - 1)}
                                   className="flex size-8 items-center justify-center rounded-l-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                                 >
                                   <Minus className="size-3" />
@@ -213,13 +218,7 @@ export function CartSheet({ trigger }: CartSheetProps = {}) {
                                 </motion.span>
                                 <motion.button
                                   whileTap={{ scale: 0.85 }}
-                                  onClick={() =>
-                                    updateQuantity(
-                                      item.productoId,
-                                      item.varianteId,
-                                      item.cantidad + 1
-                                    )
-                                  }
+                                  onClick={() => updateQuantity(item.lineId, item.cantidad + 1)}
                                   disabled={item.cantidad >= item.maxStock}
                                   className="flex size-8 items-center justify-center rounded-r-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30"
                                 >
@@ -231,9 +230,7 @@ export function CartSheet({ trigger }: CartSheetProps = {}) {
                               <motion.button
                                 whileHover={{ scale: 1.1 }}
                                 whileTap={{ scale: 0.85 }}
-                                onClick={() =>
-                                  removeItem(item.productoId, item.varianteId)
-                                }
+                                onClick={() => removeItem(item.lineId)}
                                 className="flex size-8 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:bg-destructive/8 hover:text-destructive"
                               >
                                 <Trash2 className="size-3.5" />
