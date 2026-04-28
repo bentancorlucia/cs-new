@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -22,6 +21,7 @@ import {
   FileText,
   ZoomIn,
   ZoomOut,
+  ExternalLink,
   Loader2,
   AlertTriangle,
   ScanSearch,
@@ -499,6 +499,27 @@ export default function DetallePedidoPage() {
         )}
       </motion.div>
 
+      {/* Aviso cuando es transferencia pero no hay comprobante */}
+      {isTransferencia && !comprobante && (
+        <motion.div
+          variants={fadeInUp}
+          className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:p-5"
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="size-5 shrink-0 text-amber-600" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-900">
+                Sin comprobante de transferencia
+              </p>
+              <p className="mt-1 text-xs text-amber-800/80">
+                El cliente no subió el comprobante o falló la subida. Contactalo para
+                pedirle que lo envíe antes de aprobar.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Comprobante viewer (only for transferencias) */}
       {isTransferencia && comprobante && (
         <motion.div variants={fadeInUp} className="mb-5 rounded-xl border border-linea bg-white overflow-hidden">
@@ -514,30 +535,52 @@ export default function DetallePedidoPage() {
 
             {/* Image viewer */}
             {comprobante.tipo === "imagen" && comprobante.url && (
-              <div className="relative">
-                <div
-                  className={cn(
-                    "relative w-full overflow-hidden rounded-lg bg-superficie transition-all",
-                    imageZoom ? "max-h-[600px]" : "max-h-72"
-                  )}
-                >
-                  <Image
-                    src={comprobante.url}
-                    alt="Comprobante de transferencia"
-                    width={600}
-                    height={800}
+              <div className="space-y-2">
+                <div className="relative">
+                  <div
                     className={cn(
-                      "w-full object-contain transition-all",
+                      "relative w-full overflow-hidden rounded-lg bg-superficie transition-all",
                       imageZoom ? "max-h-[600px]" : "max-h-72"
                     )}
-                  />
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={comprobante.url}
+                      alt="Comprobante de transferencia"
+                      className={cn(
+                        "w-full object-contain transition-all",
+                        imageZoom ? "max-h-[600px]" : "max-h-72"
+                      )}
+                    />
+                  </div>
+                  <div className="absolute bottom-2 right-2 flex gap-1.5">
+                    <button
+                      onClick={() => setImageZoom(!imageZoom)}
+                      className="flex size-8 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+                      aria-label={imageZoom ? "Reducir" : "Ampliar"}
+                    >
+                      {imageZoom ? <ZoomOut className="size-4" /> : <ZoomIn className="size-4" />}
+                    </button>
+                    <a
+                      href={comprobante.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex size-8 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+                      aria-label="Abrir en nueva pestaña"
+                    >
+                      <ExternalLink className="size-4" />
+                    </a>
+                  </div>
                 </div>
-                <button
-                  onClick={() => setImageZoom(!imageZoom)}
-                  className="absolute bottom-2 right-2 flex size-8 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+                <a
+                  href={comprobante.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  {imageZoom ? <ZoomOut className="size-4" /> : <ZoomIn className="size-4" />}
-                </button>
+                  <ExternalLink className="size-3" />
+                  Abrir en nueva pestaña
+                </a>
               </div>
             )}
 
@@ -557,8 +600,9 @@ export default function DetallePedidoPage() {
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    <Button variant="outline" size="sm" className="text-xs">
-                      Abrir PDF
+                    <Button variant="outline" size="sm" className="text-xs gap-1.5">
+                      <ExternalLink className="size-3.5" />
+                      Abrir en nueva pestaña
                     </Button>
                   </a>
                 </div>

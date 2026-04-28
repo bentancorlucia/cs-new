@@ -40,10 +40,6 @@ export async function GET(
           es_encargue, personalizacion, precio_extra_personalizacion,
           productos(id, nombre, slug, mto_campos),
           producto_variantes(id, nombre)
-        ),
-        comprobantes(
-          id, url, nombre_archivo, tipo, tamano_bytes,
-          datos_extraidos, estado, verificado_at, motivo_rechazo
         )
       `
       )
@@ -52,6 +48,34 @@ export async function GET(
 
     if (error || !data) {
       return NextResponse.json({ error: "Pedido no encontrado" }, { status: 404 });
+    }
+
+    const { data: comprobantesData } = await supabase
+      .from("comprobantes")
+      .select(
+        "id, url, nombre_archivo, tipo, tamano_bytes, datos_extraidos, estado, verificado_at, motivo_rechazo"
+      )
+      .eq("pedido_id", parseInt(id))
+      .order("created_at", { ascending: false });
+
+    (data as any).comprobantes = comprobantesData ?? [];
+
+    if (Array.isArray((data as any).comprobantes) && (data as any).comprobantes.length > 0) {
+      const pathRegex = /\/storage\/v1\/object\/(?:sign|public)\/comprobantes\/([^?]+)/;
+      await Promise.all(
+        (data as any).comprobantes.map(async (comp: any) => {
+          if (!comp?.url) return;
+          const match = pathRegex.exec(comp.url);
+          if (!match) return;
+          const path = decodeURIComponent(match[1]);
+          const { data: signed } = await supabase.storage
+            .from("comprobantes")
+            .createSignedUrl(path, 3600);
+          if (signed?.signedUrl) {
+            comp.url = signed.signedUrl;
+          }
+        })
+      );
     }
 
     return NextResponse.json({ data });

@@ -180,10 +180,21 @@ export function CheckoutClient() {
             });
 
             if (!uploadRes.ok) {
-              console.error("Error al subir comprobante:", await uploadRes.text());
+              const errorText = await uploadRes.text();
+              console.error("Error al subir comprobante:", errorText);
+              setError(
+                "El pedido se creó pero falló la subida del comprobante. Contactanos para reenviarlo."
+              );
+              setSubmitting(false);
+              return;
             }
           } catch (uploadError) {
             console.error("Error al subir comprobante:", uploadError);
+            setError(
+              "El pedido se creó pero falló la subida del comprobante. Contactanos para reenviarlo."
+            );
+            setSubmitting(false);
+            return;
           }
         }
 

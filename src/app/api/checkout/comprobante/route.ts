@@ -120,21 +120,7 @@ export async function POST(request: NextRequest) {
     // 7. Determine tipo
     const tipo = archivo.type === "application/pdf" ? "pdf" : "imagen";
 
-    // 8. Extract data from comprobante (PDF via pdf-parse, images via tesseract.js OCR)
-    let datos_extraidos = null;
-    try {
-      const { extractComprobanteData } = await import(
-        "@/lib/comprobante/extract"
-      );
-      datos_extraidos = await extractComprobanteData(
-        Buffer.from(arrayBuffer),
-        tipo
-      );
-    } catch (ocrError) {
-      console.error("Error en extracción del comprobante:", ocrError);
-    }
-
-    // 9. Insert comprobante record
+    // 8. Insert comprobante record FIRST so it's persisted even if OCR fails or times out
     const { data: comprobante, error: compError } = await db
       .from("comprobantes")
       .insert({
@@ -143,7 +129,7 @@ export async function POST(request: NextRequest) {
         nombre_archivo: archivo.name,
         tipo,
         tamano_bytes: archivo.size,
-        datos_extraidos: datos_extraidos as any,
+        datos_extraidos: null,
         estado: "pendiente",
       })
       .select("id")
@@ -155,6 +141,26 @@ export async function POST(request: NextRequest) {
         { error: "Error al registrar el comprobante" },
         { status: 500 }
       );
+    }
+
+    // 9. Run OCR best-effort and update record. OCR can be slow (tesseract.js),
+    // so failures here must not break the upload.
+    try {
+      const { extractComprobanteData } = await import(
+        "@/lib/comprobante/extract"
+      );
+      const datos_extraidos = await extractComprobanteData(
+        Buffer.from(arrayBuffer),
+        tipo
+      );
+      if (datos_extraidos) {
+        await db
+          .from("comprobantes")
+          .update({ datos_extraidos: datos_extraidos as any })
+          .eq("id", comprobante.id);
+      }
+    } catch (ocrError) {
+      console.error("Error en extracción del comprobante:", ocrError);
     }
 
     return NextResponse.json({
