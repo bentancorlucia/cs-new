@@ -137,7 +137,7 @@ export function orderReadyHtml(data: OrderReadyData) {
       </p>
     </div>
     <p style="margin:0 0 16px;font-size:13px;color:${COLORS.textoSecundario};">
-      ¿Necesitás envío? Contactanos al <a href="https://wa.me/59891965438" style="color:${COLORS.bordo};text-decoration:none;font-weight:600;">+598 91 965 438</a>.
+      ¿Necesitás envío? Contactanos al <a href="https://wa.me/59891498409" style="color:${COLORS.bordo};text-decoration:none;font-weight:600;">+598 91 965 438</a>.
     </p>
     ${button("Ver detalles del pedido", data.pedidoUrl)}
   `);
