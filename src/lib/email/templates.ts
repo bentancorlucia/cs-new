@@ -132,7 +132,7 @@ export function orderReadyHtml(data: OrderReadyData) {
     </p>
     <div style="background:${COLORS.fondoClaro};border-radius:8px;padding:16px;margin-bottom:16px;">
       <p style="margin:0;font-size:14px;color:${COLORS.texto};">
-        <strong>Lugar de retiro:</strong> Sede Club Seminario<br/>
+        <strong>Lugar de retiro:</strong> Sede Club Seminario (Soriano 1472, Montevideo — Colegio Seminario)<br/>
         <strong>Horario:</strong> Martes, Jueves y Viernes de 12:30 a 15:30 hs
       </p>
     </div>
