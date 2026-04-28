@@ -153,19 +153,29 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado, 
     return map;
   }, [atributoKeys, variantes]);
 
+  // Pick the first variant with available stock; fallback to the first variant
+  const varianteInicial = useMemo(() => {
+    if (!tieneVariantes) return null;
+    const conStock = variantes.find((v) => {
+      const reservado = stockReservado.variantes[v.id] || 0;
+      return v.stock_actual - reservado > 0;
+    });
+    return conStock ?? variantes[0] ?? null;
+  }, [tieneVariantes, variantes, stockReservado]);
+
   // State: selected value per attribute key (for multi-attribute mode)
   const [seleccionAtributos, setSeleccionAtributos] = useState<Record<string, string>>(() => {
-    if (!esMultiAtributo || variantes.length === 0) return {};
+    if (!esMultiAtributo || !varianteInicial) return {};
     const initial: Record<string, string> = {};
     for (const key of atributoKeys) {
-      initial[key] = variantes[0]?.atributos[key] ?? "";
+      initial[key] = varianteInicial.atributos[key] ?? "";
     }
     return initial;
   });
 
   // State: direct variant id selection (for single-attribute / fallback mode)
   const [varianteSeleccionada, setVarianteSeleccionada] = useState<number | null>(
-    tieneVariantes ? variantes[0]?.id ?? null : null
+    varianteInicial?.id ?? null
   );
 
   // Resolve the actual selected variant
