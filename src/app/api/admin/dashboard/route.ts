@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/roles";
+import { uruguayNowParts, uruguayDayStartUTC, uruguayDateKey } from "@/lib/timezone";
 
 const TIENDA_ROLES = ["super_admin", "tienda"];
 
@@ -9,10 +10,10 @@ export async function GET() {
     await requireRole(TIENDA_ROLES);
     const supabase = createAdminClient();
 
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6).toISOString();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const { year, month, day } = uruguayNowParts();
+    const todayStart = uruguayDayStartUTC(year, month, day).toISOString();
+    const weekStart = uruguayDayStartUTC(year, month, day - 6).toISOString();
+    const monthStart = uruguayDayStartUTC(year, month, 1).toISOString();
 
     // Run all queries in parallel
     const [
@@ -114,15 +115,14 @@ export async function GET() {
     const ventasSemana = sumTotal(ventasSemanaRes.data);
     const ventasMes = sumTotal(ventasMesRes.data);
 
-    // Aggregate ventas diarias for chart
+    // Aggregate ventas diarias for chart (buckets en horario Uruguay)
     const ventasPorDia: Record<string, { online: number; pos: number; total: number }> = {};
     for (let i = 6; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-      const key = d.toISOString().split("T")[0];
+      const key = uruguayDateKey(uruguayDayStartUTC(year, month, day - i));
       ventasPorDia[key] = { online: 0, pos: 0, total: 0 };
     }
     ventasDiariasRes.data?.forEach((p: { total: number; created_at: string; tipo: string }) => {
-      const key = p.created_at.split("T")[0];
+      const key = uruguayDateKey(p.created_at);
       if (ventasPorDia[key]) {
         ventasPorDia[key].total += p.total || 0;
         if (p.tipo === "online") ventasPorDia[key].online += p.total || 0;

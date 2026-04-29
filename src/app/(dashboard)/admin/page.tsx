@@ -84,12 +84,23 @@ function formatMoney(n: number) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("es-UY", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleDateString("es-UY", {
+    timeZone: "America/Montevideo",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function formatChartDay(fecha: string) {
-  const d = new Date(fecha + "T12:00:00");
-  return d.toLocaleDateString("es-UY", { weekday: "short", day: "numeric" });
+  // fecha viene como YYYY-MM-DD (clave de día en horario Uruguay)
+  const d = new Date(fecha + "T12:00:00Z");
+  return d.toLocaleDateString("es-UY", {
+    timeZone: "America/Montevideo",
+    weekday: "short",
+    day: "numeric",
+  });
 }
 
 const estadoBadge: Record<string, { label: string; className: string; icon: any }> = {
@@ -379,6 +390,7 @@ export default function AdminDashboardPage() {
                   tick={{ fontSize: 11, fill: "#6b7280" }}
                   axisLine={false}
                   tickLine={false}
+                  padding={{ left: 12, right: 12 }}
                 />
                 <YAxis
                   tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
