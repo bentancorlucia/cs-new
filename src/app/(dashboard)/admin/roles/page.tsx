@@ -162,16 +162,15 @@ export default function RolesPage() {
   }, [search, filtroRol, page]);
 
   useEffect(() => {
+    setPage(1);
+  }, [search, filtroRol]);
+
+  useEffect(() => {
     const timer = setTimeout(() => {
-      setPage(1);
       fetchPerfiles();
     }, 300);
     return () => clearTimeout(timer);
-  }, [search, filtroRol, fetchPerfiles]);
-
-  useEffect(() => {
-    fetchPerfiles();
-  }, [page, fetchPerfiles]);
+  }, [fetchPerfiles]);
 
   const handleAddRole = async () => {
     if (!selectedPerfil || !rolToAdd) return;
