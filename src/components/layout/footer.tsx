@@ -40,7 +40,7 @@ const SPONSORS_SECUNDARIOS = [
 
 const SOCIAL_LINKS = [
   {
-    href: "https://www.instagram.com/clubseminario",
+    href: "https://www.instagram.com/club.seminario",
     label: "Instagram",
     icon: Instagram,
   },
@@ -50,7 +50,7 @@ const SOCIAL_LINKS = [
     icon: Facebook,
   },
   {
-    href: "https://x.com/clubseminario",
+    href: "https://x.com/clubseminariouy",
     label: "X",
     icon: Twitter,
   },
