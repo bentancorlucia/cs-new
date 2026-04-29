@@ -26,7 +26,7 @@ export default function VoleyPage() {
           name: "Papi Volley",
           description:
             "Una oportunidad de descubrir un nuevo deporte, con un gran grupo humano que busca aprender y divertirse. Un lindo proceso en el cual se comparten prácticas, juntadas y mucho más.",
-          schedule: "Martes y jueves de 21:00 a 22:00",
+          schedule: "Lunes y miércoles de 21:00 a 22:00",
           location: "Polideportivo Gonzaga",
           contact: { name: "Rodrigo Ripa", phone: "099 743 206" },
           image: "/images/deportes/Papivolley.jpeg",
