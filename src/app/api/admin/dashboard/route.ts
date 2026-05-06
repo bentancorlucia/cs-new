@@ -28,32 +28,32 @@ export async function GET() {
       topProductosRes,
       alertasStockRes,
     ] = await Promise.all([
-      // Ventas hoy (solo pagados/preparando/listo/retirado)
+      // Ventas hoy (pagados/encargado/preparando/listo/retirado)
       supabase
         .from("pedidos")
         .select("total")
         .gte("created_at", todayStart)
-        .in("estado", ["pagado", "preparando", "listo_retiro", "retirado"]),
+        .in("estado", ["pagado", "encargado", "preparando", "listo_retiro", "retirado"]),
 
       // Ventas últimos 7 días
       supabase
         .from("pedidos")
         .select("total")
         .gte("created_at", weekStart)
-        .in("estado", ["pagado", "preparando", "listo_retiro", "retirado"]),
+        .in("estado", ["pagado", "encargado", "preparando", "listo_retiro", "retirado"]),
 
       // Ventas del mes
       supabase
         .from("pedidos")
         .select("total")
         .gte("created_at", monthStart)
-        .in("estado", ["pagado", "preparando", "listo_retiro", "retirado"]),
+        .in("estado", ["pagado", "encargado", "preparando", "listo_retiro", "retirado"]),
 
-      // Pedidos pendientes (pagado + preparando + listo_retiro + pendiente_verificacion)
+      // Pedidos pendientes (pagado + encargado + preparando + listo_retiro + pendiente_verificacion)
       supabase
         .from("pedidos")
         .select("id", { count: "exact", head: true })
-        .in("estado", ["pagado", "preparando", "listo_retiro", "pendiente_verificacion"]),
+        .in("estado", ["pagado", "encargado", "preparando", "listo_retiro", "pendiente_verificacion"]),
 
       // Productos activos
       supabase
@@ -83,7 +83,7 @@ export async function GET() {
         .from("pedidos")
         .select("total, created_at, tipo")
         .gte("created_at", weekStart)
-        .in("estado", ["pagado", "preparando", "listo_retiro", "retirado"])
+        .in("estado", ["pagado", "encargado", "preparando", "listo_retiro", "retirado"])
         .order("created_at", { ascending: true }),
 
       // Top 5 productos más vendidos (últimos 30 días)
@@ -95,7 +95,7 @@ export async function GET() {
           pedidos!inner(estado, created_at)
         `)
         .gte("pedidos.created_at", monthStart)
-        .in("pedidos.estado", ["pagado", "preparando", "listo_retiro", "retirado"]),
+        .in("pedidos.estado", ["pagado", "encargado", "preparando", "listo_retiro", "retirado"]),
 
       // Alertas de stock bajo (top 8)
       supabase

@@ -107,6 +107,7 @@ const estadoBadge: Record<string, { label: string; className: string; icon: any 
   pendiente: { label: "Pendiente", className: "bg-gray-100 text-gray-600", icon: Clock },
   pendiente_verificacion: { label: "Por conciliar", className: "bg-orange-50 text-orange-700", icon: Building2 },
   pagado: { label: "Pagado", className: "bg-emerald-50 text-emerald-700", icon: CreditCard },
+  encargado: { label: "Encargado", className: "bg-purple-50 text-purple-700", icon: Package },
   preparando: { label: "Preparando", className: "bg-amber-50 text-amber-700", icon: Package },
   listo_retiro: { label: "Listo retiro", className: "bg-blue-50 text-blue-700", icon: Truck },
   retirado: { label: "Retirado", className: "bg-gray-50 text-gray-500", icon: CheckCircle },
