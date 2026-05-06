@@ -26,6 +26,7 @@ export interface CartItem {
 interface CartContextValue {
   items: CartItem[];
   loaded: boolean;
+  idempotencyKey: string;
   addItem: (item: Omit<CartItem, "cantidad" | "lineId"> & { lineId?: string }, cantidad?: number) => void;
   updateQuantity: (lineId: string, cantidad: number) => void;
   removeItem: (lineId: string) => void;
@@ -39,6 +40,7 @@ const CartContext = createContext<CartContextValue | null>(null);
 
 const CART_KEY = "cs-carrito-v2";
 const LEGACY_KEY = "cs-carrito";
+const IDEM_KEY = "cs-checkout-idem-v1";
 
 function uuid() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -86,12 +88,31 @@ function saveCart(items: CartItem[]) {
   localStorage.setItem(CART_KEY, JSON.stringify(items));
 }
 
+function loadOrCreateIdempotencyKey(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const existing = localStorage.getItem(IDEM_KEY);
+    if (existing) return existing;
+  } catch {
+    // localStorage may be unavailable (private mode, etc).
+  }
+  const fresh = uuid();
+  try {
+    localStorage.setItem(IDEM_KEY, fresh);
+  } catch {
+    // ignore
+  }
+  return fresh;
+}
+
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState<string>("");
 
   useEffect(() => {
     setItems(loadCart());
+    setIdempotencyKey(loadOrCreateIdempotencyKey());
     setLoaded(true);
   }, []);
 
@@ -143,7 +164,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const clearCart = useCallback(() => {
     setItems([]);
-    if (typeof window !== "undefined") localStorage.removeItem(CART_KEY);
+    const fresh = uuid();
+    setIdempotencyKey(fresh);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(CART_KEY);
+      try {
+        localStorage.setItem(IDEM_KEY, fresh);
+      } catch {
+        // ignore
+      }
+    }
   }, []);
 
   const itemCount = useMemo(() => items.reduce((sum, i) => sum + i.cantidad, 0), [items]);
@@ -166,6 +196,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     () => ({
       items,
       loaded,
+      idempotencyKey,
       addItem,
       updateQuantity,
       removeItem,
@@ -174,7 +205,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       total,
       totalSocio,
     }),
-    [items, loaded, addItem, updateQuantity, removeItem, clearCart, itemCount, total, totalSocio]
+    [items, loaded, idempotencyKey, addItem, updateQuantity, removeItem, clearCart, itemCount, total, totalSocio]
   );
 
   return <CartContext value={value}>{children}</CartContext>;

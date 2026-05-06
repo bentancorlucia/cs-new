@@ -22,6 +22,7 @@ const checkoutSchema = z.object({
   items: z.array(checkoutItemSchema).min(1, "El carrito está vacío"),
   notas: z.string().max(500).optional(),
   metodo_pago: z.enum(["transferencia"]).default("transferencia"),
+  idempotencyKey: z.string().uuid().optional(),
 });
 
 interface ItemConPrecio {
@@ -64,7 +65,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { items, notas, metodo_pago } = parsed.data;
+    const { items, notas, metodo_pago, idempotencyKey } = parsed.data;
+
+    // 3a. Idempotency check: si llega un key y ya hay un pedido para este perfil
+    // con ese mismo key, devolver el existente sin volver a crear nada.
+    if (idempotencyKey) {
+      const { data: existente } = await db
+        .from("pedidos")
+        .select("id, numero_pedido")
+        .eq("perfil_id", user.id)
+        .eq("idempotency_key", idempotencyKey)
+        .maybeSingle();
+
+      if (existente) {
+        return NextResponse.json({
+          pedido_id: existente.id,
+          numero_pedido: existente.numero_pedido,
+          metodo_pago: "transferencia",
+          tiene_encargues: false,
+          idempotent_replay: true,
+        });
+      }
+    }
 
     // 3. Get user profile (for socio pricing)
     const { data: perfil } = await db
@@ -243,11 +265,34 @@ export async function POST(request: NextRequest) {
         // Solo reservar stock si hay items que no son encargues
         stock_reservado: !todosEncargues,
         stock_reservado_at: !todosEncargues ? new Date().toISOString() : null,
+        idempotency_key: idempotencyKey ?? null,
       })
       .select("id, numero_pedido")
       .single();
 
     if (pedidoError || !pedido) {
+      // Race condition: dos requests simultáneos con la misma idempotencyKey.
+      // Postgres devuelve 23505 (unique violation) por el índice parcial.
+      // Reintentamos el SELECT y devolvemos el pedido existente.
+      if (idempotencyKey && pedidoError?.code === "23505") {
+        const { data: ganador } = await db
+          .from("pedidos")
+          .select("id, numero_pedido")
+          .eq("perfil_id", user.id)
+          .eq("idempotency_key", idempotencyKey)
+          .maybeSingle();
+
+        if (ganador) {
+          return NextResponse.json({
+            pedido_id: ganador.id,
+            numero_pedido: ganador.numero_pedido,
+            metodo_pago: "transferencia",
+            tiene_encargues: false,
+            idempotent_replay: true,
+          });
+        }
+      }
+
       console.error("Error al crear pedido:", pedidoError);
       return NextResponse.json(
         { error: "Error al crear el pedido" },

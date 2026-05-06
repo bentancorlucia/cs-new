@@ -16,6 +16,7 @@ const compraEntradaSchema = z.object({
   nombre_asistente: z.string().min(1).max(200),
   cedula_asistente: z.string().max(20).optional(),
   email_asistente: z.string().email(),
+  idempotencyKey: z.string().uuid().optional(),
 });
 
 // POST /api/eventos/comprar — Comprar entradas para un evento
@@ -55,7 +56,96 @@ export async function POST(request: NextRequest) {
       nombre_asistente,
       cedula_asistente,
       email_asistente,
+      idempotencyKey,
     } = parsed.data;
+
+    // Idempotency replay: si ya hay entradas para este perfil con ese key,
+    // devolverlas sin volver a crear nada ni incrementar el lote.
+    if (idempotencyKey) {
+      const { data: entradasExistentes } = await db
+        .from("entradas")
+        .select("id, codigo, estado, precio_pagado")
+        .eq("perfil_id", user.id)
+        .eq("idempotency_key", idempotencyKey);
+
+      if (entradasExistentes && entradasExistentes.length > 0) {
+        const ids = entradasExistentes.map((e: any) => e.id);
+        const yaPagadas = entradasExistentes.every(
+          (e: any) => e.estado === "pagada"
+        );
+
+        if (yaPagadas) {
+          return NextResponse.json({
+            entrada_ids: ids,
+            gratuito: true,
+            idempotent_replay: true,
+          });
+        }
+
+        // Pago aún pendiente: regenerar preferencia de MercadoPago
+        // para que el usuario pueda completar el pago.
+        const externalReference = JSON.stringify({
+          type: "entradas",
+          entradas_ids: ids,
+          evento_id,
+        });
+
+        try {
+          const { data: ev } = await db
+            .from("eventos")
+            .select("titulo, slug")
+            .eq("id", evento_id)
+            .single();
+
+          const { data: te } = await db
+            .from("tipo_entradas")
+            .select("nombre")
+            .eq("id", tipo_entrada_id)
+            .single();
+
+          const precioUnitario = Number(
+            entradasExistentes[0]?.precio_pagado ?? 0
+          );
+
+          const preference = await createPreference({
+            items: [
+              {
+                id: `entrada-${tipo_entrada_id}`,
+                title: `${ev?.titulo ?? "Entrada"} — ${te?.nombre ?? ""} x${ids.length}`,
+                quantity: ids.length,
+                unit_price: precioUnitario,
+                currency_id: "UYU",
+              },
+            ],
+            external_reference: externalReference,
+            payer: {
+              email: email_asistente,
+              name: nombre_asistente,
+            },
+            back_urls: {
+              success: `${APP_URL}/eventos/${ev?.slug}?compra=exitosa`,
+              failure: `${APP_URL}/eventos/${ev?.slug}?compra=fallida`,
+              pending: `${APP_URL}/eventos/${ev?.slug}?compra=pendiente`,
+            },
+            notification_url: `${APP_URL}/api/webhooks/mercadopago`,
+            statement_descriptor: "CLUB SEMINARIO",
+          });
+
+          return NextResponse.json({
+            entrada_ids: ids,
+            checkout_url: getCheckoutUrl(preference),
+            gratuito: false,
+            idempotent_replay: true,
+          });
+        } catch (mpError: any) {
+          console.error("MercadoPago error (replay):", mpError?.message);
+          return NextResponse.json(
+            { error: "Error al conectar con MercadoPago. Intentá de nuevo." },
+            { status: 502 }
+          );
+        }
+      }
+    }
 
     // 3. Validate event
     const { data: evento } = await db
@@ -162,6 +252,7 @@ export async function POST(request: NextRequest) {
       precio_pagado: precioUnitario,
       estado: evento.es_gratuito ? "pagada" : "pendiente",
       metodo_pago: evento.es_gratuito ? "cortesia" : "mercadopago",
+      idempotency_key: idempotencyKey ?? null,
     }));
 
     const { data: entradas, error: entradasError } = await db
@@ -170,6 +261,25 @@ export async function POST(request: NextRequest) {
       .select("id, codigo");
 
     if (entradasError || !entradas || entradas.length === 0) {
+      // Race: dos requests simultáneos con la misma idempotencyKey ganaron
+      // por el índice parcial UNIQUE. Devolver las del request que ganó.
+      if (idempotencyKey && (entradasError as any)?.code === "23505") {
+        const { data: ganadoras } = await db
+          .from("entradas")
+          .select("id, codigo")
+          .eq("perfil_id", user.id)
+          .eq("idempotency_key", idempotencyKey);
+
+        if (ganadoras && ganadoras.length > 0) {
+          const ids = ganadoras.map((e: any) => e.id);
+          return NextResponse.json({
+            entrada_ids: ids,
+            gratuito: !!evento.es_gratuito,
+            idempotent_replay: true,
+          });
+        }
+      }
+
       console.error("Error al crear entradas:", entradasError);
       return NextResponse.json(
         { error: "Error al crear las entradas" },

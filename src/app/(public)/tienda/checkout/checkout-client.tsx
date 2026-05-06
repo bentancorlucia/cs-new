@@ -62,7 +62,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export function CheckoutClient() {
-  const { items, loaded, total, totalSocio, itemCount, clearCart } = useCart();
+  const { items, loaded, total, totalSocio, itemCount, clearCart, idempotencyKey } = useCart();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [notas, setNotas] = useState("");
@@ -73,6 +73,7 @@ export function CheckoutClient() {
   const [comprobantePreview, setComprobantePreview] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const submittingRef = useRef(false);
 
   // Cargar perfil del usuario
   useEffect(() => {
@@ -139,6 +140,8 @@ export function CheckoutClient() {
   }
 
   async function handleCheckout() {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     setError(null);
 
@@ -156,6 +159,7 @@ export function CheckoutClient() {
           })),
           notas: notas || undefined,
           metodo_pago: metodoPago,
+          idempotencyKey: idempotencyKey || undefined,
         }),
       });
 
@@ -163,6 +167,7 @@ export function CheckoutClient() {
 
       if (!res.ok) {
         setError(data.error || "Error al procesar el checkout");
+        submittingRef.current = false;
         setSubmitting(false);
         return;
       }
@@ -185,7 +190,8 @@ export function CheckoutClient() {
               setError(
                 "El pedido se creó pero falló la subida del comprobante. Contactanos para reenviarlo."
               );
-              setSubmitting(false);
+              submittingRef.current = false;
+        setSubmitting(false);
               return;
             }
           } catch (uploadError) {
@@ -193,7 +199,8 @@ export function CheckoutClient() {
             setError(
               "El pedido se creó pero falló la subida del comprobante. Contactanos para reenviarlo."
             );
-            setSubmitting(false);
+            submittingRef.current = false;
+        setSubmitting(false);
             return;
           }
         }

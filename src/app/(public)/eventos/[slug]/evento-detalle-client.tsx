@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
@@ -99,6 +99,8 @@ export function EventoDetalleClient({ slug }: { slug: string }) {
   const [comprando, setComprando] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [perfil, setPerfil] = useState<any>(null);
+  const idempotencyKeyRef = useRef<string>("");
+  const comprandoRef = useRef(false);
 
   const searchParams = useSearchParams();
   const compraStatus = searchParams.get("compra");
@@ -165,6 +167,12 @@ export function EventoDetalleClient({ slug }: { slug: string }) {
     setSelectedTipo(tipo);
     setCantidad(1);
     setShowCompra(true);
+    if (!idempotencyKeyRef.current) {
+      idempotencyKeyRef.current =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : Math.random().toString(36).slice(2);
+    }
   };
 
   const handleConfirmarCompra = async (formData: {
@@ -173,6 +181,8 @@ export function EventoDetalleClient({ slug }: { slug: string }) {
     email: string;
   }) => {
     if (!selectedTipo || !evento) return;
+    if (comprandoRef.current) return;
+    comprandoRef.current = true;
 
     setComprando(true);
     try {
@@ -187,6 +197,7 @@ export function EventoDetalleClient({ slug }: { slug: string }) {
           nombre_asistente: formData.nombre,
           cedula_asistente: formData.cedula || undefined,
           email_asistente: formData.email,
+          idempotencyKey: idempotencyKeyRef.current || undefined,
         }),
       });
 
@@ -202,15 +213,18 @@ export function EventoDetalleClient({ slug }: { slug: string }) {
           description: "Tus entradas ya están en Mi Cuenta",
         });
         setShowCompra(false);
+        idempotencyKeyRef.current = "";
         // Refresh event data
         const refreshRes = await fetch(`/api/eventos/${slug}`);
         if (refreshRes.ok) setEvento(await refreshRes.json());
       } else if (data.checkout_url) {
+        idempotencyKeyRef.current = "";
         window.location.href = data.checkout_url;
       }
     } catch {
       toast.error("Error de conexión");
     } finally {
+      comprandoRef.current = false;
       setComprando(false);
     }
   };
