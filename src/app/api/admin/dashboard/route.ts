@@ -22,10 +22,9 @@ export async function GET() {
       ventasMesRes,
       pedidosPendientesRes,
       productosActivosRes,
-      stockBajoRes,
+      productosStockRes,
       pedidosRecientesRes,
       topProductosRes,
-      alertasStockRes,
     ] = await Promise.all([
       // Ventas hoy (pagados/encargado/preparando/listo/retirado)
       supabase
@@ -60,12 +59,12 @@ export async function GET() {
         .select("id", { count: "exact", head: true })
         .eq("activo", true),
 
-      // Productos con stock bajo
+      // Productos activos con datos de stock (filtramos en JS porque
+      // PostgREST no compara dos columnas de la misma fila).
       supabase
         .from("productos")
-        .select("id", { count: "exact", head: true })
-        .eq("activo", true)
-        .filter("stock_actual", "lte", "stock_minimo"),
+        .select("id, nombre, stock_actual, stock_minimo, sku")
+        .eq("activo", true),
 
       // Pedidos recientes (últimos 10)
       supabase
@@ -87,16 +86,16 @@ export async function GET() {
         `)
         .gte("pedidos.created_at", monthStart)
         .in("pedidos.estado", ["pagado", "encargado", "preparando", "listo_retiro", "retirado"]),
-
-      // Alertas de stock bajo (top 8)
-      supabase
-        .from("productos")
-        .select("id, nombre, stock_actual, stock_minimo, sku")
-        .eq("activo", true)
-        .filter("stock_actual", "lte", "stock_minimo")
-        .order("stock_actual", { ascending: true })
-        .limit(8),
     ]);
+
+    // Stock bajo: filtrado en JS
+    const productosBajoStock = (productosStockRes.data || []).filter(
+      (p: any) => p.stock_actual <= p.stock_minimo
+    );
+    const stockBajoCount = productosBajoStock.length;
+    const alertasStock = [...productosBajoStock]
+      .sort((a, b) => a.stock_actual - b.stock_actual)
+      .slice(0, 8);
 
     // Aggregate ventas
     const sumTotal = (rows: { total: number }[] | null) =>
@@ -134,12 +133,12 @@ export async function GET() {
         ventasMes,
         pedidosPendientes: pedidosPendientesRes.count || 0,
         productosActivos: productosActivosRes.count || 0,
-        stockBajo: stockBajoRes.count || 0,
+        stockBajo: stockBajoCount,
         pedidosHoy: ventasHoyRes.data?.length || 0,
       },
       pedidosRecientes: pedidosRecientesRes.data || [],
       topProductos,
-      alertasStock: alertasStockRes.data || [],
+      alertasStock,
     });
   } catch (error: any) {
     if (error.message === "No autorizado") {
