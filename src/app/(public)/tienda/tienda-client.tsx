@@ -16,7 +16,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProductCard } from "@/components/tienda/product-card";
+import { VariantSelectorDialog } from "@/components/tienda/variant-selector-dialog";
 import { useCart } from "@/hooks/use-cart";
+import { tieneVariantesActivas, type ProductoVariante } from "@/lib/tienda/variantes";
 import {
   AnimateOnScroll,
 } from "@/components/shared/animate-on-scroll";
@@ -41,6 +43,7 @@ type Producto = Database["public"]["Tables"]["productos"]["Row"] & {
     es_principal: boolean;
     focal_point: string;
   }[];
+  producto_variantes: ProductoVariante[];
 };
 
 type Categoria = Database["public"]["Tables"]["categorias_producto"]["Row"];
@@ -64,6 +67,7 @@ export function TiendaClient({
   const [categoriaActiva, setCategoriaActiva] = useState<string>("todas");
   const [orden, setOrden] = useState<string>("nuevos");
   const [page, setPage] = useState(1);
+  const [productoEnSelector, setProductoEnSelector] = useState<Producto | null>(null);
   const { addItem } = useCart();
 
   const heroRef = useRef<HTMLDivElement>(null);
@@ -77,7 +81,7 @@ export function TiendaClient({
         supabase
           .from("productos")
           .select(
-            "*, categorias_producto(nombre, slug), producto_imagenes(url, es_principal, focal_point)"
+            "*, categorias_producto(nombre, slug), producto_imagenes(url, es_principal, focal_point), producto_variantes(id, nombre, sku, precio_override, stock_actual, atributos, activo)"
           )
           .eq("activo", true)
           .order("created_at", { ascending: false }),
@@ -150,6 +154,10 @@ export function TiendaClient({
 
   const handleAddToCart = useCallback(
     (producto: Producto) => {
+      if (tieneVariantesActivas(producto.producto_variantes)) {
+        setProductoEnSelector(producto);
+        return;
+      }
       const imagen =
         producto.producto_imagenes?.find((i) => i.es_principal) ??
         producto.producto_imagenes?.[0];
@@ -504,6 +512,7 @@ export function TiendaClient({
                       categoria={producto.categorias_producto?.nombre}
                       mtoDisponible={producto.mto_disponible}
                       mtoSolo={producto.mto_solo}
+                      tieneVariantes={tieneVariantesActivas(producto.producto_variantes)}
                       onAddToCart={() => handleAddToCart(producto)}
                     />
                   </div>
@@ -675,6 +684,7 @@ export function TiendaClient({
                       categoria={producto.categorias_producto?.nombre}
                       mtoDisponible={producto.mto_disponible}
                       mtoSolo={producto.mto_solo}
+                      tieneVariantes={tieneVariantesActivas(producto.producto_variantes)}
                       onAddToCart={() => handleAddToCart(producto)}
                     />
                   );
@@ -707,6 +717,11 @@ export function TiendaClient({
 
       {/* Mobile sticky cart bar */}
       <MobileCartBar />
+
+      <VariantSelectorDialog
+        producto={productoEnSelector}
+        onClose={() => setProductoEnSelector(null)}
+      />
     </>
   );
 }

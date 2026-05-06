@@ -21,6 +21,7 @@ export interface ProductCardProps {
   categoria?: string | null;
   mtoDisponible?: boolean;
   mtoSolo?: boolean;
+  tieneVariantes?: boolean;
   onAddToCart?: () => void;
 }
 
@@ -36,6 +37,7 @@ export function ProductCard({
   categoria,
   mtoDisponible,
   mtoSolo,
+  tieneVariantes,
   onAddToCart,
 }: ProductCardProps) {
   // Si es MTO solo, no se vende stock por la web → nunca está "agotado".
@@ -54,6 +56,7 @@ export function ProductCard({
     e.stopPropagation();
     if (agotado || added) return;
     onAddToCart?.();
+    if (tieneVariantes) return;
     setAdded(true);
     setTimeout(() => setAdded(false), 1500);
   }
@@ -138,7 +141,7 @@ export function ProductCard({
                   exit={{ scale: 0 }}
                   className="flex items-center gap-1.5"
                 >
-                  Añadir
+                  {tieneVariantes ? "Elegir" : "Añadir"}
                   <Plus className="size-3.5" strokeWidth={2.5} />
                 </motion.span>
               )}
@@ -180,7 +183,7 @@ export function ProductCard({
                 className="flex items-center gap-1.5"
               >
                 <ShoppingCart className="size-3.5" strokeWidth={2.5} />
-                Añadir
+                {tieneVariantes ? "Elegir" : "Añadir"}
               </motion.span>
             )}
           </AnimatePresence>

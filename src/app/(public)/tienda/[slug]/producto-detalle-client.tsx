@@ -23,6 +23,15 @@ import { MtoForm, calcularExtraSeguro } from "@/components/tienda/mto-form";
 import { useCart } from "@/hooks/use-cart";
 import { validarValoresMto, validarRestriccionSocios } from "@/lib/mto/schema";
 import { resumirPersonalizacion } from "@/lib/mto/pricing";
+import {
+  getAtributoKeys,
+  getValoresPorAtributo,
+  findVarianteInicial,
+  resolveVariante,
+  isAtributoValueAvailable as isAtributoValueAvailableShared,
+  getStockForAtributoValue as getStockForAtributoValueShared,
+  getStockDisponible as getStockDisponibleShared,
+} from "@/lib/tienda/variantes";
 import type { MtoCampo, MtoValores } from "@/types/mto";
 import {
   fadeInUp,
@@ -122,46 +131,16 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado, 
   const containerRef = useRef<HTMLDivElement>(null);
 
   // --- Attribute-aware variant selection ---
-  // Detect attribute dimensions (e.g. "color", "talle") from variant data
-  const atributoKeys = useMemo(() => {
-    const keySets = variantes.map((v) => Object.keys(v.atributos || {}));
-    if (keySets.length === 0) return [];
-    // Use keys that appear in ALL variants
-    const allKeys = keySets[0].filter((k) =>
-      keySets.every((ks) => ks.includes(k))
-    );
-    return allKeys;
-  }, [variantes]);
-
+  const atributoKeys = useMemo(() => getAtributoKeys(variantes), [variantes]);
   const esMultiAtributo = atributoKeys.length >= 2;
-
-  // Unique values per attribute key, preserving order of appearance
-  const valoresPorAtributo = useMemo(() => {
-    const map: Record<string, string[]> = {};
-    for (const key of atributoKeys) {
-      const seen = new Set<string>();
-      const values: string[] = [];
-      for (const v of variantes) {
-        const val = v.atributos[key];
-        if (val && !seen.has(val)) {
-          seen.add(val);
-          values.push(val);
-        }
-      }
-      map[key] = values;
-    }
-    return map;
-  }, [atributoKeys, variantes]);
-
-  // Pick the first variant with available stock; fallback to the first variant
-  const varianteInicial = useMemo(() => {
-    if (!tieneVariantes) return null;
-    const conStock = variantes.find((v) => {
-      const reservado = stockReservado.variantes[v.id] || 0;
-      return v.stock_actual - reservado > 0;
-    });
-    return conStock ?? variantes[0] ?? null;
-  }, [tieneVariantes, variantes, stockReservado]);
+  const valoresPorAtributo = useMemo(
+    () => getValoresPorAtributo(variantes, atributoKeys),
+    [variantes, atributoKeys]
+  );
+  const varianteInicial = useMemo(
+    () => (tieneVariantes ? findVarianteInicial(variantes, stockReservado.variantes) : null),
+    [tieneVariantes, variantes, stockReservado.variantes]
+  );
 
   // State: selected value per attribute key (for multi-attribute mode)
   const [seleccionAtributos, setSeleccionAtributos] = useState<Record<string, string>>(() => {
@@ -182,42 +161,34 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado, 
   const varianteActual = useMemo(() => {
     if (!tieneVariantes) return null;
     if (esMultiAtributo) {
-      // Find the variant matching all selected attributes
-      return (
-        variantes.find((v) =>
-          atributoKeys.every((k) => v.atributos[k] === seleccionAtributos[k])
-        ) ?? null
-      );
+      return resolveVariante(variantes, atributoKeys, seleccionAtributos);
     }
     return variantes.find((v) => v.id === varianteSeleccionada) ?? null;
   }, [tieneVariantes, esMultiAtributo, variantes, atributoKeys, seleccionAtributos, varianteSeleccionada]);
 
-  // For multi-attribute: check if a specific value for an attribute has any
-  // in-stock variant given the other selected attributes
   function isAtributoValueAvailable(key: string, value: string): boolean {
-    return variantes.some((v) => {
-      if (v.atributos[key] !== value) return false;
-      // Check other selected attributes match
-      return atributoKeys.every(
-        (k) => k === key || v.atributos[k] === seleccionAtributos[k]
-      );
-    });
+    return isAtributoValueAvailableShared(
+      variantes,
+      atributoKeys,
+      key,
+      value,
+      seleccionAtributos
+    );
   }
 
   function getStockDisponible(variante: ProductoVariante): number {
-    const reservado = stockReservado.variantes[variante.id] || 0;
-    return Math.max(0, variante.stock_actual - reservado);
+    return getStockDisponibleShared(variante, stockReservado.variantes);
   }
 
   function getStockForAtributoValue(key: string, value: string): number {
-    const match = variantes.find((v) => {
-      if (v.atributos[key] !== value) return false;
-      return atributoKeys.every(
-        (k) => k === key || v.atributos[k] === seleccionAtributos[k]
-      );
-    });
-    if (!match) return 0;
-    return getStockDisponible(match);
+    return getStockForAtributoValueShared(
+      variantes,
+      atributoKeys,
+      key,
+      value,
+      seleccionAtributos,
+      stockReservado.variantes
+    );
   }
 
   const precioActual = varianteActual?.precio_override ?? producto.precio;
