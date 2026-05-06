@@ -228,8 +228,10 @@ export function CheckoutClient() {
     );
   }
 
-  // Carrito vacío
-  if (items.length === 0) {
+  // Carrito vacío (omitir si estamos navegando al pedido recién creado:
+  // clearCart() vacía items antes del redirect y dispararía un flash del
+  // empty state).
+  if (items.length === 0 && !submittingRef.current) {
     return (
       <motion.div
         {...pageTransition}
