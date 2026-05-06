@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 // POST /api/checkout/comprobante — Subir comprobante de transferencia
@@ -143,25 +143,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 9. Run OCR best-effort and update record. OCR can be slow (tesseract.js),
-    // so failures here must not break the upload.
-    try {
-      const { extractComprobanteData } = await import(
-        "@/lib/comprobante/extract"
-      );
-      const datos_extraidos = await extractComprobanteData(
-        Buffer.from(arrayBuffer),
-        tipo
-      );
-      if (datos_extraidos) {
-        await db
-          .from("comprobantes")
-          .update({ datos_extraidos: datos_extraidos as any })
-          .eq("id", comprobante.id);
+    // 9. OCR en background con after(): tesseract.js es lento y bloqueaba la
+    // respuesta. Ahora respondemos inmediatamente y el OCR actualiza el
+    // registro cuando termina (datos_extraidos pasa de null al JSON parseado).
+    after(async () => {
+      try {
+        const { extractComprobanteData } = await import(
+          "@/lib/comprobante/extract"
+        );
+        const datos_extraidos = await extractComprobanteData(
+          Buffer.from(arrayBuffer),
+          tipo
+        );
+        if (datos_extraidos) {
+          await db
+            .from("comprobantes")
+            .update({ datos_extraidos: datos_extraidos as any })
+            .eq("id", comprobante.id);
+        }
+      } catch (ocrError) {
+        console.error("Error en extracción del comprobante:", ocrError);
       }
-    } catch (ocrError) {
-      console.error("Error en extracción del comprobante:", ocrError);
-    }
+    });
 
     return NextResponse.json({
       comprobante_id: comprobante.id,
