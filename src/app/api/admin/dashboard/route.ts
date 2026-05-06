@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/roles";
-import { uruguayNowParts, uruguayDayStartUTC, uruguayDateKey } from "@/lib/timezone";
+import { uruguayNowParts, uruguayDayStartUTC } from "@/lib/timezone";
 
 const TIENDA_ROLES = ["super_admin", "tienda"];
 
@@ -24,7 +24,6 @@ export async function GET() {
       productosActivosRes,
       stockBajoRes,
       pedidosRecientesRes,
-      ventasDiariasRes,
       topProductosRes,
       alertasStockRes,
     ] = await Promise.all([
@@ -78,14 +77,6 @@ export async function GET() {
         .order("created_at", { ascending: false })
         .limit(10),
 
-      // Ventas diarias últimos 7 días
-      supabase
-        .from("pedidos")
-        .select("total, created_at, tipo")
-        .gte("created_at", weekStart)
-        .in("estado", ["pagado", "encargado", "preparando", "listo_retiro", "retirado"])
-        .order("created_at", { ascending: true }),
-
       // Top 5 productos más vendidos (últimos 30 días)
       supabase
         .from("pedido_items")
@@ -114,26 +105,6 @@ export async function GET() {
     const ventasHoy = sumTotal(ventasHoyRes.data);
     const ventasSemana = sumTotal(ventasSemanaRes.data);
     const ventasMes = sumTotal(ventasMesRes.data);
-
-    // Aggregate ventas diarias for chart (buckets en horario Uruguay)
-    const ventasPorDia: Record<string, { online: number; pos: number; total: number }> = {};
-    for (let i = 6; i >= 0; i--) {
-      const key = uruguayDateKey(uruguayDayStartUTC(year, month, day - i));
-      ventasPorDia[key] = { online: 0, pos: 0, total: 0 };
-    }
-    ventasDiariasRes.data?.forEach((p: { total: number; created_at: string; tipo: string }) => {
-      const key = uruguayDateKey(p.created_at);
-      if (ventasPorDia[key]) {
-        ventasPorDia[key].total += p.total || 0;
-        if (p.tipo === "online") ventasPorDia[key].online += p.total || 0;
-        else ventasPorDia[key].pos += p.total || 0;
-      }
-    });
-
-    const chartData = Object.entries(ventasPorDia).map(([fecha, vals]) => ({
-      fecha,
-      ...vals,
-    }));
 
     // Aggregate top productos
     const productoMap = new Map<number, { nombre: string; cantidad: number; total: number; stock: number }>();
@@ -166,7 +137,6 @@ export async function GET() {
         stockBajo: stockBajoRes.count || 0,
         pedidosHoy: ventasHoyRes.data?.length || 0,
       },
-      chartData,
       pedidosRecientes: pedidosRecientesRes.data || [],
       topProductos,
       alertasStock: alertasStockRes.data || [],

@@ -51,6 +51,23 @@ import { useDocumentTitle } from "@/hooks/use-document-title";
 
 // ─── Types ──────────────────────────────────────────────
 
+type ChartPeriod = "7d" | "1m" | "3m" | "6m" | "1y";
+type ChartBucket = "day" | "week" | "month";
+
+const PERIOD_OPTIONS: { value: ChartPeriod; label: string }[] = [
+  { value: "7d", label: "7d" },
+  { value: "1m", label: "1m" },
+  { value: "3m", label: "3m" },
+  { value: "6m", label: "6m" },
+  { value: "1y", label: "1a" },
+];
+
+interface ChartResponse {
+  data: { fecha: string; online: number; pos: number; total: number }[];
+  bucket: ChartBucket;
+  period: ChartPeriod;
+}
+
 interface DashboardData {
   stats: {
     ventasHoy: number;
@@ -61,7 +78,6 @@ interface DashboardData {
     stockBajo: number;
     pedidosHoy: number;
   };
-  chartData: { fecha: string; online: number; pos: number; total: number }[];
   pedidosRecientes: {
     id: number;
     numero_pedido: string;
@@ -93,9 +109,24 @@ function formatDate(iso: string) {
   });
 }
 
-function formatChartDay(fecha: string) {
-  // fecha viene como YYYY-MM-DD (clave de día en horario Uruguay)
+function formatChartLabel(fecha: string, bucket: ChartBucket) {
+  if (bucket === "month") {
+    // YYYY-MM
+    const d = new Date(fecha + "-01T12:00:00Z");
+    return d.toLocaleDateString("es-UY", {
+      timeZone: "America/Montevideo",
+      month: "short",
+    });
+  }
+  // YYYY-MM-DD (día o inicio de semana)
   const d = new Date(fecha + "T12:00:00Z");
+  if (bucket === "week") {
+    return d.toLocaleDateString("es-UY", {
+      timeZone: "America/Montevideo",
+      day: "numeric",
+      month: "short",
+    });
+  }
   return d.toLocaleDateString("es-UY", {
     timeZone: "America/Montevideo",
     weekday: "short",
@@ -198,8 +229,9 @@ function StatCard({
 
 // ─── Custom Tooltip ─────────────────────────────────────
 
-function ChartTooltip({ active, payload, label }: any) {
+function ChartTooltip({ active, payload, label, bucket }: any) {
   if (!active || !payload?.length) return null;
+  const formatted = label ? formatChartLabel(label, bucket || "day") : "";
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -207,7 +239,7 @@ function ChartTooltip({ active, payload, label }: any) {
       className="rounded-xl border bg-white/95 px-4 py-3 shadow-elevated backdrop-blur-sm"
     >
       <p className="mb-1 font-heading text-xs font-medium uppercase tracking-editorial text-muted-foreground">
-        {label}
+        {formatted}
       </p>
       {payload.map((p: any) => (
         <p key={p.dataKey} className="font-body text-sm" style={{ color: p.color }}>
@@ -225,6 +257,9 @@ export default function AdminDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [chart, setChart] = useState<ChartResponse | null>(null);
+  const [chartLoading, setChartLoading] = useState(true);
+  const [period, setPeriod] = useState<ChartPeriod>("7d");
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -243,9 +278,27 @@ export default function AdminDashboardPage() {
     }
   }, []);
 
+  const fetchChart = useCallback(async (p: ChartPeriod) => {
+    setChartLoading(true);
+    try {
+      const res = await fetch(`/api/admin/dashboard/chart?period=${p}`);
+      if (!res.ok) throw new Error("Error al cargar gráfico");
+      const json: ChartResponse = await res.json();
+      setChart(json);
+    } catch {
+      toast.error("No se pudo cargar el gráfico");
+    } finally {
+      setChartLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    fetchChart(period);
+  }, [fetchChart, period]);
 
   return (
     <motion.div
@@ -283,7 +336,10 @@ export default function AdminDashboardPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => fetchData(true)}
+            onClick={() => {
+              fetchData(true);
+              fetchChart(period);
+            }}
             disabled={refreshing}
             className="gap-2"
           >
@@ -353,13 +409,29 @@ export default function AdminDashboardPage() {
           transition={{ ...easeSmooth, delay: 0.2 }}
           className="rounded-2xl border bg-white p-5 shadow-card lg:col-span-2"
         >
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h2 className="font-heading text-base font-semibold text-foreground">Ventas últimos 7 días</h2>
+              <h2 className="font-heading text-base font-semibold text-foreground">Ventas</h2>
               <p className="font-body text-xs text-muted-foreground">Online vs POS</p>
             </div>
-            {data && (
-              <div className="flex items-center gap-4 font-body text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="inline-flex rounded-lg border bg-bordo-50/40 p-0.5">
+                {PERIOD_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setPeriod(opt.value)}
+                    className={cn(
+                      "relative rounded-md px-2.5 py-1 font-heading text-[11px] font-medium tabular-nums transition-colors",
+                      period === opt.value
+                        ? "bg-white text-bordo-800 shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <div className="hidden items-center gap-3 font-body text-xs text-muted-foreground sm:flex">
                 <span className="flex items-center gap-1.5">
                   <span className="h-2.5 w-2.5 rounded-full bg-bordo-600" /> Online
                 </span>
@@ -367,59 +439,62 @@ export default function AdminDashboardPage() {
                   <span className="h-2.5 w-2.5 rounded-full bg-dorado-500" /> POS
                 </span>
               </div>
-            )}
+            </div>
           </div>
-          {loading ? (
+          {chartLoading && !chart ? (
             <Skeleton className="h-[240px] rounded-xl" />
-          ) : data ? (
-            <ResponsiveContainer width="100%" height={240}>
-              <AreaChart data={data.chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="gradOnline" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#730d32" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#730d32" stopOpacity={0.02} />
-                  </linearGradient>
-                  <linearGradient id="gradPos" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#f7b643" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#f7b643" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e8e4de" vertical={false} />
-                <XAxis
-                  dataKey="fecha"
-                  tickFormatter={formatChartDay}
-                  tick={{ fontSize: 11, fill: "#6b7280" }}
-                  axisLine={false}
-                  tickLine={false}
-                  padding={{ left: 12, right: 12 }}
-                />
-                <YAxis
-                  tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-                  tick={{ fontSize: 11, fill: "#6b7280" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip content={<ChartTooltip />} />
-                <Area
-                  type="monotone"
-                  dataKey="online"
-                  stroke="#730d32"
-                  strokeWidth={2}
-                  fill="url(#gradOnline)"
-                  dot={false}
-                  activeDot={{ r: 5, strokeWidth: 2, fill: "#fff" }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="pos"
-                  stroke="#f7b643"
-                  strokeWidth={2}
-                  fill="url(#gradPos)"
-                  dot={false}
-                  activeDot={{ r: 5, strokeWidth: 2, fill: "#fff" }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+          ) : chart ? (
+            <div className={cn("transition-opacity", chartLoading && "opacity-60")}>
+              <ResponsiveContainer width="100%" height={240}>
+                <AreaChart data={chart.data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gradOnline" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#730d32" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#730d32" stopOpacity={0.02} />
+                    </linearGradient>
+                    <linearGradient id="gradPos" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#f7b643" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#f7b643" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e8e4de" vertical={false} />
+                  <XAxis
+                    dataKey="fecha"
+                    tickFormatter={(v) => formatChartLabel(v, chart.bucket)}
+                    tick={{ fontSize: 11, fill: "#6b7280" }}
+                    axisLine={false}
+                    tickLine={false}
+                    padding={{ left: 12, right: 12 }}
+                    minTickGap={20}
+                  />
+                  <YAxis
+                    tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                    tick={{ fontSize: 11, fill: "#6b7280" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip content={<ChartTooltip bucket={chart.bucket} />} />
+                  <Area
+                    type="monotone"
+                    dataKey="online"
+                    stroke="#730d32"
+                    strokeWidth={2}
+                    fill="url(#gradOnline)"
+                    dot={false}
+                    activeDot={{ r: 5, strokeWidth: 2, fill: "#fff" }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="pos"
+                    stroke="#f7b643"
+                    strokeWidth={2}
+                    fill="url(#gradPos)"
+                    dot={false}
+                    activeDot={{ r: 5, strokeWidth: 2, fill: "#fff" }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
           ) : null}
         </motion.div>
 
