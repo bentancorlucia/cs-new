@@ -281,7 +281,6 @@ export async function POST(
               origen_tipo: "pedido",
               origen_id: pedidoId,
               referencia: `TRANSF-${pedido.numero_pedido}`,
-              conciliado: false,
             });
           }
         }

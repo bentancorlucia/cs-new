@@ -13,7 +13,6 @@ import {
   Pencil,
   Trash2,
   Check,
-  Loader2,
   Wallet,
   Landmark,
 } from "lucide-react";
@@ -22,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -57,12 +55,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { staggerContainer, fadeInUp, springSmooth } from "@/lib/motion";
 import { toast } from "sonner";
 import { useDocumentTitle } from "@/hooks/use-document-title";
@@ -98,8 +90,6 @@ interface Movimiento {
   descripcion: string;
   referencia: string | null;
   notas: string | null;
-  conciliado: boolean;
-  conciliacion_id: number | null;
   created_at: string;
   cuentas_financieras: { id: number; nombre: string; tipo: string; moneda: string; color: string } | null;
   categorias_financieras: { id: number; nombre: string; slug: string; color: string; icono: string } | null;
@@ -174,9 +164,6 @@ export default function MovimientosTiendaClient() {
   const [deleteTarget, setDeleteTarget] = useState<Movimiento | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState(emptyForm);
-
-  // Conciliar loading state
-  const [conciliandoId, setConciliandoId] = useState<number | null>(null);
 
   // Debounced search
   useEffect(() => {
@@ -322,36 +309,6 @@ export default function MovimientosTiendaClient() {
       toast.error("Error de conexión");
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function handleToggleConciliado(mov: Movimiento) {
-    setConciliandoId(mov.id);
-    try {
-      const res = await fetch(`/api/admin/movimientos/${mov.id}/conciliar`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conciliado: !mov.conciliado }),
-      });
-      if (res.ok) {
-        setMovimientos((prev) =>
-          prev.map((m) =>
-            m.id === mov.id
-              ? { ...m, conciliado: !m.conciliado, conciliacion_id: !m.conciliado ? m.conciliacion_id : null }
-              : m
-          )
-        );
-        toast.success(
-          !mov.conciliado ? "Movimiento conciliado" : "Conciliación removida"
-        );
-      } else {
-        const err = await res.json().catch(() => null);
-        toast.error(err?.error || "Error al conciliar");
-      }
-    } catch {
-      toast.error("Error de conexión");
-    } finally {
-      setConciliandoId(null);
     }
   }
 
@@ -549,9 +506,6 @@ export default function MovimientosTiendaClient() {
                 <TableHead className="font-heading uppercase tracking-editorial text-xs text-right">
                   Monto
                 </TableHead>
-                <TableHead className="font-heading uppercase tracking-editorial text-xs text-center w-[80px]">
-                  Concil.
-                </TableHead>
                 <TableHead className="font-heading uppercase tracking-editorial text-xs text-right w-[90px]">
                   Acciones
                 </TableHead>
@@ -566,13 +520,12 @@ export default function MovimientosTiendaClient() {
                     <TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-24" /></TableCell>
                     <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-24" /></TableCell>
                     <TableCell><Skeleton className="ml-auto h-4 w-20" /></TableCell>
-                    <TableCell><Skeleton className="mx-auto h-4 w-8" /></TableCell>
                     <TableCell><Skeleton className="ml-auto h-4 w-16" /></TableCell>
                   </TableRow>
                 ))
               ) : movimientos.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-16 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="py-16 text-center text-muted-foreground">
                     <Receipt className="mx-auto mb-3 size-12 opacity-15" />
                     <p className="font-body text-sm">No se encontraron movimientos</p>
                     <button
@@ -656,32 +609,6 @@ export default function MovimientosTiendaClient() {
                             {mov.moneda}
                           </span>
                         )}
-                      </TableCell>
-                      <TableCell className="py-3 text-center">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <div className="flex justify-center">
-                                {conciliandoId === mov.id ? (
-                                  <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                                ) : (
-                                  <Switch
-                                    checked={mov.conciliado}
-                                    onCheckedChange={() => handleToggleConciliado(mov)}
-                                    className="data-[state=checked]:bg-emerald-600"
-                                  />
-                                )}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {mov.conciliado
-                                ? mov.conciliacion_id
-                                  ? "Conciliado (masivo) — click para des-conciliar"
-                                  : "Conciliado (manual)"
-                                : "Marcar como conciliado"}
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
                       </TableCell>
                       <TableCell className="py-3 text-right">
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

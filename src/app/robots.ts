@@ -12,7 +12,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: [
           "/admin/",
           "/secretaria/",
-          "/tesoreria/",
           "/mi-cuenta/",
           "/eventos",
           "/eventos/",
