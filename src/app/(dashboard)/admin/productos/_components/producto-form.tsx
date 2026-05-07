@@ -731,19 +731,14 @@ function ImageUploader({
 // --- Proveedores section ---
 
 function ProveedoresSection({
-  productoId,
   initialProveedores,
   onChange,
 }: {
-  productoId?: number;
   initialProveedores: ProductoProveedor[];
-  onChange?: (proveedores: ProductoProveedor[]) => void;
+  onChange: (proveedores: ProductoProveedor[]) => void;
 }) {
   const [proveedoresProducto, setProveedoresProducto] = useState<ProductoProveedor[]>(initialProveedores);
   const [allProveedores, setAllProveedores] = useState<Proveedor[]>([]);
-  const [saving, setSaving] = useState(false);
-
-  const isLocal = !productoId;
 
   useEffect(() => {
     async function load() {
@@ -761,7 +756,7 @@ function ProveedoresSection({
   const setAndNotify = (updater: (prev: ProductoProveedor[]) => ProductoProveedor[]) => {
     setProveedoresProducto((prev) => {
       const next = updater(prev);
-      if (isLocal && onChange) onChange(next);
+      onChange(next);
       return next;
     });
   };
@@ -795,33 +790,6 @@ function ProveedoresSection({
         return { ...row, [field]: value };
       })
     );
-  };
-
-  const handleSave = async () => {
-    const valid = proveedoresProducto.filter((p) => p.proveedor_id > 0);
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/admin/productos/${productoId}/proveedores`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          proveedores: valid.map((p) => ({
-            proveedor_id: p.proveedor_id,
-            costo: p.costo,
-            codigo_proveedor: p.codigo_proveedor,
-            es_principal: p.es_principal,
-          })),
-        }),
-      });
-      if (!res.ok) throw new Error("Error al guardar proveedores");
-      const { data } = await res.json();
-      setProveedoresProducto(data);
-      toast.success("Proveedores actualizados");
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setSaving(false);
-    }
   };
 
   // Filter out already-assigned proveedores
@@ -931,22 +899,6 @@ function ProveedoresSection({
           <Plus className="size-3" />
           Agregar proveedor
         </motion.button>
-
-        {!isLocal && proveedoresProducto.length > 0 && (
-          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={handleSave}
-              disabled={saving}
-              className="h-7 text-xs"
-            >
-              {saving ? <Loader2 className="size-3 animate-spin mr-1" /> : <Save className="size-3 mr-1" />}
-              Guardar proveedores
-            </Button>
-          </motion.div>
-        )}
       </div>
 
       {proveedoresProducto.length === 0 && (
@@ -966,7 +918,9 @@ export function ProductoForm({ producto }: Props) {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [newProveedores, setNewProveedores] = useState<ProductoProveedor[]>([]);
+  const [proveedoresState, setProveedoresState] = useState<ProductoProveedor[]>(
+    producto?.producto_proveedores || []
+  );
   const [mtoCampos, setMtoCampos] = useState<MtoCampo[]>(
     Array.isArray(producto?.mto_campos) ? producto.mto_campos : []
   );
@@ -1077,23 +1031,27 @@ export function ProductoForm({ producto }: Props) {
 
       const result = await res.json();
 
-      // Save proveedores for new product
-      if (!isEdit && newProveedores.length > 0) {
-        const validProveedores = newProveedores.filter((p) => p.proveedor_id > 0);
-        if (validProveedores.length > 0) {
-          await fetch(`/api/admin/productos/${result.data.id}/proveedores`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              proveedores: validProveedores.map((p) => ({
-                proveedor_id: p.proveedor_id,
-                costo: p.costo,
-                codigo_proveedor: p.codigo_proveedor,
-                es_principal: p.es_principal,
-              })),
-            }),
-          });
+      // Persistir proveedores (crear y editar)
+      const productoId = isEdit ? producto.id : result.data.id;
+      const validProveedores = proveedoresState.filter((p) => p.proveedor_id > 0);
+      const provRes = await fetch(
+        `/api/admin/productos/${productoId}/proveedores`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            proveedores: validProveedores.map((p) => ({
+              proveedor_id: p.proveedor_id,
+              costo: p.costo,
+              codigo_proveedor: p.codigo_proveedor,
+              es_principal: p.es_principal,
+            })),
+          }),
         }
+      );
+      if (!provRes.ok) {
+        const err = await provRes.json().catch(() => ({}));
+        throw new Error(err.error || "Error al guardar proveedores");
       }
 
       setSaved(true);
@@ -1490,9 +1448,8 @@ export function ProductoForm({ producto }: Props) {
             delay={0.15}
           >
             <ProveedoresSection
-              productoId={isEdit ? producto.id : undefined}
-              initialProveedores={isEdit ? (producto.producto_proveedores || []) : []}
-              onChange={!isEdit ? setNewProveedores : undefined}
+              initialProveedores={proveedoresState}
+              onChange={setProveedoresState}
             />
           </FormSection>
 

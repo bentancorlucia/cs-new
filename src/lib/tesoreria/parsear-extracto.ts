@@ -45,7 +45,12 @@ interface ColumnaConfig {
   ingreso?: string; // columna separada de créditos
   egreso?: string; // columna separada de débitos
   referencia?: string;
-  formatoFecha: "DD/MM/YYYY" | "YYYY-MM-DD" | "MM/DD/YYYY" | "DD-MM-YYYY";
+  formatoFecha:
+    | "DD/MM/YYYY"
+    | "YYYY-MM-DD"
+    | "MM/DD/YYYY"
+    | "DD-MM-YYYY"
+    | "DDMMMYY";
 }
 
 const FORMATOS: Record<FormatoBanco, ColumnaConfig> = {
@@ -58,12 +63,12 @@ const FORMATOS: Record<FormatoBanco, ColumnaConfig> = {
     formatoFecha: "DD/MM/YYYY",
   },
   itau: {
-    fecha: "Fecha",
-    descripcion: "Concepto",
-    egreso: "Débitos",
-    ingreso: "Créditos",
-    referencia: "Referencia",
-    formatoFecha: "DD/MM/YYYY",
+    fecha: "FECHA",
+    descripcion: "CONCEPTO",
+    egreso: "DEBE",
+    ingreso: "HABER",
+    referencia: "REFERENCIA",
+    formatoFecha: "DDMMMYY",
   },
   santander: {
     fecha: "Fecha Valor",
@@ -124,6 +129,15 @@ function parsearFecha(fecha: string, formato: string): string {
       [day, month, year] = parts;
       break;
     }
+    case "DDMMMYY": {
+      // Ej: "31MAR26" → 31 / MAR / 26
+      const m = cleaned.toUpperCase().match(/^(\d{2})([A-Z]{3})(\d{2,4})$/);
+      if (!m) return cleaned;
+      day = m[1];
+      month = MESES_ABBR[m[2]] ?? m[2];
+      year = m[3];
+      break;
+    }
     default: {
       const parts = cleaned.split(/[\/\-\.]/);
       [day, month, year] = parts;
@@ -144,12 +158,17 @@ function parsearMonto(valor: string | number | undefined | null): number {
   if (valor === undefined || valor === null || valor === "") return 0;
   if (typeof valor === "number") return valor;
 
-  // Limpiar formato uruguayo: 1.234,56 → 1234.56
-  const cleaned = valor
-    .replace(/[$ U]/g, "")
-    .replace(/\s/g, "")
-    .replace(/\./g, "")
-    .replace(",", ".");
+  // Quitar símbolos y espacios
+  let cleaned = valor.replace(/[$ U]/g, "").replace(/\s/g, "");
+
+  // Detectar formato:
+  // - Uruguayo: "1.234,56" → tiene coma como decimal
+  // - US: "1,234.56" o "000000130340.45" → punto como decimal (sin coma)
+  if (cleaned.includes(",")) {
+    // Formato uruguayo: el punto es separador de miles, la coma decimal
+    cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+  }
+  // Si no hay coma, asumimos que el "." es decimal y dejamos como está.
 
   return parseFloat(cleaned) || 0;
 }
@@ -178,7 +197,18 @@ function parsearCSVConFormato(
       const tieneMonto = config.monto
         ? row[config.monto]
         : row[config.ingreso!] || row[config.egreso!];
-      return fecha && tieneMonto;
+      if (!fecha || !tieneMonto) return false;
+
+      // Excluir filas que son saldos (no son movimientos reales).
+      // Normalizamos espacios porque el CSV de Itaú usa "SALDO       INICIAL".
+      const desc = (row[config.descripcion] || "")
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, " ");
+      if (desc.includes("SALDO INICIAL") || desc.includes("SALDO FINAL")) {
+        return false;
+      }
+      return true;
     })
     .map((row) => {
       const fecha = parsearFecha(row[config.fecha] || "", config.formatoFecha);

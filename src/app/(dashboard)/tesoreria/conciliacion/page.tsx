@@ -1,16 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Upload,
-  FileSpreadsheet,
   Check,
-  X,
   AlertTriangle,
   ChevronDown,
   ChevronUp,
-  Loader2,
   ArrowRightLeft,
   Eye,
   Plus,
@@ -21,23 +18,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -47,8 +28,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { staggerContainer, fadeInUp, springSmooth } from "@/lib/motion";
-import { formatMonto, formatFecha, nombreMes } from "@/lib/tesoreria/format";
-import { FORMATO_OPTIONS } from "@/lib/tesoreria/parsear-extracto";
+import { formatMonto, formatFecha } from "@/lib/tesoreria/format";
+import { NuevaConciliacionDialog } from "@/components/tesoreria/nueva-conciliacion-dialog";
 import { toast } from "sonner";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 
@@ -97,24 +78,16 @@ interface ConciliacionItem {
 
 export default function ConciliacionPage() {
   useDocumentTitle("Conciliación");
+  const searchParams = useSearchParams();
+  const conciliacionIdFromUrl = searchParams.get("id");
   const [cuentas, setCuentas] = useState<CuentaFinanciera[]>([]);
   const [conciliaciones, setConciliaciones] = useState<Conciliacion[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNueva, setShowNueva] = useState(false);
-  const [processing, setProcessing] = useState(false);
 
   // Detalle de conciliación
   const [detalle, setDetalle] = useState<(Conciliacion & { items: ConciliacionItem[] }) | null>(null);
   const [showDetalle, setShowDetalle] = useState(false);
-
-  // Form nueva conciliación
-  const [cuentaId, setCuentaId] = useState("");
-  const [periodoDesde, setPeriodoDesde] = useState("");
-  const [periodoHasta, setPeriodoHasta] = useState("");
-  const [saldoBanco, setSaldoBanco] = useState("");
-  const [formato, setFormato] = useState("generico");
-  const [archivo, setArchivo] = useState<File | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Expandable sections
   const [expandMatcheados, setExpandMatcheados] = useState(true);
@@ -142,47 +115,20 @@ export default function ConciliacionPage() {
     fetchData();
   }, [fetchData]);
 
-  const handleNuevaConciliacion = async () => {
-    if (!cuentaId || !periodoDesde || !periodoHasta || !saldoBanco) {
-      toast.error("Completá todos los campos requeridos");
-      return;
-    }
-
-    setProcessing(true);
-    try {
-      const formData = new FormData();
-      formData.append("cuenta_id", cuentaId);
-      formData.append("periodo_desde", periodoDesde);
-      formData.append("periodo_hasta", periodoHasta);
-      formData.append("saldo_banco", saldoBanco);
-      formData.append("formato", formato);
-      if (archivo) {
-        formData.append("archivo", archivo);
+  // Si la URL trae ?id=N, abrir detalle de esa conciliación
+  useEffect(() => {
+    if (conciliacionIdFromUrl) {
+      const id = parseInt(conciliacionIdFromUrl, 10);
+      if (!isNaN(id)) {
+        loadDetalle(id);
       }
-
-      const res = await fetch("/api/tesoreria/conciliacion", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-
-      toast.success(
-        `Conciliación creada: ${data.data.resumen.matcheados} matcheados, ${data.data.resumen.pendientes_banco + data.data.resumen.pendientes_sistema} pendientes`
-      );
-
-      setShowNueva(false);
-      resetForm();
-      fetchData();
-
-      // Abrir detalle automáticamente
-      loadDetalle(data.data.conciliacion.id);
-    } catch (err: any) {
-      toast.error(err.message || "Error al crear conciliación");
-    } finally {
-      setProcessing(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conciliacionIdFromUrl]);
+
+  const handleConciliacionCreated = (id: number) => {
+    fetchData();
+    loadDetalle(id);
   };
 
   const loadDetalle = async (id: number) => {
@@ -250,17 +196,6 @@ export default function ConciliacionPage() {
       toast.error("Error al finalizar conciliación");
     }
   };
-
-  const resetForm = () => {
-    setCuentaId("");
-    setPeriodoDesde("");
-    setPeriodoHasta("");
-    setSaldoBanco("");
-    setFormato("generico");
-    setArchivo(null);
-  };
-
-  const cuentaSeleccionada = cuentas.find((c) => c.id === parseInt(cuentaId));
 
   if (loading) {
     return (
@@ -761,151 +696,12 @@ export default function ConciliacionPage() {
         )}
       </motion.div>
 
-      {/* Dialog: Nueva conciliación */}
-      <Dialog open={showNueva} onOpenChange={setShowNueva}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Nueva conciliación bancaria</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <Label>Cuenta</Label>
-              <Select value={cuentaId} onValueChange={(v) => setCuentaId(v || "")}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar cuenta..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {cuentas
-                    .filter((c) => c.tipo === "bancaria")
-                    .map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>
-                        {c.nombre} ({c.moneda})
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Desde</Label>
-                <Input
-                  type="date"
-                  value={periodoDesde}
-                  onChange={(e) => setPeriodoDesde(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label>Hasta</Label>
-                <Input
-                  type="date"
-                  value={periodoHasta}
-                  onChange={(e) => setPeriodoHasta(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label>Saldo según banco</Label>
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={saldoBanco}
-                onChange={(e) => setSaldoBanco(e.target.value)}
-              />
-              {cuentaSeleccionada && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Saldo sistema: {formatMonto(cuentaSeleccionada.saldo_actual, cuentaSeleccionada.moneda)}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <Label>Formato del extracto</Label>
-              <Select value={formato} onValueChange={(v) => setFormato(v || "generico")}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {FORMATO_OPTIONS.map((f) => (
-                    <SelectItem key={f.value} value={f.value}>
-                      {f.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>Extracto bancario (CSV / Excel)</Label>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,.xlsx,.xls,.pdf"
-                className="hidden"
-                onChange={(e) => setArchivo(e.target.files?.[0] || null)}
-              />
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className={`
-                  mt-1 border-2 border-dashed rounded-lg p-6 text-center cursor-pointer
-                  transition-colors hover:border-bordo-300 hover:bg-bordo-50/30
-                  ${archivo ? "border-green-300 bg-green-50/30" : "border-muted"}
-                `}
-              >
-                {archivo ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <FileSpreadsheet className="size-5 text-green-600" />
-                    <span className="text-sm font-medium">{archivo.name}</span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setArchivo(null);
-                      }}
-                      className="ml-2 text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="size-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <div>
-                    <Upload className="size-8 mx-auto text-muted-foreground/40 mb-2" />
-                    <p className="text-sm text-muted-foreground">
-                      Click para subir o arrastrá el archivo
-                    </p>
-                    <p className="text-xs text-muted-foreground/60 mt-1">
-                      PDF, CSV, XLS, XLSX
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNueva(false)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleNuevaConciliacion}
-              disabled={processing}
-              className="bg-bordo-800 hover:bg-bordo-900"
-            >
-              {processing ? (
-                <>
-                  <Loader2 className="size-4 mr-2 animate-spin" />
-                  Procesando...
-                </>
-              ) : (
-                <>
-                  <ArrowRightLeft className="size-4 mr-2" />
-                  Conciliar
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <NuevaConciliacionDialog
+        open={showNueva}
+        onOpenChange={setShowNueva}
+        cuentas={cuentas}
+        onCreated={handleConciliacionCreated}
+      />
     </motion.div>
   );
 }

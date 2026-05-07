@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
@@ -13,6 +14,7 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
+  ArrowRightLeft,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,13 +48,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { staggerContainer, fadeInUp, springSmooth } from "@/lib/motion";
 import { toast } from "sonner";
 import { ImportarCSVDialog } from "@/components/tesoreria/importar-csv-dialog";
+import { NuevaConciliacionDialog } from "@/components/tesoreria/nueva-conciliacion-dialog";
+import { useRouter } from "next/navigation";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 
 interface Cuenta {
   id: number;
   nombre: string;
   color: string;
-  moneda: string;
+  moneda: "UYU" | "USD";
+  tipo: string;
+  saldo_actual: number;
 }
 
 interface Categoria {
@@ -109,6 +115,10 @@ function getToday(): string {
 
 export default function TesoreriaMovimientosPage() {
   useDocumentTitle("Movimientos");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const cuentaIdFromUrl = searchParams.get("cuenta_id") || "";
+
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [loading, setLoading] = useState(true);
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
@@ -116,7 +126,7 @@ export default function TesoreriaMovimientosPage() {
   const [totals, setTotals] = useState<Totals>({ ingresos: 0, egresos: 0, neto: 0 });
 
   // Filters
-  const [cuentaFilter, setCuentaFilter] = useState("");
+  const [cuentaFilter, setCuentaFilter] = useState(cuentaIdFromUrl);
   const [tipoFilter, setTipoFilter] = useState("");
   const [categoriaFilter, setCategoriaFilter] = useState("");
   const [desde, setDesde] = useState(getFirstDayOfMonth);
@@ -133,6 +143,7 @@ export default function TesoreriaMovimientosPage() {
   // Create dialog
   const [dialogOpen, setDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [conciliarDialogOpen, setConciliarDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     cuenta_id: "",
@@ -209,6 +220,11 @@ export default function TesoreriaMovimientosPage() {
     fetchMovimientos();
   }, [fetchMovimientos]);
 
+  // Cuenta seleccionada (cuando hay un filtro por cuenta específica)
+  const cuentaSeleccionada = cuentaFilter
+    ? cuentas.find((c) => String(c.id) === cuentaFilter) ?? null
+    : null;
+
   // Filtered categories for the create form based on selected tipo
   const categoriasFiltered = categorias.filter(
     (c) => c.tipo === form.tipo
@@ -281,12 +297,28 @@ export default function TesoreriaMovimientosPage() {
         <div>
           <h1 className="font-display text-2xl sm:text-3xl uppercase tracking-tightest text-foreground">
             Movimientos
+            {cuentaSeleccionada && (
+              <span className="text-muted-foreground font-normal normal-case tracking-normal text-base sm:text-lg">
+                {" · "}
+                {cuentaSeleccionada.nombre}
+              </span>
+            )}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground font-body">
             {total > 0 && `${total} movimientos · `}Ingresos y egresos de tesoreria
           </p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
+          {cuentaSeleccionada?.tipo === "bancaria" && (
+            <Button
+              variant="outline"
+              className="flex-1 sm:flex-none"
+              onClick={() => setConciliarDialogOpen(true)}
+            >
+              <ArrowRightLeft className="size-4" />
+              Conciliar con extracto
+            </Button>
+          )}
           <Button
             variant="outline"
             className="flex-1 sm:flex-none"
@@ -834,6 +866,17 @@ export default function TesoreriaMovimientosPage() {
         cuentas={cuentas}
         categorias={categorias}
         onImportComplete={fetchMovimientos}
+      />
+
+      {/* Conciliar con extracto */}
+      <NuevaConciliacionDialog
+        open={conciliarDialogOpen}
+        onOpenChange={setConciliarDialogOpen}
+        cuentas={cuentas}
+        cuentaId={cuentaSeleccionada?.id}
+        onCreated={(id) => {
+          router.push(`/tesoreria/conciliacion?id=${id}`);
+        }}
       />
     </div>
   );

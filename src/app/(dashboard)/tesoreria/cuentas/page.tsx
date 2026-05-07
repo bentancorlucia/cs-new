@@ -401,7 +401,7 @@ export default function CuentasFinancierasPage() {
 
                       {/* Name + bank */}
                       <Link
-                        href={`/tesoreria/cuentas/${cuenta.id}`}
+                        href={`/tesoreria/movimientos?cuenta_id=${cuenta.id}`}
                         className="group block"
                       >
                         <h3 className="font-heading text-sm uppercase tracking-editorial text-foreground group-hover:text-bordo-700 transition-colors line-clamp-1">
@@ -440,10 +440,10 @@ export default function CuentasFinancierasPage() {
                           </span>
                         </div>
                         <Link
-                          href={`/tesoreria/cuentas/${cuenta.id}`}
+                          href={`/tesoreria/movimientos?cuenta_id=${cuenta.id}`}
                           className="inline-flex items-center gap-1 text-xs font-body font-medium text-bordo-700 hover:text-bordo-800 transition-colors"
                         >
-                          Ver detalle
+                          Ver movimientos
                           <ChevronRight className="size-3.5" />
                         </Link>
                       </div>

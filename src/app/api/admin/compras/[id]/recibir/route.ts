@@ -37,47 +37,86 @@ export async function POST(
       );
     }
 
-    // Para cada item, actualizar stock
+    const DEPOSITO_PRINCIPAL_ID = 1;
+
+    // Para cada item: upsert en stock_deposito (fuente de verdad multi-depósito),
+    // registrar movimiento, y actualizar cantidad recibida.
     for (const item of compra.compra_items) {
-      const tabla = item.variante_id ? "producto_variantes" : "productos";
-      const itemId = item.variante_id || item.producto_id;
+      const filtroDeposito = db
+        .from("stock_deposito")
+        .select("id, cantidad")
+        .eq("producto_id", item.producto_id)
+        .eq("deposito_id", DEPOSITO_PRINCIPAL_ID);
 
-      // Obtener stock actual
-      const { data: producto } = await db
-        .from(tabla)
-        .select("stock_actual")
-        .eq("id", itemId)
-        .single();
+      const { data: filaDeposito, error: errSelectDep } = item.variante_id
+        ? await filtroDeposito.eq("variante_id", item.variante_id).maybeSingle()
+        : await filtroDeposito.is("variante_id", null).maybeSingle();
 
-      if (!producto) continue;
+      if (errSelectDep) throw errSelectDep;
 
-      const nuevoStock = producto.stock_actual + item.cantidad;
+      // Si no existe fila en stock_deposito, sembrar con el stock_actual cacheado
+      // del producto/variante para no perder stock pre-existente al recalcular.
+      let cantidadAnterior = filaDeposito?.cantidad ?? 0;
+      if (!filaDeposito) {
+        const tablaCache = item.variante_id ? "producto_variantes" : "productos";
+        const idCache = item.variante_id || item.producto_id;
+        const { data: cached, error: errCache } = await db
+          .from(tablaCache)
+          .select("stock_actual")
+          .eq("id", idCache)
+          .single();
+        if (errCache) throw errCache;
+        cantidadAnterior = cached?.stock_actual ?? 0;
+      }
+      const cantidadNueva = cantidadAnterior + item.cantidad;
 
-      // Actualizar stock
-      await db
-        .from(tabla)
-        .update({ stock_actual: nuevoStock })
-        .eq("id", itemId);
+      if (filaDeposito) {
+        const { error: errUpd } = await db
+          .from("stock_deposito")
+          .update({ cantidad: cantidadNueva, updated_at: new Date().toISOString() })
+          .eq("id", filaDeposito.id);
+        if (errUpd) throw errUpd;
+      } else {
+        const { error: errIns } = await db.from("stock_deposito").insert({
+          producto_id: item.producto_id,
+          variante_id: item.variante_id || null,
+          deposito_id: DEPOSITO_PRINCIPAL_ID,
+          cantidad: cantidadNueva,
+        });
+        if (errIns) throw errIns;
+      }
 
-      // Registrar movimiento de stock
-      await db.from("stock_movimientos").insert({
+      const { error: errMov } = await db.from("stock_movimientos").insert({
         producto_id: item.producto_id,
         variante_id: item.variante_id || null,
+        deposito_id: DEPOSITO_PRINCIPAL_ID,
         tipo: "entrada",
         cantidad: item.cantidad,
-        stock_anterior: producto.stock_actual,
-        stock_nuevo: nuevoStock,
+        stock_anterior: cantidadAnterior,
+        stock_nuevo: cantidadNueva,
         referencia_tipo: "compra",
         referencia_id: compra.id,
         motivo: `Recepción compra #${compra.numero_compra}`,
         registrado_por: user?.id,
       });
+      if (errMov) throw errMov;
 
-      // Actualizar cantidad recibida en el item
-      await db
+      const { error: errItem } = await db
         .from("compra_items")
         .update({ cantidad_recibida: item.cantidad })
         .eq("id", item.id);
+      if (errItem) throw errItem;
+    }
+
+    // Sincronizar columnas cacheadas productos.stock_actual / producto_variantes.stock_actual
+    const productosUnicos = Array.from(
+      new Set(compra.compra_items.map((i: any) => i.producto_id as number))
+    );
+    for (const pid of productosUnicos) {
+      const { error: errRpc } = await db.rpc("recalcular_stock_producto", {
+        p_producto_id: pid,
+      });
+      if (errRpc) throw errRpc;
     }
 
     // Marcar compra como recibida

@@ -46,15 +46,25 @@ interface Proveedor {
   nombre: string;
 }
 
+interface Variante {
+  id: number;
+  nombre: string;
+  sku: string | null;
+  precio_override: number | null;
+  activo: boolean;
+}
+
 interface Producto {
   id: number;
   nombre: string;
   sku: string | null;
   precio: number;
+  producto_variantes: Variante[];
 }
 
 interface CompraItem {
   producto_id: number;
+  variante_id: number | null;
   nombre: string;
   cantidad: number;
   costo_unitario: number;
@@ -78,6 +88,7 @@ function NuevaCompraContent() {
   // Producto selector
   const [productoOpen, setProductoOpen] = useState(false);
   const [productoSearch, setProductoSearch] = useState("");
+  const [expandedProductoId, setExpandedProductoId] = useState<number | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -90,7 +101,9 @@ function NuevaCompraContent() {
           .order("nombre"),
         supabase
           .from("productos")
-          .select("id, nombre, sku, precio")
+          .select(
+            "id, nombre, sku, precio, producto_variantes(id, nombre, sku, precio_override, activo)"
+          )
           .eq("activo", true)
           .order("nombre"),
       ]);
@@ -100,28 +113,38 @@ function NuevaCompraContent() {
     load();
   }, []);
 
-  function addItem(producto: Producto) {
-    const existing = items.find((i) => i.producto_id === producto.id);
+  function addItem(producto: Producto, variante?: Variante) {
+    const varianteId = variante?.id ?? null;
+    const existing = items.find(
+      (i) => i.producto_id === producto.id && i.variante_id === varianteId
+    );
     if (existing) {
       setItems(
         items.map((i) =>
-          i.producto_id === producto.id
+          i.producto_id === producto.id && i.variante_id === varianteId
             ? { ...i, cantidad: i.cantidad + 1 }
             : i
         )
       );
     } else {
+      const nombre = variante
+        ? `${producto.nombre} — ${variante.nombre}`
+        : producto.nombre;
+      const costo = variante?.precio_override ?? producto.precio;
       setItems([
         ...items,
         {
           producto_id: producto.id,
-          nombre: producto.nombre,
+          variante_id: varianteId,
+          nombre,
           cantidad: 1,
-          costo_unitario: producto.precio,
+          costo_unitario: costo,
         },
       ]);
     }
     setProductoOpen(false);
+    setExpandedProductoId(null);
+    setProductoSearch("");
   }
 
   function updateItem(
@@ -162,6 +185,7 @@ function NuevaCompraContent() {
           notas: notas || null,
           items: items.map((i) => ({
             producto_id: i.producto_id,
+            variante_id: i.variante_id,
             cantidad: i.cantidad,
             costo_unitario: i.costo_unitario,
           })),
@@ -305,7 +329,7 @@ function NuevaCompraContent() {
                 <AnimatePresence>
                   {items.map((item, index) => (
                     <motion.tr
-                      key={item.producto_id}
+                      key={`${item.producto_id}-${item.variante_id ?? "base"}`}
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }}
@@ -435,25 +459,70 @@ function NuevaCompraContent() {
                 Sin resultados
               </p>
             ) : (
-              filteredProductos.slice(0, 20).map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => addItem(p)}
-                  className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-muted transition-colors"
-                >
-                  <div>
-                    <p className="text-sm font-medium">{p.nombre}</p>
-                    {p.sku && (
-                      <p className="text-xs text-muted-foreground">
-                        SKU: {p.sku}
-                      </p>
+              filteredProductos.slice(0, 20).map((p) => {
+                const variantesActivas = (p.producto_variantes || []).filter(
+                  (v) => v.activo
+                );
+                const tieneVariantes = variantesActivas.length > 0;
+                const isExpanded = expandedProductoId === p.id;
+                return (
+                  <div key={p.id}>
+                    <button
+                      onClick={() => {
+                        if (tieneVariantes) {
+                          setExpandedProductoId(isExpanded ? null : p.id);
+                        } else {
+                          addItem(p);
+                        }
+                      }}
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-muted transition-colors"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">{p.nombre}</p>
+                        {tieneVariantes ? (
+                          <p className="text-xs text-muted-foreground">
+                            {variantesActivas.length} variante
+                            {variantesActivas.length === 1 ? "" : "s"} —{" "}
+                            {isExpanded ? "ocultar" : "elegir"}
+                          </p>
+                        ) : (
+                          p.sku && (
+                            <p className="text-xs text-muted-foreground">
+                              SKU: {p.sku}
+                            </p>
+                          )
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {formatCurrency(p.precio)}
+                      </span>
+                    </button>
+                    {tieneVariantes && isExpanded && (
+                      <div className="ml-3 mt-1 space-y-0.5 border-l border-border/50 pl-3">
+                        {variantesActivas.map((v) => (
+                          <button
+                            key={v.id}
+                            onClick={() => addItem(p, v)}
+                            className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left hover:bg-muted transition-colors"
+                          >
+                            <div>
+                              <p className="text-xs font-medium">{v.nombre}</p>
+                              {v.sku && (
+                                <p className="text-[11px] text-muted-foreground">
+                                  SKU: {v.sku}
+                                </p>
+                              )}
+                            </div>
+                            <span className="text-[11px] text-muted-foreground">
+                              {formatCurrency(v.precio_override ?? p.precio)}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    {formatCurrency(p.precio)}
-                  </span>
-                </button>
-              ))
+                );
+              })
             )}
           </div>
         </DialogContent>
