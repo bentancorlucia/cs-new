@@ -28,6 +28,9 @@ import {
   ShieldCheck,
   LayoutDashboard,
   Receipt,
+  Wallet,
+  ArrowLeftRight,
+  FileSpreadsheet,
 } from "lucide-react";
 import { useRoles } from "@/hooks/use-roles";
 import { RoleSwitcher } from "@/components/layout/role-switcher";
@@ -76,6 +79,19 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/eventos/admin", label: "Eventos", icon: Calendar },
       { href: "/eventos/crear", label: "Crear evento", icon: Plus },
       { href: "/eventos/scanner", label: "Scanner", icon: QrCode },
+    ],
+  },
+  {
+    title: "Tesorería",
+    requiredRoles: ["super_admin", "tesorero"],
+    items: [
+      { href: "/tesoreria", label: "Dashboard", icon: LayoutDashboard, exact: true },
+      { href: "/tesoreria/cuentas", label: "Cuentas", icon: Wallet },
+      { href: "/tesoreria/movimientos", label: "Movimientos", icon: Receipt },
+      { href: "/tesoreria/categorias", label: "Categorías", icon: Tag },
+      { href: "/tesoreria/transferencias", label: "Transferencias", icon: ArrowLeftRight },
+      { href: "/tesoreria/presupuesto", label: "Presupuesto", icon: BarChart3 },
+      { href: "/tesoreria/reportes", label: "Reportes", icon: FileSpreadsheet },
     ],
   },
   {

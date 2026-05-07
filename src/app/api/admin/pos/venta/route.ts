@@ -224,6 +224,22 @@ export async function POST(request: NextRequest) {
           });
         }
       }
+
+      try {
+        const { registrarMovimientoVentaPedido } = await import(
+          "@/lib/tienda/registrar-movimiento"
+        );
+        await registrarMovimientoVentaPedido(db, {
+          pedidoId: pedido.id,
+          numeroPedido: pedido.numero_pedido,
+          tipoPedido: "pos",
+          total,
+          metodoPago: "efectivo",
+          registradoPor: user?.id ?? null,
+        });
+      } catch (movError) {
+        console.error("Error al registrar movimiento financiero:", movError);
+      }
     }
 
     return NextResponse.json({ data: pedido });

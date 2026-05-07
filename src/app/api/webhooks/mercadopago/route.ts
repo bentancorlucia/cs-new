@@ -194,7 +194,7 @@ async function handlePedidoPayment(
 ) {
   const { data: pedido, error: pedidoError } = await supabaseAdmin
     .from("pedidos")
-    .select("id, estado, perfil_id")
+    .select("id, estado, perfil_id, numero_pedido, total, tipo")
     .eq("numero_pedido", numeroPedido)
     .single();
 
@@ -285,6 +285,23 @@ async function handlePedidoPayment(
           }
         }
       }
+    }
+
+    // Register financial movement in tienda bank account
+    try {
+      const { registrarMovimientoVentaPedido } = await import(
+        "@/lib/tienda/registrar-movimiento"
+      );
+      await registrarMovimientoVentaPedido(supabaseAdmin as any, {
+        pedidoId: pedido.id,
+        numeroPedido: pedido.numero_pedido || numeroPedido,
+        tipoPedido: pedido.tipo === "pos" ? "pos" : "online",
+        total: Number(pedido.total ?? payment.transaction_amount ?? 0),
+        metodoPago: "mercadopago",
+        registradoPor: null,
+      });
+    } catch (movError) {
+      console.error("Error al registrar movimiento financiero:", movError);
     }
 
     // 3. Register in pagos_mercadopago

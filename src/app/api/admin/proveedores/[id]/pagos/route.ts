@@ -53,7 +53,8 @@ export async function POST(
     const body = await request.json();
     const parsed = pagoSchema.parse(body);
 
-    const { data, error } = await (supabase as any)
+    const db = supabase as any;
+    const { data, error } = await db
       .from("pagos_proveedor")
       .insert({
         proveedor_id: parseInt(id),
@@ -70,6 +71,39 @@ export async function POST(
     if (error) throw error;
 
     // El trigger en DB actualiza saldo_cuenta_corriente automáticamente
+
+    try {
+      const { data: proveedor } = await db
+        .from("proveedores")
+        .select("nombre")
+        .eq("id", parseInt(id))
+        .maybeSingle();
+
+      let compraNumero: string | null = null;
+      if (parsed.compra_id) {
+        const { data: compra } = await db
+          .from("compras_proveedor")
+          .select("numero_compra")
+          .eq("id", parsed.compra_id)
+          .maybeSingle();
+        compraNumero = compra?.numero_compra ?? null;
+      }
+
+      const { registrarMovimientoPagoProveedor } = await import(
+        "@/lib/tienda/registrar-movimiento"
+      );
+      await registrarMovimientoPagoProveedor(db, {
+        pagoId: data.id,
+        proveedorNombre: proveedor?.nombre || `Proveedor #${id}`,
+        monto: parsed.monto,
+        metodoPago: parsed.metodo_pago,
+        referencia: parsed.referencia || null,
+        compraNumero,
+        registradoPor: user?.id ?? null,
+      });
+    } catch (movError) {
+      console.error("Error al registrar movimiento financiero:", movError);
+    }
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error: any) {
