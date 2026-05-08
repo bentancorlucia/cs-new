@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/supabase/roles";
 import { rangoDeFechas, type TipoPeriodo } from "@/lib/tesoreria/presupuesto";
+import { getCotizacionVigente } from "@/lib/tesoreria/bcu";
+import { convertir, type Moneda } from "@/lib/tesoreria/conversion";
 
 const ROLES = ["super_admin", "tesorero"];
 
@@ -22,11 +24,19 @@ export async function GET(req: NextRequest) {
   const tipo = (searchParams.get("tipo_periodo") ?? "anual") as TipoPeriodo;
   const anio = Number(searchParams.get("anio") ?? new Date().getFullYear());
   const numero = Number(searchParams.get("periodo_numero") ?? "1");
-  const moneda = (searchParams.get("moneda") ?? "UYU") as "UYU" | "USD";
+  const moneda = (searchParams.get("moneda") ?? "UYU") as Moneda;
 
   const { desde, hasta } = rangoDeFechas(tipo, anio, numero);
   const mesInicio = Number(desde.slice(5, 7));
   const mesFin = Number(hasta.slice(5, 7));
+
+  const cotizacion = await getCotizacionVigente();
+
+  // Convert any source amount to the requested view currency. If a source is
+  // in another currency and no rate is available, the entry is skipped so it
+  // doesn't silently inflate totals at 1:1.
+  const aMoneda = (monto: number, desde: Moneda): number | null =>
+    convertir(monto, desde, moneda, cotizacion);
 
   const { data: presupuestos, error: errPres } = await supabase
     .from("presupuestos")
@@ -34,8 +44,7 @@ export async function GET(req: NextRequest) {
     .eq("tipo_periodo", "mensual")
     .eq("anio", anio)
     .gte("periodo_numero", mesInicio)
-    .lte("periodo_numero", mesFin)
-    .eq("moneda", moneda);
+    .lte("periodo_numero", mesFin);
 
   if (errPres) {
     return NextResponse.json({ error: errPres.message }, { status: 500 });
@@ -45,8 +54,7 @@ export async function GET(req: NextRequest) {
     .from("movimientos_financieros")
     .select("categoria_id, tipo, monto, moneda, fecha")
     .gte("fecha", desde)
-    .lte("fecha", hasta)
-    .eq("moneda", moneda);
+    .lte("fecha", hasta);
 
   if (errMov) {
     return NextResponse.json({ error: errMov.message }, { status: 500 });
@@ -73,22 +81,19 @@ export async function GET(req: NextRequest) {
   for (const p of presupuestos ?? []) {
     if (p.categoria_id == null) continue;
     if (tieneHijos(p.categoria_id)) continue; // los padres se calculan
-    selfPresup.set(
-      p.categoria_id,
-      (selfPresup.get(p.categoria_id) ?? 0) + Number(p.monto)
-    );
+    const conv = aMoneda(Number(p.monto), (p.moneda as Moneda) ?? "UYU");
+    if (conv == null) continue;
+    selfPresup.set(p.categoria_id, (selfPresup.get(p.categoria_id) ?? 0) + conv);
   }
 
   // Self ejecutado (signed) por categoría — incluye lo asignado directamente.
   const selfEjec = new Map<number, number>();
   for (const m of movs ?? []) {
     if (m.categoria_id == null) continue;
-    const monto = Number(m.monto);
+    const conv = aMoneda(Number(m.monto), (m.moneda as Moneda) ?? "UYU");
+    if (conv == null) continue;
     const signo = m.tipo === "ingreso" ? 1 : -1;
-    selfEjec.set(
-      m.categoria_id,
-      (selfEjec.get(m.categoria_id) ?? 0) + signo * monto
-    );
+    selfEjec.set(m.categoria_id, (selfEjec.get(m.categoria_id) ?? 0) + signo * conv);
   }
 
   // Aggregate recursivo: presupuestado y ejecutado de la cat + descendientes.
@@ -128,16 +133,19 @@ export async function GET(req: NextRequest) {
     if (!cat) continue;
     const slot = presupMensual[p.periodo_numero];
     if (!slot) continue;
-    if (cat.tipo === "ingreso") slot.ingreso += Number(p.monto);
-    else slot.egreso += Number(p.monto);
+    const conv = aMoneda(Number(p.monto), (p.moneda as Moneda) ?? "UYU");
+    if (conv == null) continue;
+    if (cat.tipo === "ingreso") slot.ingreso += conv;
+    else slot.egreso += conv;
   }
 
   for (const m of movs ?? []) {
     const fmes = Number((m.fecha as string).slice(5, 7));
     if (!ejecMensual[fmes]) continue;
-    const monto = Number(m.monto);
-    if (m.tipo === "ingreso") ejecMensual[fmes].ingreso += monto;
-    else ejecMensual[fmes].egreso += monto;
+    const conv = aMoneda(Number(m.monto), (m.moneda as Moneda) ?? "UYU");
+    if (conv == null) continue;
+    if (m.tipo === "ingreso") ejecMensual[fmes].ingreso += conv;
+    else ejecMensual[fmes].egreso += conv;
   }
 
   type Row = {
