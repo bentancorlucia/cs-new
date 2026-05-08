@@ -69,7 +69,16 @@ export default function AdminCategoriasPage() {
       .from("categorias_producto")
       .select("*")
       .order("orden");
-    setCategorias(data || []);
+    setCategorias(
+      (data || []).map((c) => ({
+        id: c.id,
+        nombre: c.nombre,
+        slug: c.slug,
+        descripcion: c.descripcion,
+        orden: c.orden ?? 0,
+        activa: c.activa ?? true,
+      }))
+    );
     setLoading(false);
   }, []);
 
