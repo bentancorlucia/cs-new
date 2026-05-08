@@ -157,7 +157,7 @@ export default function SecretariaDashboard() {
           ),
         supabase
           .from("disciplinas")
-          .select("id, nombre, perfil_disciplinas(id)")
+          .select("id, nombre, padron_disciplinas(id)")
           .eq("activa", true)
           .order("nombre"),
         supabase
@@ -172,12 +172,12 @@ export default function SecretariaDashboard() {
         pagos?.reduce((sum, p) => sum + (p.monto || 0), 0) || 0;
 
       const discs = disciplinasResult.data as unknown as
-        | { nombre: string; perfil_disciplinas: unknown[] }[]
+        | { nombre: string; padron_disciplinas: unknown[] }[]
         | null;
       const sociosPorDisciplina =
         discs?.map((d) => ({
           nombre: d.nombre,
-          cantidad: d.perfil_disciplinas?.length || 0,
+          cantidad: d.padron_disciplinas?.length || 0,
         })) || [];
 
       setStats({
