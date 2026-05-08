@@ -55,7 +55,8 @@ export async function GET(req: NextRequest) {
       if (!buckets[key]) buckets[key] = { online: 0, pos: 0, total: 0 };
     }
 
-    data?.forEach((p: { total: number; created_at: string; tipo: string }) => {
+    data?.forEach((p: { total: number; created_at: string | null; tipo: string }) => {
+      if (!p.created_at) return;
       const dayKey = uruguayDateKey(p.created_at);
       const key = bucketKey(dayKey, config.bucket);
       if (buckets[key]) {

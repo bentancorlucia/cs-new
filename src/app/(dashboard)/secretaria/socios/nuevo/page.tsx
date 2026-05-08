@@ -68,7 +68,7 @@ export default function NuevoSocioPage() {
         .select("id, nombre, slug, activa")
         .eq("activa", true)
         .order("nombre");
-      setDisciplinas(data || []);
+      setDisciplinas((data || []).map((d) => ({ ...d, activa: d.activa ?? false })));
     }
     load();
   }, []);

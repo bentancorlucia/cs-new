@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
         categoria: d.categoria || null,
       }));
 
-      await supabase.from("perfil_disciplinas").insert(disciplinasData as never);
+      await (supabase as any).from("perfil_disciplinas").insert(disciplinasData);
 
       return NextResponse.json({
         socio_id: parsed.perfil_id,
@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
         categoria: d.categoria || null,
       }));
 
-      await supabase.from("perfil_disciplinas").insert(disciplinasData2 as never);
+      await (supabase as any).from("perfil_disciplinas").insert(disciplinasData2);
 
       return NextResponse.json(
         { socio_id: newId },

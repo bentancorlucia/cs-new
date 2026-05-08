@@ -28,9 +28,9 @@ export async function POST(
       disciplina_id: parsed.disciplina_id,
       categoria: parsed.categoria || null,
     };
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("perfil_disciplinas")
-      .insert(insertPayload as never)
+      .insert(insertPayload)
       .select("*, disciplinas(id, nombre, slug)")
       .single();
 
@@ -79,7 +79,7 @@ export async function DELETE(
     const body = await request.json();
     const parsed = quitarDisciplinaSchema.parse(body);
 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from("perfil_disciplinas")
       .delete()
       .eq("id", parsed.perfil_disciplina_id);

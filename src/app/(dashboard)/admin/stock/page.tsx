@@ -225,7 +225,10 @@ export default function AdminStockPage() {
       .limit(20);
 
     // Para ventas, traer nombre del cliente del pedido
-    const movs: Movimiento[] = data || [];
+    const movs: Movimiento[] = (data || []).map((m) => ({
+      ...m,
+      created_at: m.created_at ?? "",
+    }));
     const ventaMovs = movs.filter((m) => m.referencia_tipo === "pedido" && m.referencia_id);
     if (ventaMovs.length > 0) {
       const pedidoIds = [...new Set(ventaMovs.map((m) => m.referencia_id!))];

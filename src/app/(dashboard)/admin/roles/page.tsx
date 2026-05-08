@@ -145,6 +145,7 @@ export default function RolesPage() {
 
     let result: PerfilConRoles[] = perfilesData.map((p) => ({
       ...p,
+      es_socio: p.es_socio ?? false,
       roles: roleMap[p.id] || [],
     }));
 

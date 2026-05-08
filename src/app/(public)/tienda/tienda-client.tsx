@@ -139,8 +139,8 @@ export function TiendaClient({
       case "nuevos":
         result.sort(
           (a, b) =>
-            new Date(b.created_at).getTime() -
-            new Date(a.created_at).getTime()
+            new Date(b.created_at ?? 0).getTime() -
+            new Date(a.created_at ?? 0).getTime()
         );
         break;
     }
@@ -508,7 +508,7 @@ export function TiendaClient({
                       imagenUrl={imagen?.url}
                       imagenFocalPoint={imagen?.focal_point}
                       stock={producto.stock_actual}
-                      destacado={producto.destacado}
+                      destacado={producto.destacado ?? undefined}
                       categoria={producto.categorias_producto?.nombre}
                       mtoDisponible={producto.mto_disponible}
                       mtoSolo={producto.mto_solo}
@@ -680,7 +680,7 @@ export function TiendaClient({
                       imagenUrl={imagen?.url}
                       imagenFocalPoint={imagen?.focal_point}
                       stock={producto.stock_actual}
-                      destacado={producto.destacado}
+                      destacado={producto.destacado ?? undefined}
                       categoria={producto.categorias_producto?.nombre}
                       mtoDisponible={producto.mto_disponible}
                       mtoSolo={producto.mto_solo}
