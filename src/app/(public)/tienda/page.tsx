@@ -33,10 +33,41 @@ export default async function TiendaPage() {
       .order("orden"),
   ]);
 
+  const productos = (prodRes.data ?? []) as { id: number }[];
+  const productoIds = productos.map((p) => p.id);
+
+  const stockReservadoProductos: Record<number, number> = {};
+  const stockReservadoVariantes: Record<number, number> = {};
+
+  if (productoIds.length > 0) {
+    const { data: reservados } = await supabase
+      .from("pedido_items")
+      .select("producto_id, variante_id, cantidad, pedidos!inner(estado)")
+      .in("producto_id", productoIds)
+      .eq("pedidos.estado", "pendiente_verificacion");
+
+    if (reservados) {
+      for (const item of reservados as {
+        producto_id: number;
+        variante_id: number | null;
+        cantidad: number;
+      }[]) {
+        stockReservadoProductos[item.producto_id] =
+          (stockReservadoProductos[item.producto_id] || 0) + item.cantidad;
+        if (item.variante_id) {
+          stockReservadoVariantes[item.variante_id] =
+            (stockReservadoVariantes[item.variante_id] || 0) + item.cantidad;
+        }
+      }
+    }
+  }
+
   return (
     <TiendaClient
       initialProductos={(prodRes.data ?? []) as never[]}
       initialCategorias={catRes.data ?? []}
+      stockReservadoProductos={stockReservadoProductos}
+      stockReservadoVariantes={stockReservadoVariantes}
     />
   );
 }

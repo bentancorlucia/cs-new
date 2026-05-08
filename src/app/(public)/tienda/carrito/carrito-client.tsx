@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
@@ -15,6 +16,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/hooks/use-cart";
 import { PromocodeInput } from "@/components/tienda/promocode-input";
+import { previewPromocode } from "@/lib/promocodes/client";
+import { createBrowserClient } from "@/lib/supabase/client";
 import {
   fadeInUp,
   staggerContainer,
@@ -23,8 +26,40 @@ import {
 } from "@/lib/motion";
 
 export function CarritoClient() {
-  const { items, loaded, total, totalSocio, itemCount, updateQuantity, removeItem, clearCart } =
+  const { items, loaded, total, totalSocio, itemCount, updateQuantity, removeItem, clearCart, promocode } =
     useCart();
+  const [esSocio, setEsSocio] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const supabase = createBrowserClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from("perfiles")
+        .select("es_socio")
+        .eq("id", user.id)
+        .single();
+      if (!cancelled && data?.es_socio === true) setEsSocio(true);
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const preview = previewPromocode({
+    totalNormal: total,
+    totalSocio,
+    esSocio,
+    promo: promocode,
+  });
+  const totalFinal = preview.total;
+  const descuentoSocio = preview.descuentoSocio;
+  const descuentoCodigo = preview.descuentoCodigo;
 
   if (!loaded) {
     return (
@@ -262,13 +297,38 @@ export function CarritoClient() {
                   ${total.toLocaleString("es-UY")}
                 </motion.span>
               </div>
-              {totalSocio < total && (
+              {descuentoSocio > 0 && (
                 <div className="flex justify-between text-bordo-800">
-                  <span>Precio socio</span>
+                  <span>{esSocio ? "Descuento socio" : "Precio socio"}</span>
                   <span className="font-bold">
-                    ${totalSocio.toLocaleString("es-UY")}
+                    -${descuentoSocio.toLocaleString("es-UY")}
                   </span>
                 </div>
+              )}
+              <AnimatePresence>
+                {descuentoCodigo > 0 && promocode && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="flex justify-between text-bordo-800 overflow-hidden"
+                  >
+                    <span className="truncate">
+                      Código{" "}
+                      <span className="font-mono text-[11px]">
+                        {promocode.codigo}
+                      </span>
+                    </span>
+                    <span className="font-bold shrink-0">
+                      -${descuentoCodigo.toLocaleString("es-UY")}
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              {promocode && !preview.aplicoPromocode && esSocio && (
+                <p className="text-[11px] text-bordo-800/60 italic">
+                  El precio socio es mejor que el código.
+                </p>
               )}
               <div className="flex justify-between text-bordo-800/40">
                 <span>Envío</span>
@@ -289,13 +349,13 @@ export function CarritoClient() {
                 Total
               </span>
               <motion.span
-                key={totalSocio < total ? totalSocio : total}
+                key={totalFinal}
                 initial={{ scale: 0.8 }}
                 animate={{ scale: 1 }}
                 transition={springSmooth}
                 className="font-display text-2xl text-bordo-950 font-medium tracking-tight"
               >
-                ${(totalSocio < total ? totalSocio : total).toLocaleString("es-UY")}
+                ${totalFinal.toLocaleString("es-UY")}
               </motion.span>
             </div>
 
@@ -332,20 +392,23 @@ export function CarritoClient() {
                 <span className="font-heading text-[10px] uppercase tracking-editorial text-dorado-300/70">
                   {itemCount} {itemCount === 1 ? "producto" : "productos"}
                 </span>
-                {totalSocio < total && (
+                {total - totalFinal > 0 && (
                   <span className="font-heading text-[10px] uppercase tracking-editorial text-dorado-300/50">
-                    Socio: ${totalSocio.toLocaleString("es-UY")}
+                    Ahorrás ${(total - totalFinal).toLocaleString("es-UY")}
+                    {promocode && preview.aplicoPromocode
+                      ? ` · ${promocode.codigo}`
+                      : ""}
                   </span>
                 )}
               </div>
               <motion.span
-                key={totalSocio < total ? totalSocio : total}
+                key={totalFinal}
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={springSmooth}
                 className="text-2xl font-bold text-white font-body"
               >
-                ${(totalSocio < total ? totalSocio : total).toLocaleString("es-UY")}
+                ${totalFinal.toLocaleString("es-UY")}
               </motion.span>
             </div>
             {/* CTA */}

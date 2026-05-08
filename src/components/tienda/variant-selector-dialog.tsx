@@ -21,6 +21,7 @@ import {
   resolveVariante,
   isAtributoValueAvailable,
   getStockForAtributoValue,
+  getStockDisponible,
 } from "@/lib/tienda/variantes";
 import { springBouncy, springSmooth } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -38,16 +39,26 @@ interface ProductoConVariantes {
 
 interface Props {
   producto: ProductoConVariantes | null;
+  stockReservadoVariantes?: Record<number, number>;
   onClose: () => void;
 }
 
-export function VariantSelectorDialog({ producto, onClose }: Props) {
+export function VariantSelectorDialog({
+  producto,
+  stockReservadoVariantes = {},
+  onClose,
+}: Props) {
   const open = producto !== null;
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-md p-0 overflow-hidden">
         {producto && (
-          <SelectorBody key={producto.id} producto={producto} onClose={onClose} />
+          <SelectorBody
+            key={producto.id}
+            producto={producto}
+            stockReservadoVariantes={stockReservadoVariantes}
+            onClose={onClose}
+          />
         )}
       </DialogContent>
     </Dialog>
@@ -56,9 +67,11 @@ export function VariantSelectorDialog({ producto, onClose }: Props) {
 
 function SelectorBody({
   producto,
+  stockReservadoVariantes,
   onClose,
 }: {
   producto: ProductoConVariantes;
+  stockReservadoVariantes: Record<number, number>;
   onClose: () => void;
 }) {
   const { addItem } = useCart();
@@ -74,7 +87,10 @@ function SelectorBody({
     [variantes, atributoKeys]
   );
 
-  const varianteInicial = useMemo(() => findVarianteInicial(variantes), [variantes]);
+  const varianteInicial = useMemo(
+    () => findVarianteInicial(variantes, stockReservadoVariantes),
+    [variantes, stockReservadoVariantes]
+  );
 
   const [seleccionAtributos, setSeleccionAtributos] = useState<Record<string, string>>(() => {
     if (!esMultiAtributo || !varianteInicial) return {};
@@ -97,7 +113,9 @@ function SelectorBody({
     return variantes.find((v) => v.id === varianteSeleccionada) ?? null;
   }, [esMultiAtributo, variantes, atributoKeys, seleccionAtributos, varianteSeleccionada]);
 
-  const stockDisponible = varianteActual?.stock_actual ?? 0;
+  const stockDisponible = varianteActual
+    ? getStockDisponible(varianteActual, stockReservadoVariantes)
+    : 0;
   const sinStock = stockDisponible <= 0;
   const precioActual = varianteActual?.precio_override ?? producto.precio;
   const tieneDescuento = producto.precio_socio != null && producto.precio_socio < precioActual;
@@ -199,7 +217,8 @@ function SelectorBody({
                     atributoKeys,
                     key,
                     val,
-                    seleccionAtributos
+                    seleccionAtributos,
+                    stockReservadoVariantes
                   );
                   return (
                     <motion.button
@@ -232,26 +251,29 @@ function SelectorBody({
               Variante
             </span>
             <div className="flex flex-wrap gap-2">
-              {variantes.map((v) => (
-                <motion.button
-                  key={v.id}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => {
-                    setVarianteSeleccionada(v.id);
-                    setCantidad(1);
-                  }}
-                  disabled={v.stock_actual <= 0}
-                  className={cn(
-                    "h-10 border px-3 text-sm font-bold transition-all min-w-[40px]",
-                    varianteSeleccionada === v.id
-                      ? "border-bordo-800 bg-bordo-800 text-white shadow-sm"
-                      : "border-bordo-800/20 text-bordo-950 hover:border-bordo-800 hover:bg-bordo-800/5",
-                    v.stock_actual <= 0 && "opacity-40 line-through cursor-not-allowed"
-                  )}
-                >
-                  {v.nombre}
-                </motion.button>
-              ))}
+              {variantes.map((v) => {
+                const stockV = getStockDisponible(v, stockReservadoVariantes);
+                return (
+                  <motion.button
+                    key={v.id}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => {
+                      setVarianteSeleccionada(v.id);
+                      setCantidad(1);
+                    }}
+                    disabled={stockV <= 0}
+                    className={cn(
+                      "h-10 border px-3 text-sm font-bold transition-all min-w-[40px]",
+                      varianteSeleccionada === v.id
+                        ? "border-bordo-800 bg-bordo-800 text-white shadow-sm"
+                        : "border-bordo-800/20 text-bordo-950 hover:border-bordo-800 hover:bg-bordo-800/5",
+                      stockV <= 0 && "opacity-40 line-through cursor-not-allowed"
+                    )}
+                  >
+                    {v.nombre}
+                  </motion.button>
+                );
+              })}
             </div>
           </div>
         )}

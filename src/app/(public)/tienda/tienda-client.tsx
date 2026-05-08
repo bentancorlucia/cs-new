@@ -53,15 +53,31 @@ const ITEMS_PER_PAGE = 12;
 interface TiendaClientProps {
   initialProductos?: Producto[];
   initialCategorias?: Categoria[];
+  stockReservadoProductos?: Record<number, number>;
+  stockReservadoVariantes?: Record<number, number>;
 }
 
 export function TiendaClient({
   initialProductos = [],
   initialCategorias = [],
+  stockReservadoProductos: initialReservadoProductos = {},
+  stockReservadoVariantes: initialReservadoVariantes = {},
 }: TiendaClientProps) {
   const [productos, setProductos] = useState<Producto[]>(initialProductos);
   const [categorias, setCategorias] = useState<Categoria[]>(initialCategorias);
+  const [stockReservadoProductos, setStockReservadoProductos] = useState<
+    Record<number, number>
+  >(initialReservadoProductos);
+  const [stockReservadoVariantes, setStockReservadoVariantes] = useState<
+    Record<number, number>
+  >(initialReservadoVariantes);
   const hasInitialData = initialProductos.length > 0;
+
+  const getStockDisponibleProducto = useCallback(
+    (p: Producto) =>
+      Math.max(0, p.stock_actual - (stockReservadoProductos[p.id] || 0)),
+    [stockReservadoProductos]
+  );
   const [loading, setLoading] = useState(!hasInitialData);
   const [search, setSearch] = useState("");
   const [categoriaActiva, setCategoriaActiva] = useState<string>("todas");
@@ -94,6 +110,35 @@ export function TiendaClient({
 
       if (prodRes.data) setProductos(prodRes.data as unknown as Producto[]);
       if (catRes.data) setCategorias(catRes.data);
+
+      const ids = (prodRes.data ?? []).map((p: { id: number }) => p.id);
+      if (ids.length > 0) {
+        const { data: reservados } = await supabase
+          .from("pedido_items")
+          .select("producto_id, variante_id, cantidad, pedidos!inner(estado)")
+          .in("producto_id", ids)
+          .eq("pedidos.estado", "pendiente_verificacion");
+
+        const resProd: Record<number, number> = {};
+        const resVar: Record<number, number> = {};
+        if (reservados) {
+          for (const item of reservados as {
+            producto_id: number;
+            variante_id: number | null;
+            cantidad: number;
+          }[]) {
+            resProd[item.producto_id] =
+              (resProd[item.producto_id] || 0) + item.cantidad;
+            if (item.variante_id) {
+              resVar[item.variante_id] =
+                (resVar[item.variante_id] || 0) + item.cantidad;
+            }
+          }
+        }
+        setStockReservadoProductos(resProd);
+        setStockReservadoVariantes(resVar);
+      }
+
       setLoading(false);
     }
 
@@ -103,13 +148,16 @@ export function TiendaClient({
   // Featured products
   const productosDestacados = useMemo(() => {
     const destacados = productos
-      .filter((p) => p.destacado && p.stock_actual > 0)
+      .filter((p) => p.destacado && getStockDisponibleProducto(p) > 0)
       .slice(0, 6);
     if (destacados.length > 0) return destacados;
     return productos
-      .filter((p) => p.producto_imagenes?.length > 0 && p.stock_actual > 0)
+      .filter(
+        (p) =>
+          p.producto_imagenes?.length > 0 && getStockDisponibleProducto(p) > 0
+      )
       .slice(0, 6);
-  }, [productos]);
+  }, [productos, getStockDisponibleProducto]);
 
   const productosFiltrados = useMemo(() => {
     let result = [...productos];
@@ -167,14 +215,14 @@ export function TiendaClient({
         precio: producto.precio,
         precioSocio: producto.precio_socio ?? undefined,
         imagenUrl: imagen?.url ?? "",
-        maxStock: producto.stock_actual,
+        maxStock: getStockDisponibleProducto(producto),
         slug: producto.slug,
       });
       toast.success("Agregado al carrito", {
         description: producto.nombre,
       });
     },
-    [addItem]
+    [addItem, getStockDisponibleProducto]
   );
 
   // Debounced search
@@ -507,7 +555,7 @@ export function TiendaClient({
                       precioSocio={producto.precio_socio}
                       imagenUrl={imagen?.url}
                       imagenFocalPoint={imagen?.focal_point}
-                      stock={producto.stock_actual}
+                      stock={getStockDisponibleProducto(producto)}
                       destacado={producto.destacado ?? undefined}
                       categoria={producto.categorias_producto?.nombre}
                       mtoDisponible={producto.mto_disponible}
@@ -679,7 +727,7 @@ export function TiendaClient({
                       precioSocio={producto.precio_socio}
                       imagenUrl={imagen?.url}
                       imagenFocalPoint={imagen?.focal_point}
-                      stock={producto.stock_actual}
+                      stock={getStockDisponibleProducto(producto)}
                       destacado={producto.destacado ?? undefined}
                       categoria={producto.categorias_producto?.nombre}
                       mtoDisponible={producto.mto_disponible}
@@ -720,6 +768,7 @@ export function TiendaClient({
 
       <VariantSelectorDialog
         producto={productoEnSelector}
+        stockReservadoVariantes={stockReservadoVariantes}
         onClose={() => setProductoEnSelector(null)}
       />
     </>

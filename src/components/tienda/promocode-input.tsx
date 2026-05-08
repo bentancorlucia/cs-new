@@ -107,52 +107,54 @@ export function PromocodeInput() {
             transition={springSmooth}
             className="overflow-hidden"
           >
-            <div className="flex items-stretch gap-2">
-              <input
-                type="text"
-                value={codigo}
-                onChange={(e) => {
-                  setCodigo(e.target.value.toUpperCase());
-                  setError(null);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    aplicar();
-                  }
-                }}
-                placeholder="CÓDIGO"
-                autoFocus
-                disabled={loading}
-                maxLength={40}
-                className="flex-1 border border-bordo-800/15 bg-white px-3 py-2 font-mono text-sm uppercase text-bordo-950 placeholder:text-bordo-800/30 focus:border-bordo-800 focus:outline-none disabled:opacity-50"
-              />
+            <div className="flex flex-col gap-2">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={codigo}
+                  onChange={(e) => {
+                    setCodigo(e.target.value.toUpperCase());
+                    setError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      aplicar();
+                    }
+                  }}
+                  placeholder="CÓDIGO"
+                  autoFocus
+                  disabled={loading}
+                  maxLength={40}
+                  className="w-full border border-bordo-800/15 bg-white px-3 py-2 pr-9 font-mono text-sm uppercase text-bordo-950 placeholder:text-bordo-800/30 focus:border-bordo-800 focus:outline-none disabled:opacity-50"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    setCodigo("");
+                    setError(null);
+                  }}
+                  className="absolute right-1 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center text-bordo-800/40 transition-colors hover:text-bordo-950"
+                  aria-label="Cancelar"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
               <motion.button
                 type="button"
-                whileTap={{ scale: 0.96 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={aplicar}
                 disabled={loading || codigo.trim().length === 0}
-                className="flex items-center gap-1.5 bg-bordo-800 px-4 py-2 font-heading text-[10px] uppercase tracking-editorial text-white transition-colors hover:bg-bordo-900 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex w-full items-center justify-center gap-1.5 bg-bordo-800 px-4 py-2.5 font-heading text-[10px] uppercase tracking-editorial text-white transition-colors hover:bg-bordo-900 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {loading ? (
                   <Loader2 className="size-3.5 animate-spin" />
                 ) : (
                   <Check className="size-3.5" />
                 )}
-                Aplicar
+                Aplicar código
               </motion.button>
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  setCodigo("");
-                  setError(null);
-                }}
-                className="flex size-9 shrink-0 items-center justify-center text-bordo-800/40 transition-colors hover:text-bordo-950"
-                aria-label="Cancelar"
-              >
-                <X className="size-4" />
-              </button>
             </div>
             <AnimatePresence>
               {error && (
