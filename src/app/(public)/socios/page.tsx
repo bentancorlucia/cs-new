@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     "Hacete socio del Club Seminario en Montevideo. Categorías Socio Colaborador y Socio Deportivo. Beneficios, descuentos exclusivos del 5% al 50% y acceso a las disciplinas del club.",
   alternates: { canonical: "/socios" },
   openGraph: {
-    title: "Hacete Socio — Club Seminario",
+    title: "Socios — Club Seminario",
     description:
       "Categorías Socio Colaborador y Deportivo. Sumate a la comunidad del Club Seminario.",
     url: "/socios",
