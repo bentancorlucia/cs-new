@@ -9,7 +9,7 @@ export default async function MovimientosPage() {
   const [{ data: cuentas }, { data: categorias }] = await Promise.all([
     supabase
       .from("cuentas_financieras")
-      .select("id, nombre, tipo, moneda, color")
+      .select("id, nombre, tipo, moneda, color, banco, modulo")
       .eq("activa", true)
       .order("nombre", { ascending: true }),
     supabase

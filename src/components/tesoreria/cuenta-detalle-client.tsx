@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Pencil, AlertCircle } from "lucide-react";
+import { Check, Pencil, AlertCircle, X } from "lucide-react";
 import { formatearMoneda, type Moneda } from "@/lib/tesoreria/conversion";
 
 type Categoria = {
@@ -49,6 +49,7 @@ export function CuentaDetalleClient({
 }) {
   const [movimientos, setMovimientos] = useState(movimientosIniciales);
   const [filtroSinClasificar, setFiltroSinClasificar] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
 
   const visibles = filtroSinClasificar
     ? movimientos.filter((m) => !m.clasificado)
@@ -59,6 +60,64 @@ export function CuentaDetalleClient({
       prev.map((m) => (m.id === id ? { ...m, ...patch } : m))
     );
   };
+
+  const toggle = (id: number) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const toggleAll = () => {
+    if (visibles.every((m) => selected.has(m.id))) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        visibles.forEach((m) => next.delete(m.id));
+        return next;
+      });
+    } else {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        visibles.forEach((m) => next.add(m.id));
+        return next;
+      });
+    }
+  };
+
+  const onBulkApplied = (
+    ids: number[],
+    patch: { tipo?: "ingreso" | "egreso"; categoria_id: number | null },
+    cat: Categoria | null
+  ) => {
+    setMovimientos((prev) =>
+      prev.map((m) =>
+        ids.includes(m.id)
+          ? {
+              ...m,
+              ...(patch.tipo ? { tipo: patch.tipo } : {}),
+              categoria_id: patch.categoria_id,
+              clasificado: patch.categoria_id !== null,
+              categorias_financieras: cat
+                ? {
+                    id: cat.id,
+                    nombre: cat.nombre,
+                    slug: cat.slug,
+                    color: cat.color,
+                    tipo: cat.tipo,
+                  }
+                : null,
+            }
+          : m
+      )
+    );
+    setSelected(new Set());
+  };
+
+  const allChecked =
+    visibles.length > 0 && visibles.every((m) => selected.has(m.id));
+  const someChecked =
+    visibles.some((m) => selected.has(m.id)) && !allChecked;
 
   return (
     <div className="space-y-3">
@@ -81,11 +140,34 @@ export function CuentaDetalleClient({
         </button>
       </div>
 
+      <AnimatePresence>
+        {selected.size > 0 && (
+          <BulkBar
+            ids={Array.from(selected)}
+            categorias={categorias}
+            onApplied={onBulkApplied}
+            onCancel={() => setSelected(new Set())}
+          />
+        )}
+      </AnimatePresence>
+
       <div className="rounded-2xl border border-linea bg-white overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-xs uppercase tracking-editorial text-muted-foreground bg-superficie">
               <tr>
+                <th className="px-3 py-3 w-8">
+                  <input
+                    type="checkbox"
+                    aria-label="Seleccionar todos"
+                    checked={allChecked}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someChecked;
+                    }}
+                    onChange={toggleAll}
+                    className="size-4 rounded border-linea accent-bordo-800"
+                  />
+                </th>
                 <th className="text-left px-4 py-3 font-heading">Fecha</th>
                 <th className="text-left px-4 py-3 font-heading">Descripción</th>
                 <th className="text-left px-4 py-3 font-heading">Categoría</th>
@@ -102,12 +184,14 @@ export function CuentaDetalleClient({
                     cuentaMoneda={cuentaMoneda}
                     categorias={categorias}
                     onUpdate={onUpdate}
+                    checked={selected.has(m.id)}
+                    onToggle={() => toggle(m.id)}
                   />
                 ))}
               </AnimatePresence>
               {visibles.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-muted-foreground">
                     {filtroSinClasificar ? "No hay movimientos sin clasificar 🎉" : "No hay movimientos."}
                   </td>
                 </tr>
@@ -120,16 +204,140 @@ export function CuentaDetalleClient({
   );
 }
 
+function BulkBar({
+  ids,
+  categorias,
+  onApplied,
+  onCancel,
+}: {
+  ids: number[];
+  categorias: Categoria[];
+  onApplied: (
+    ids: number[],
+    patch: { tipo?: "ingreso" | "egreso"; categoria_id: number | null },
+    cat: Categoria | null
+  ) => void;
+  onCancel: () => void;
+}) {
+  const [bulkTipo, setBulkTipo] = useState<"" | "ingreso" | "egreso">("");
+  const [bulkCategoriaId, setBulkCategoriaId] = useState<string>("");
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const padres = useMemo(
+    () =>
+      categorias.filter(
+        (c) => !c.padre_id && (bulkTipo === "" || c.tipo === bulkTipo)
+      ),
+    [categorias, bulkTipo]
+  );
+
+  const aplicar = () => {
+    setError(null);
+    if (bulkCategoriaId === "" && bulkTipo === "") {
+      setError("Elegí una categoría o un tipo");
+      return;
+    }
+    const categoria_id = bulkCategoriaId ? Number(bulkCategoriaId) : null;
+    const patch: { tipo?: "ingreso" | "egreso"; categoria_id: number | null } = {
+      categoria_id,
+    };
+    if (bulkTipo) patch.tipo = bulkTipo;
+
+    startTransition(async () => {
+      const res = await fetch("/api/tesoreria/movimientos/bulk", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, patch }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setError(j.error ?? "Error al actualizar");
+        return;
+      }
+      const cat = categorias.find((c) => c.id === categoria_id) ?? null;
+      onApplied(ids, patch, cat);
+    });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      className="rounded-2xl border border-bordo-200 bg-bordo-50 p-3 flex flex-wrap items-center gap-2"
+    >
+      <div className="text-sm font-heading text-bordo-900">
+        {ids.length} seleccionado{ids.length === 1 ? "" : "s"}
+      </div>
+      <div className="flex-1" />
+      <select
+        value={bulkTipo}
+        onChange={(e) => {
+          setBulkTipo(e.target.value as "" | "ingreso" | "egreso");
+          setBulkCategoriaId("");
+        }}
+        className="text-sm border border-linea rounded-lg px-3 py-2 outline-none focus:border-bordo-700 bg-white"
+      >
+        <option value="">Mantener tipo</option>
+        <option value="ingreso">Ingreso</option>
+        <option value="egreso">Egreso</option>
+      </select>
+      <select
+        value={bulkCategoriaId}
+        onChange={(e) => setBulkCategoriaId(e.target.value)}
+        className="text-sm border border-linea rounded-lg px-3 py-2 outline-none focus:border-bordo-700 bg-white min-w-[200px]"
+      >
+        <option value="">— Sin clasificar —</option>
+        {padres.map((c) => (
+          <optgroup key={c.id} label={c.nombre}>
+            <option value={c.id}>{c.nombre}</option>
+            {categorias
+              .filter((s) => s.padre_id === c.id)
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  &nbsp;&nbsp;{s.nombre}
+                </option>
+              ))}
+          </optgroup>
+        ))}
+      </select>
+      <button
+        onClick={aplicar}
+        disabled={pending}
+        className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg font-medium bg-bordo-700 text-white hover:bg-bordo-900 transition-colors disabled:opacity-60"
+      >
+        <Check className="size-3.5" />
+        {pending ? "Aplicando…" : "Aplicar"}
+      </button>
+      <button
+        onClick={onCancel}
+        className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg font-medium bg-white border border-linea text-muted-foreground hover:text-foreground"
+      >
+        <X className="size-3.5" />
+        Cancelar
+      </button>
+      {error && (
+        <div className="basis-full text-xs text-rose-700">{error}</div>
+      )}
+    </motion.div>
+  );
+}
+
 function MovimientoFila({
   movimiento,
   cuentaMoneda,
   categorias,
   onUpdate,
+  checked,
+  onToggle,
 }: {
   movimiento: Movimiento;
   cuentaMoneda: Moneda;
   categorias: Categoria[];
   onUpdate: (id: number, patch: Partial<Movimiento>) => void;
+  checked: boolean;
+  onToggle: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [, startTransition] = useTransition();
@@ -176,8 +384,17 @@ function MovimientoFila({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="border-t border-linea hover:bg-superficie/50"
+      className={`border-t border-linea hover:bg-superficie/50 ${checked ? "bg-bordo-50/50" : ""}`}
     >
+      <td className="px-3 py-3">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={onToggle}
+          aria-label="Seleccionar movimiento"
+          className="size-4 rounded border-linea accent-bordo-800"
+        />
+      </td>
       <td className="px-4 py-3 text-muted-foreground tabular-nums whitespace-nowrap">
         {new Date(movimiento.fecha + "T00:00:00").toLocaleDateString("es-UY", {
           day: "2-digit",

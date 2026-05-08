@@ -11,7 +11,7 @@ export default async function CuentasPage() {
   const [{ data: cuentas }, cotizacion] = await Promise.all([
     supabase
       .from("cuentas_financieras")
-      .select("*")
+      .select("id, nombre, tipo, moneda, banco, numero_cuenta, titular, descripcion, saldo_actual, saldo_inicial, color, modulo")
       .eq("activa", true)
       .order("tipo", { ascending: true })
       .order("nombre", { ascending: true }),

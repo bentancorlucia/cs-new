@@ -12,6 +12,7 @@ const patchSchema = z.object({
   titular: z.string().max(200).nullable().optional(),
   descripcion: z.string().nullable().optional(),
   color: z.string().max(7).nullable().optional(),
+  saldo_inicial: z.number().optional(),
   incluir_en_tesoreria: z.boolean().optional(),
   activa: z.boolean().optional(),
 });
@@ -56,9 +57,25 @@ export async function PATCH(
     );
   }
   const supabase = await createServerClient();
+
+  const updates: Record<string, unknown> = { ...parsed.data };
+
+  if (parsed.data.saldo_inicial !== undefined) {
+    const { data: actual, error: errActual } = await supabase
+      .from("cuentas_financieras")
+      .select("saldo_inicial, saldo_actual")
+      .eq("id", Number(id))
+      .single();
+    if (errActual || !actual) {
+      return NextResponse.json({ error: errActual?.message ?? "Cuenta no encontrada" }, { status: 404 });
+    }
+    const delta = parsed.data.saldo_inicial - Number(actual.saldo_inicial);
+    updates.saldo_actual = Number(actual.saldo_actual) + delta;
+  }
+
   const { data, error } = await supabase
     .from("cuentas_financieras")
-    .update(parsed.data)
+    .update(updates)
     .eq("id", Number(id))
     .select()
     .single();

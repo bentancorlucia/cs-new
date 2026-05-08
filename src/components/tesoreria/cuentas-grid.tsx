@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Banknote, Wallet, CreditCard, ArrowRight } from "lucide-react";
+import { Banknote, Wallet, CreditCard, ArrowRight, Pencil } from "lucide-react";
 import { staggerContainer, fadeInUp, springSmooth } from "@/lib/motion";
 import { convertir, formatearMoneda, type Moneda } from "@/lib/tesoreria/conversion";
 import type { Cotizacion } from "@/lib/tesoreria/bcu";
+import { CuentaEditModal } from "./cuenta-edit-modal";
 
 type Cuenta = {
   id: number;
@@ -15,7 +16,10 @@ type Cuenta = {
   moneda: Moneda;
   banco: string | null;
   numero_cuenta: string | null;
+  titular?: string | null;
+  descripcion?: string | null;
   saldo_actual: number | string;
+  saldo_inicial?: number | string | null;
   color: string | null;
   modulo: string | null;
 };
@@ -35,6 +39,7 @@ export function CuentasGrid({
   cotizacion: Cotizacion | null;
 }) {
   const [vista, setVista] = useState<Moneda>("UYU");
+  const [editing, setEditing] = useState<Cuenta | null>(null);
 
   const totales = useMemo(() => {
     let totalUYU = 0;
@@ -119,10 +124,10 @@ export function CuentasGrid({
               : convertir(saldo, cuenta.moneda, vista, cotizacion);
 
           return (
-            <motion.div key={cuenta.id} variants={fadeInUp}>
+            <motion.div key={cuenta.id} variants={fadeInUp} className="h-full">
               <Link
                 href={`/tesoreria/cuentas/${cuenta.id}`}
-                className="block rounded-2xl border border-linea bg-white p-4 hover:border-bordo-200 hover:shadow-card transition-all group"
+                className="flex h-full flex-col rounded-2xl border border-linea bg-white p-4 hover:border-bordo-200 hover:shadow-card transition-all group"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div
@@ -131,7 +136,21 @@ export function CuentasGrid({
                   >
                     <Icon className="size-4" />
                   </div>
-                  <ArrowRight className="size-4 text-muted-foreground group-hover:text-bordo-700 group-hover:translate-x-1 transition-all" />
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      aria-label="Editar cuenta"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setEditing(cuenta);
+                      }}
+                      className="p-1.5 rounded-md text-muted-foreground hover:text-bordo-700 hover:bg-bordo-50 transition-colors"
+                    >
+                      <Pencil className="size-3.5" />
+                    </button>
+                    <ArrowRight className="size-4 text-muted-foreground group-hover:text-bordo-700 group-hover:translate-x-1 transition-all" />
+                  </div>
                 </div>
                 <div className="mt-3">
                   <div className="font-heading text-base text-foreground">{cuenta.nombre}</div>
@@ -141,15 +160,13 @@ export function CuentasGrid({
                     {cuenta.modulo === "tienda" ? " · Tienda" : ""}
                   </div>
                 </div>
-                <div className="mt-4">
+                <div className="mt-auto pt-4">
                   <div className="font-heading text-xl tabular-nums text-foreground">
                     {formatearMoneda(saldo, cuenta.moneda)}
                   </div>
-                  {equivalente !== null && (
-                    <div className="text-xs text-muted-foreground tabular-nums">
-                      ≈ {formatearMoneda(equivalente, vista)}
-                    </div>
-                  )}
+                  <div className="min-h-[1rem] text-xs text-muted-foreground tabular-nums">
+                    {equivalente !== null ? `≈ ${formatearMoneda(equivalente, vista)}` : ""}
+                  </div>
                 </div>
               </Link>
             </motion.div>
@@ -161,6 +178,14 @@ export function CuentasGrid({
           </div>
         )}
       </motion.div>
+
+      {editing && (
+        <CuentaEditModal
+          cuenta={editing}
+          open={!!editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </div>
   );
 }

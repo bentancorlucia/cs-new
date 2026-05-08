@@ -1,21 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { motion } from "framer-motion";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  BarChart,
   Bar,
   XAxis,
   YAxis,
   Tooltip,
   CartesianGrid,
   ResponsiveContainer,
-  Legend,
   ComposedChart,
   Line,
   Area,
 } from "recharts";
-import { TrendingUp, TrendingDown, Lock, Sparkles, RotateCcw, ChevronRight } from "lucide-react";
+import { TrendingUp, TrendingDown, Lock, Sparkles, RotateCcw, ChevronRight, Check, Loader2 } from "lucide-react";
 import { springSmooth } from "@/lib/motion";
 import { Slider } from "@/components/ui/slider";
 import { formatearMoneda, formatearMonedaCompacta, type Moneda } from "@/lib/tesoreria/conversion";
@@ -97,63 +95,88 @@ export function PresupuestoCliente({ categorias }: { categorias: Categoria[] }) 
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
   const [, startTransition] = useTransition();
+  const [savingId, setSavingId] = useState<number | null>(null);
+  const [lastSavedId, setLastSavedId] = useState<number | null>(null);
+  const lastSavedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sliders: magnitud (0..50). Genera tres escenarios: normal, max, min.
-  const [ingresoVar, setIngresoVar] = useState(0);
-  const [egresoVar, setEgresoVar] = useState(0);
+  // Slider único: magnitud de incertidumbre (0..50%). Aplica a ingresos y egresos.
+  const [variacion, setVariacion] = useState(0);
 
   useEffect(() => {
     const np = periodoActual(tipo, hoy);
     if (numero > PERIODOS_POR_TIPO[tipo]) {
       setNumero(np.numero);
     }
+    if (tipo === "mensual") {
+      setVariacion(0);
+    }
   }, [tipo]);
 
-  const cargar = async () => {
-    setLoading(true);
-    const params = new URLSearchParams({
-      tipo_periodo: tipo,
-      anio: String(anio),
-      periodo_numero: String(numero),
-      moneda,
-    });
-    const res = await fetch(`/api/tesoreria/presupuestos/ejecucion?${params}`);
-    const data = await res.json();
-    setRows(data.rows ?? []);
-    setMeses(data.meses ?? []);
-    setTotales(data.totales ?? null);
-    setLoading(false);
-  };
+  const cargar = useCallback(
+    async ({ silent = false }: { silent?: boolean } = {}) => {
+      if (!silent) setLoading(true);
+      const params = new URLSearchParams({
+        tipo_periodo: tipo,
+        anio: String(anio),
+        periodo_numero: String(numero),
+        moneda,
+      });
+      const res = await fetch(`/api/tesoreria/presupuestos/ejecucion?${params}`);
+      const data = await res.json();
+      setRows(data.rows ?? []);
+      setMeses(data.meses ?? []);
+      setTotales(data.totales ?? null);
+      if (!silent) setLoading(false);
+    },
+    [tipo, anio, numero, moneda]
+  );
 
   useEffect(() => {
     cargar();
-  }, [tipo, anio, numero, moneda]);
+  }, [cargar]);
 
-  const onGuardar = (categoriaId: number, monto: number) => {
-    if (tipo !== "mensual") return;
-    startTransition(async () => {
-      await fetch("/api/tesoreria/presupuestos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          anio,
-          mes: numero,
-          categoria_id: categoriaId,
-          monto,
-          moneda,
-        }),
+  const persistir = useCallback(
+    async (categoriaId: number, monto: number) => {
+      if (tipo !== "mensual") return;
+      setSavingId(categoriaId);
+      try {
+        await fetch("/api/tesoreria/presupuestos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            anio,
+            mes: numero,
+            categoria_id: categoriaId,
+            monto,
+            moneda,
+          }),
+        });
+        setLastSavedId(categoriaId);
+        if (lastSavedTimer.current) clearTimeout(lastSavedTimer.current);
+        lastSavedTimer.current = setTimeout(() => setLastSavedId(null), 1500);
+        await cargar({ silent: true });
+      } finally {
+        setSavingId((prev) => (prev === categoriaId ? null : prev));
+      }
+    },
+    [tipo, anio, numero, moneda, cargar]
+  );
+
+  const onAutoSave = useCallback(
+    (categoriaId: number, monto: number) => {
+      startTransition(() => {
+        void persistir(categoriaId, monto);
       });
-      setEditing(null);
-      cargar();
-    });
-  };
+    },
+    [persistir]
+  );
 
   const ingresos = rows.filter((r) => r.categoria_tipo === "ingreso");
   const egresos = rows.filter((r) => r.categoria_tipo === "egreso");
 
-  const ing = ingresoVar / 100;
-  const egr = egresoVar / 100;
-  const escenarioActivo = ingresoVar !== 0 || egresoVar !== 0;
+  const ing = variacion / 100;
+  const egr = variacion / 100;
+  const escenarioActivo = variacion !== 0;
 
   // Escenarios (sobre cualquier monto presupuestado):
   // - max (optimista resultado): +ing en ingresos, -egr en egresos
@@ -176,17 +199,6 @@ export function PresupuestoCliente({ categorias }: { categorias: Categoria[] }) 
       },
     };
   }, [totales, ing, egr]);
-
-  const chartCategorias = useMemo(() => {
-    return rows
-      .filter((r) => !r.tiene_hijos && (r.presupuestado > 0 || Math.abs(r.ejecutado) > 0))
-      .slice(0, 10)
-      .map((r) => ({
-        nombre: r.categoria_nombre,
-        Presupuestado: r.presupuestado,
-        Ejecutado: r.ejecutado,
-      }));
-  }, [rows]);
 
   const chartMensual = useMemo(() => {
     return meses.map((m) => {
@@ -283,29 +295,27 @@ export function PresupuestoCliente({ categorias }: { categorias: Categoria[] }) 
         </div>
       </div>
 
-      {/* Escenarios "what-if" */}
+      {/* Escenarios "what-if" — slider único de incertidumbre (oculto en vista mensual) */}
+      {tipo !== "mensual" && (
       <div className="rounded-2xl bg-white border border-linea p-4 space-y-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <Sparkles className="size-4" style={{ color: COLORS.bordo }} />
             <h3 className="font-heading text-sm" style={{ color: COLORS.bordo }}>
-              Escenarios proyectados
+              Sensibilidad del plan
             </h3>
             {escenarioActivo && (
               <span
                 className="text-[10px] uppercase tracking-editorial rounded-full px-2 py-0.5 font-medium"
                 style={{ background: COLORS.bordoSoft, color: COLORS.bordo }}
               >
-                Activo
+                ±{variacion}%
               </span>
             )}
           </div>
           {escenarioActivo && (
             <button
-              onClick={() => {
-                setIngresoVar(0);
-                setEgresoVar(0);
-              }}
+              onClick={() => setVariacion(0)}
               className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-bordo-700"
             >
               <RotateCcw className="size-3" /> Reset
@@ -313,24 +323,19 @@ export function PresupuestoCliente({ categorias }: { categorias: Categoria[] }) 
           )}
         </div>
         <p className="text-xs text-muted-foreground -mt-1">
-          Ajustá el rango de incertidumbre. Verás tres líneas: <strong>normal</strong>, escenario <strong>máximo</strong>{" "}
-          (más ingresos / menos egresos) y <strong>mínimo</strong> (menos ingresos / más egresos).
+          Movés un único deslizador con el margen de incertidumbre del plan. Aparecen tres líneas:{" "}
+          <strong style={{ color: COLORS.oscuro }}>normal</strong> (lo presupuestado),{" "}
+          <strong style={{ color: COLORS.bordo }}>máximo</strong> (ingresos +X% y egresos -X%, mejor caso) y{" "}
+          <strong style={{ color: COLORS.amarillo }}>mínimo</strong> (ingresos -X% y egresos +X%, peor caso).
         </p>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <SliderEscenario
-            label="Variación ingresos"
-            value={ingresoVar}
-            setValue={setIngresoVar}
-            color={COLORS.bordo}
-          />
-          <SliderEscenario
-            label="Variación egresos"
-            value={egresoVar}
-            setValue={setEgresoVar}
-            color={COLORS.amarillo}
-          />
-        </div>
+        <SliderEscenario
+          label="Margen de incertidumbre"
+          value={variacion}
+          setValue={setVariacion}
+          color={COLORS.bordo}
+        />
       </div>
+      )}
 
       {/* KPIs */}
       {totales && escenarios && (
@@ -343,7 +348,7 @@ export function PresupuestoCliente({ categorias }: { categorias: Categoria[] }) 
             min={escenarios.min.ingreso}
             moneda={moneda}
             invertido={false}
-            mostrarRango={ingresoVar !== 0}
+            mostrarRango={escenarioActivo}
             color={COLORS.bordo}
           />
           <KpiPresupuesto
@@ -354,7 +359,7 @@ export function PresupuestoCliente({ categorias }: { categorias: Categoria[] }) 
             min={escenarios.min.egreso}
             moneda={moneda}
             invertido={true}
-            mostrarRango={egresoVar !== 0}
+            mostrarRango={escenarioActivo}
             color={COLORS.amarillo}
           />
           <KpiResultado
@@ -368,40 +373,55 @@ export function PresupuestoCliente({ categorias }: { categorias: Categoria[] }) 
         </div>
       )}
 
-      {/* Chart mensual con tres líneas de escenario */}
+      {/* Chart mensual */}
       {chartMensual.length > 1 && (
-        <div className="rounded-2xl bg-white border border-linea p-4">
-          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="rounded-2xl bg-white border border-linea p-4 sm:p-5">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <h3 className="font-heading text-sm" style={{ color: COLORS.bordo }}>
               Evolución mensual · {nombrePeriodo(tipo, numero)} {anio}
             </h3>
             <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
-              <span className="inline-flex items-center gap-1">
-                <LegendDot color={COLORS.bordoLight} /> Ing. plan
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <LegendDot color={COLORS.bordo} /> Ing. ejec.
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <LegendDot color={COLORS.amarilloLight} /> Egr. plan
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <LegendDot color={COLORS.amarillo} /> Egr. ejec.
-              </span>
+              <LegendItem variant="striped" color={COLORS.bordo} label="Ing. plan" />
+              <LegendItem variant="solid" color={COLORS.bordo} label="Ing. ejec." />
+              <LegendItem variant="striped" color={COLORS.amarillo} label="Egr. plan" />
+              <LegendItem variant="solid" color={COLORS.amarillo} label="Egr. ejec." />
+              <LegendItem variant="line-dashed" color={COLORS.oscuro} label="Result. plan" />
+              <LegendItem variant="line" color={COLORS.bordo} label="Result. ejec." />
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={chartMensual}>
+          <ResponsiveContainer width="100%" height={340}>
+            <ComposedChart data={chartMensual} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
               <defs>
+                <pattern id="planIngPattern" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+                  <rect width="6" height="6" fill={COLORS.bordo} fillOpacity="0.08" />
+                  <line x1="0" y1="0" x2="0" y2="6" stroke={COLORS.bordo} strokeWidth="1.4" strokeOpacity="0.7" />
+                </pattern>
+                <pattern id="planEgrPattern" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+                  <rect width="6" height="6" fill={COLORS.amarillo} fillOpacity="0.14" />
+                  <line x1="0" y1="0" x2="0" y2="6" stroke={COLORS.amarillo} strokeWidth="1.4" strokeOpacity="0.95" />
+                </pattern>
                 <linearGradient id="bandaGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={COLORS.bordo} stopOpacity={0.18} />
-                  <stop offset="100%" stopColor={COLORS.bordo} stopOpacity={0.04} />
+                  <stop offset="0%" stopColor={COLORS.bordo} stopOpacity={0.16} />
+                  <stop offset="100%" stopColor={COLORS.bordo} stopOpacity={0.02} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke={COLORS.linea} />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatearMonedaCompacta(v, moneda)} />
+              <CartesianGrid strokeDasharray="2 4" stroke="#e5e7eb" vertical={false} />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 11, fill: "#6b7280" }}
+                axisLine={false}
+                tickLine={false}
+                dy={6}
+              />
+              <YAxis
+                tick={{ fontSize: 11, fill: "#6b7280" }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v) => formatearMonedaCompacta(v, moneda)}
+                width={70}
+              />
               <Tooltip
+                cursor={{ fill: "#f9fafb" }}
                 formatter={((value: number | number[], name: string) => {
                   if (Array.isArray(value)) {
                     const [a, b] = value;
@@ -409,12 +429,13 @@ export function PresupuestoCliente({ categorias }: { categorias: Categoria[] }) 
                   }
                   return [formatearMoneda(Number(value), moneda), name];
                 }) as never}
-                contentStyle={{ borderRadius: 12, border: `1px solid ${COLORS.linea}`, fontSize: 12 }}
+                contentStyle={{
+                  borderRadius: 12,
+                  border: "1px solid #e5e7eb",
+                  fontSize: 12,
+                  boxShadow: "0 6px 24px -8px rgba(0,0,0,0.12)",
+                }}
               />
-              <Bar dataKey="ing_p" name="Ing. plan" fill={COLORS.bordoLight} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="ing_e" name="Ing. ejec." fill={COLORS.bordo} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="egr_p" name="Egr. plan" fill={COLORS.amarilloLight} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="egr_e" name="Egr. ejec." fill={COLORS.amarillo} radius={[4, 4, 0, 0]} />
               {escenarioActivo && (
                 <Area
                   type="monotone"
@@ -425,78 +446,72 @@ export function PresupuestoCliente({ categorias }: { categorias: Categoria[] }) 
                   isAnimationActive={false}
                 />
               )}
+              <Bar
+                dataKey="ing_p"
+                name="Ing. plan"
+                fill="url(#planIngPattern)"
+                stroke={COLORS.bordo}
+                strokeOpacity={0.5}
+                strokeWidth={1}
+                radius={[5, 5, 0, 0]}
+                barSize={14}
+              />
+              <Bar dataKey="ing_e" name="Ing. ejec." fill={COLORS.bordo} radius={[5, 5, 0, 0]} barSize={14} />
+              <Bar
+                dataKey="egr_p"
+                name="Egr. plan"
+                fill="url(#planEgrPattern)"
+                stroke={COLORS.amarillo}
+                strokeOpacity={0.7}
+                strokeWidth={1}
+                radius={[5, 5, 0, 0]}
+                barSize={14}
+              />
+              <Bar dataKey="egr_e" name="Egr. ejec." fill={COLORS.amarillo} radius={[5, 5, 0, 0]} barSize={14} />
               {escenarioActivo && (
                 <Line
                   type="monotone"
                   dataKey="res_max"
-                  name="Resultado máx."
+                  name="Result. máx."
                   stroke={COLORS.bordo}
-                  strokeWidth={2}
-                  strokeDasharray="6 3"
-                  dot={{ r: 3, fill: COLORS.bordo }}
+                  strokeWidth={1.5}
+                  strokeDasharray="2 4"
+                  strokeOpacity={0.7}
+                  dot={false}
+                />
+              )}
+              {escenarioActivo && (
+                <Line
+                  type="monotone"
+                  dataKey="res_min"
+                  name="Result. mín."
+                  stroke={COLORS.amarillo}
+                  strokeWidth={1.5}
+                  strokeDasharray="2 4"
+                  strokeOpacity={0.8}
+                  dot={false}
                 />
               )}
               <Line
                 type="monotone"
                 dataKey="res_n"
-                name="Resultado normal"
+                name="Result. plan"
                 stroke={COLORS.oscuro}
-                strokeWidth={2.5}
-                dot={{ r: 3.5, fill: COLORS.oscuro }}
+                strokeWidth={2}
+                strokeDasharray="5 4"
+                dot={{ r: 2.5, fill: COLORS.oscuro, strokeWidth: 0 }}
+                activeDot={{ r: 5, fill: COLORS.oscuro }}
               />
-              {escenarioActivo && (
-                <Line
-                  type="monotone"
-                  dataKey="res_min"
-                  name="Resultado mín."
-                  stroke={COLORS.amarillo}
-                  strokeWidth={2}
-                  strokeDasharray="6 3"
-                  dot={{ r: 3, fill: COLORS.amarillo }}
-                />
-              )}
               <Line
                 type="monotone"
                 dataKey="res_e"
-                name="Resultado ejec."
+                name="Result. ejec."
                 stroke={COLORS.bordo}
                 strokeWidth={2.5}
-                strokeOpacity={0.7}
-                dot={{ r: 3, fill: COLORS.bordo }}
+                dot={{ r: 3, fill: COLORS.bordo, strokeWidth: 0 }}
+                activeDot={{ r: 5, fill: COLORS.bordo }}
               />
             </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {/* Top categorías */}
-      {chartCategorias.length > 0 && (
-        <div className="rounded-2xl bg-white border border-linea p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-heading text-sm" style={{ color: COLORS.bordo }}>
-              Top categorías · plan vs ejecutado
-            </h3>
-          </div>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={chartCategorias}>
-              <CartesianGrid strokeDasharray="3 3" stroke={COLORS.linea} />
-              <XAxis
-                dataKey="nombre"
-                tick={{ fontSize: 11 }}
-                interval={0}
-                angle={-20}
-                textAnchor="end"
-                height={70}
-              />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatearMonedaCompacta(v, moneda)} />
-              <Tooltip
-                formatter={((value: number) => formatearMoneda(Number(value), moneda)) as never}
-                contentStyle={{ borderRadius: 12, border: `1px solid ${COLORS.linea}`, fontSize: 12 }}
-              />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="Presupuestado" fill={COLORS.amarillo} radius={[6, 6, 0, 0]} />
-              <Bar dataKey="Ejecutado" fill={COLORS.bordo} radius={[6, 6, 0, 0]} />
-            </BarChart>
           </ResponsiveContainer>
         </div>
       )}
@@ -528,8 +543,10 @@ export function PresupuestoCliente({ categorias }: { categorias: Categoria[] }) 
             moneda={moneda}
             editing={editing}
             setEditing={setEditing}
-            onGuardar={onGuardar}
+            onAutoSave={onAutoSave}
             editable={editable}
+            savingId={savingId}
+            lastSavedId={lastSavedId}
           />
           <TablaCategorias
             titulo="Egresos"
@@ -539,8 +556,10 @@ export function PresupuestoCliente({ categorias }: { categorias: Categoria[] }) 
             moneda={moneda}
             editing={editing}
             setEditing={setEditing}
-            onGuardar={onGuardar}
+            onAutoSave={onAutoSave}
             editable={editable}
+            savingId={savingId}
+            lastSavedId={lastSavedId}
           />
         </div>
       )}
@@ -548,8 +567,43 @@ export function PresupuestoCliente({ categorias }: { categorias: Categoria[] }) 
   );
 }
 
-function LegendDot({ color }: { color: string }) {
-  return <span className="inline-block size-2 rounded-full" style={{ background: color }} />;
+function LegendItem({
+  variant,
+  color,
+  label,
+}: {
+  variant: "solid" | "striped" | "line" | "line-dashed";
+  color: string;
+  label: string;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {variant === "solid" && (
+        <span className="inline-block w-3 h-3 rounded-sm" style={{ background: color }} />
+      )}
+      {variant === "striped" && (
+        <span
+          className="inline-block w-3 h-3 rounded-sm border"
+          style={{
+            borderColor: color,
+            backgroundImage: `repeating-linear-gradient(45deg, ${color}, ${color} 1.5px, transparent 1.5px, transparent 4px)`,
+          }}
+        />
+      )}
+      {variant === "line" && (
+        <span className="inline-block w-4 h-[2.5px] rounded-full" style={{ background: color }} />
+      )}
+      {variant === "line-dashed" && (
+        <span
+          className="inline-block w-4 h-[2px]"
+          style={{
+            backgroundImage: `repeating-linear-gradient(to right, ${color} 0 4px, transparent 4px 7px)`,
+          }}
+        />
+      )}
+      {label}
+    </span>
+  );
 }
 
 function SliderEscenario({
@@ -628,7 +682,7 @@ function KpiPresupuesto({
       </div>
       {mostrarRango && (
         <div className="text-[11px] text-muted-foreground tabular-nums mt-1">
-          rango: {formatearMoneda(min, moneda)} – {formatearMoneda(max, moneda)}
+          rango: {formatearMoneda(Math.min(min, max), moneda)} – {formatearMoneda(Math.max(min, max), moneda)}
         </div>
       )}
       <div className="mt-2 h-1.5 rounded-full bg-superficie overflow-hidden">
@@ -693,8 +747,10 @@ function TablaCategorias({
   moneda,
   editing,
   setEditing,
-  onGuardar,
+  onAutoSave,
   editable,
+  savingId,
+  lastSavedId,
 }: {
   titulo: string;
   tipo: "ingreso" | "egreso";
@@ -703,8 +759,10 @@ function TablaCategorias({
   moneda: Moneda;
   editing: number | null;
   setEditing: (id: number | null) => void;
-  onGuardar: (categoriaId: number, monto: number) => void;
+  onAutoSave: (categoriaId: number, monto: number) => void;
   editable: boolean;
+  savingId: number | null;
+  lastSavedId: number | null;
 }) {
   // Categorías hoja sin presupuesto (para "+ Presupuestar"), solo en modo editable
   const idsConFila = new Set(rows.map((r) => r.categoria_id));
@@ -745,9 +803,11 @@ function TablaCategorias({
               moneda={moneda}
               isEditing={editing === r.categoria_id}
               onEdit={() => editable && !r.tiene_hijos && setEditing(r.categoria_id)}
-              onSave={(m) => onGuardar(r.categoria_id, m)}
-              onCancel={() => setEditing(null)}
+              onAutoSave={(m) => onAutoSave(r.categoria_id, m)}
+              onClose={() => setEditing(null)}
               editable={editable && !r.tiene_hijos}
+              saving={savingId === r.categoria_id}
+              justSaved={lastSavedId === r.categoria_id}
             />
           ))}
           {sinPresupuestar.map((c) => (
@@ -757,8 +817,10 @@ function TablaCategorias({
               moneda={moneda}
               isEditing={editing === c.id}
               onEdit={() => setEditing(c.id)}
-              onSave={(m) => onGuardar(c.id, m)}
-              onCancel={() => setEditing(null)}
+              onAutoSave={(m) => onAutoSave(c.id, m)}
+              onClose={() => setEditing(null)}
+              saving={savingId === c.id}
+              justSaved={lastSavedId === c.id}
             />
           ))}
           {rows.length === 0 && sinPresupuestar.length === 0 && (
@@ -779,22 +841,47 @@ function FilaPresupuesto({
   moneda,
   isEditing,
   onEdit,
-  onSave,
-  onCancel,
+  onAutoSave,
+  onClose,
   editable,
+  saving,
+  justSaved,
 }: {
   row: Row;
   moneda: Moneda;
   isEditing: boolean;
   onEdit: () => void;
-  onSave: (monto: number) => void;
-  onCancel: () => void;
+  onAutoSave: (monto: number) => void;
+  onClose: () => void;
   editable: boolean;
+  saving: boolean;
+  justSaved: boolean;
 }) {
   const [valor, setValor] = useState(row.presupuestado.toString());
+  const lastSaved = useRef(row.presupuestado);
   useEffect(() => {
+    // No pisar el valor mientras el usuario está tipeando.
+    if (isEditing) {
+      lastSaved.current = row.presupuestado;
+      return;
+    }
     setValor(row.presupuestado.toString());
-  }, [row.presupuestado]);
+    lastSaved.current = row.presupuestado;
+  }, [row.presupuestado, isEditing]);
+
+  // Auto-save con debounce mientras el usuario tipea
+  useEffect(() => {
+    if (!isEditing || !editable) return;
+    if (valor === "" || valor === "-") return;
+    const num = Number(valor);
+    if (!Number.isFinite(num) || num < 0) return;
+    if (num === lastSaved.current) return;
+    const t = setTimeout(() => {
+      lastSaved.current = num;
+      onAutoSave(num);
+    }, 600);
+    return () => clearTimeout(t);
+  }, [valor, isEditing, editable, onAutoSave]);
 
   const overrun =
     row.categoria_tipo === "egreso" && row.ejecutado > row.presupuestado && row.presupuestado > 0;
@@ -828,37 +915,54 @@ function FilaPresupuesto({
         </div>
       </td>
       <td className="px-4 py-2 text-right tabular-nums">
-        {isEditing && editable ? (
-          <input
-            type="number"
-            step="0.01"
-            value={valor}
-            autoFocus
-            onChange={(e) => setValor(e.target.value)}
-            onBlur={() => onSave(Number(valor) || 0)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") onSave(Number(valor) || 0);
-              if (e.key === "Escape") onCancel();
-            }}
-            className="w-28 text-right text-sm border rounded-md px-2 py-0.5 outline-none tabular-nums"
-            style={{ borderColor: COLORS.bordo }}
-          />
-        ) : editable ? (
-          <button
-            onClick={onEdit}
-            className="text-foreground hover:underline tabular-nums"
-            style={{ color: COLORS.bordo }}
-          >
-            {row.presupuestado > 0 ? formatearMoneda(row.presupuestado, moneda) : "—"}
-          </button>
-        ) : (
-          <span
-            className="text-foreground tabular-nums"
-            title={esPadre ? "Suma de subcategorías" : undefined}
-          >
-            {row.presupuestado > 0 ? formatearMoneda(row.presupuestado, moneda) : "—"}
-          </span>
-        )}
+        <div className="inline-flex items-center gap-1.5 justify-end">
+          {isEditing && editable ? (
+            <input
+              type="number"
+              step="0.01"
+              value={valor}
+              autoFocus
+              onChange={(e) => setValor(e.target.value)}
+              onBlur={() => {
+                const num = Number(valor) || 0;
+                if (num !== lastSaved.current) {
+                  lastSaved.current = num;
+                  onAutoSave(num);
+                }
+                onClose();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const num = Number(valor) || 0;
+                  if (num !== lastSaved.current) {
+                    lastSaved.current = num;
+                    onAutoSave(num);
+                  }
+                  onClose();
+                }
+                if (e.key === "Escape") onClose();
+              }}
+              className="w-28 text-right text-sm border rounded-md px-2 py-0.5 outline-none tabular-nums"
+              style={{ borderColor: COLORS.bordo }}
+            />
+          ) : editable ? (
+            <button
+              onClick={onEdit}
+              className="text-foreground hover:underline tabular-nums"
+              style={{ color: COLORS.bordo }}
+            >
+              {row.presupuestado > 0 ? formatearMoneda(row.presupuestado, moneda) : "—"}
+            </button>
+          ) : (
+            <span
+              className="text-foreground tabular-nums"
+              title={esPadre ? "Suma de subcategorías" : undefined}
+            >
+              {row.presupuestado > 0 ? formatearMoneda(row.presupuestado, moneda) : "—"}
+            </span>
+          )}
+          <SaveStatus saving={saving} justSaved={justSaved} />
+        </div>
       </td>
       <td className="px-4 py-2 text-right tabular-nums">
         {row.ejecutado !== 0 ? formatearMoneda(row.ejecutado, moneda) : "—"}
@@ -875,20 +979,39 @@ function FilaPresupuesto({
 
 function FilaSinPresupuesto({
   categoria,
-  moneda,
+  moneda: _moneda,
   isEditing,
   onEdit,
-  onSave,
-  onCancel,
+  onAutoSave,
+  onClose,
+  saving,
+  justSaved,
 }: {
   categoria: Categoria;
   moneda: Moneda;
   isEditing: boolean;
   onEdit: () => void;
-  onSave: (monto: number) => void;
-  onCancel: () => void;
+  onAutoSave: (monto: number) => void;
+  onClose: () => void;
+  saving: boolean;
+  justSaved: boolean;
 }) {
   const [valor, setValor] = useState("");
+  const lastSaved = useRef(0);
+
+  // Auto-save con debounce
+  useEffect(() => {
+    if (!isEditing) return;
+    if (valor === "" || valor === "-") return;
+    const num = Number(valor);
+    if (!Number.isFinite(num) || num < 0) return;
+    if (num === lastSaved.current) return;
+    const t = setTimeout(() => {
+      lastSaved.current = num;
+      onAutoSave(num);
+    }, 600);
+    return () => clearTimeout(t);
+  }, [valor, isEditing, onAutoSave]);
 
   return (
     <tr className="border-t border-linea hover:bg-superficie/50">
@@ -904,33 +1027,84 @@ function FilaSinPresupuesto({
         </span>
       </td>
       <td className="px-4 py-2 text-right tabular-nums">
-        {isEditing ? (
-          <input
-            type="number"
-            step="0.01"
-            value={valor}
-            autoFocus
-            placeholder="0.00"
-            onChange={(e) => setValor(e.target.value)}
-            onBlur={() => valor && onSave(Number(valor) || 0)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") onSave(Number(valor) || 0);
-              if (e.key === "Escape") onCancel();
-            }}
-            className="w-28 text-right text-sm border rounded-md px-2 py-0.5 outline-none tabular-nums"
-            style={{ borderColor: COLORS.bordo }}
-          />
-        ) : (
-          <button
-            onClick={onEdit}
-            className="text-xs hover:underline"
-            style={{ color: COLORS.bordo }}
-          >
-            + Presupuestar
-          </button>
-        )}
+        <div className="inline-flex items-center gap-1.5 justify-end">
+          {isEditing ? (
+            <input
+              type="number"
+              step="0.01"
+              value={valor}
+              autoFocus
+              placeholder="0.00"
+              onChange={(e) => setValor(e.target.value)}
+              onBlur={() => {
+                if (valor) {
+                  const num = Number(valor) || 0;
+                  if (num !== lastSaved.current) {
+                    lastSaved.current = num;
+                    onAutoSave(num);
+                  }
+                }
+                onClose();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const num = Number(valor) || 0;
+                  if (num !== lastSaved.current) {
+                    lastSaved.current = num;
+                    onAutoSave(num);
+                  }
+                  onClose();
+                }
+                if (e.key === "Escape") onClose();
+              }}
+              className="w-28 text-right text-sm border rounded-md px-2 py-0.5 outline-none tabular-nums"
+              style={{ borderColor: COLORS.bordo }}
+            />
+          ) : (
+            <button
+              onClick={onEdit}
+              className="text-xs hover:underline"
+              style={{ color: COLORS.bordo }}
+            >
+              + Presupuestar
+            </button>
+          )}
+          <SaveStatus saving={saving} justSaved={justSaved} />
+        </div>
       </td>
       <td className="px-4 py-2 text-right text-muted-foreground" colSpan={2}>—</td>
     </tr>
+  );
+}
+
+function SaveStatus({ saving, justSaved }: { saving: boolean; justSaved: boolean }) {
+  return (
+    <span className="inline-flex items-center w-4 h-4 justify-center">
+      <AnimatePresence mode="wait">
+        {saving ? (
+          <motion.span
+            key="saving"
+            initial={{ opacity: 0, scale: 0.6 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.6 }}
+            transition={springSmooth}
+            title="Guardando…"
+          >
+            <Loader2 className="size-3 animate-spin" style={{ color: COLORS.bordo }} />
+          </motion.span>
+        ) : justSaved ? (
+          <motion.span
+            key="saved"
+            initial={{ opacity: 0, scale: 0.6 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.6 }}
+            transition={springSmooth}
+            title="Guardado"
+          >
+            <Check className="size-3" style={{ color: COLORS.bordo }} />
+          </motion.span>
+        ) : null}
+      </AnimatePresence>
+    </span>
   );
 }

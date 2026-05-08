@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
   const hasta = searchParams.get("hasta");
   const search = searchParams.get("search") ?? "";
   const sinClasificar = searchParams.get("sin_clasificar") === "1";
+  const sinExtracto = searchParams.get("sin_extracto") === "1";
   const page = parseInt(searchParams.get("page") ?? "1", 10);
   const limit = parseInt(searchParams.get("limit") ?? "50", 10);
   const offset = (page - 1) * limit;
@@ -58,6 +59,7 @@ export async function GET(request: NextRequest) {
   if (desde) query = query.gte("fecha", desde);
   if (hasta) query = query.lte("fecha", hasta);
   if (sinClasificar) query = query.eq("clasificado", false);
+  if (sinExtracto) query = query.is("extracto_id", null);
   if (search) {
     query = query.or(
       `descripcion.ilike.%${search}%,nombre.ilike.%${search}%,referencia.ilike.%${search}%`

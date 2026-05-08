@@ -15,7 +15,10 @@ import {
   Check,
   Wallet,
   Landmark,
+  Upload,
+  Link2,
 } from "lucide-react";
+import { ConciliacionItauModal } from "@/components/tesoreria/conciliacion-itau-modal";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +69,8 @@ interface CuentaTienda {
   moneda: "UYU" | "USD";
   color: string;
   saldo_actual: number;
+  banco: string | null;
+  modulo: string | null;
 }
 
 interface Categoria {
@@ -164,6 +169,7 @@ export default function MovimientosTiendaClient() {
   const [deleteTarget, setDeleteTarget] = useState<Movimiento | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [conciliacionOpen, setConciliacionOpen] = useState(false);
 
   // Debounced search
   useEffect(() => {
@@ -336,14 +342,38 @@ export default function MovimientosTiendaClient() {
             {total > 0 && `${total} movimientos · `}Ingresos y egresos de la tienda
           </p>
         </div>
-        <Button
-          className="bg-bordo-800 hover:bg-bordo-700 text-white w-full sm:w-auto"
-          onClick={openCreate}
-        >
-          <Plus className="size-4" />
-          Nuevo movimiento
-        </Button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            className="flex-1 sm:flex-none"
+            onClick={() => setConciliacionOpen(true)}
+          >
+            <Upload className="size-4" />
+            Subir extracto ITAÚ
+          </Button>
+          <Button
+            className="bg-bordo-800 hover:bg-bordo-700 text-white flex-1 sm:flex-none"
+            onClick={openCreate}
+          >
+            <Plus className="size-4" />
+            Nuevo movimiento
+          </Button>
+        </div>
       </motion.div>
+
+      <ConciliacionItauModal
+        open={conciliacionOpen}
+        onClose={() => setConciliacionOpen(false)}
+        cuentas={cuentas.map((c) => ({
+          id: c.id,
+          nombre: c.nombre,
+          tipo: c.tipo,
+          moneda: c.moneda,
+          banco: c.banco,
+          modulo: c.modulo,
+        }))}
+        onCompleted={fetchMovimientos}
+      />
 
       {/* Account cards */}
       <motion.div
