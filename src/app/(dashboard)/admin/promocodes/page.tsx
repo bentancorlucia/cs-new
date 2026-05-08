@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -70,17 +69,50 @@ function formatFecha(iso: string) {
   return d.toLocaleDateString("es-UY", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function getEstado(p: Promocode): { label: string; variant: "default" | "secondary" | "outline" | "destructive" } {
+type EstadoTone = "vigente" | "programado" | "expirado" | "inactivo" | "agotado";
+
+function getEstado(p: Promocode): { label: string; tone: EstadoTone } {
   const now = Date.now();
-  if (!p.activo) return { label: "Inactivo", variant: "outline" };
+  if (!p.activo) return { label: "Inactivo", tone: "inactivo" };
   const inicio = new Date(p.fecha_inicio).getTime();
   const fin = new Date(p.fecha_fin).getTime();
-  if (now < inicio) return { label: "Programado", variant: "secondary" };
-  if (now > fin) return { label: "Expirado", variant: "outline" };
+  if (now < inicio) return { label: "Programado", tone: "programado" };
+  if (now > fin) return { label: "Expirado", tone: "expirado" };
   if (p.usos_max != null && p.usos_actuales >= p.usos_max) {
-    return { label: "Agotado", variant: "outline" };
+    return { label: "Agotado", tone: "agotado" };
   }
-  return { label: "Vigente", variant: "secondary" };
+  return { label: "Vigente", tone: "vigente" };
+}
+
+const estadoStyles: Record<EstadoTone, string> = {
+  vigente:
+    "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20",
+  programado:
+    "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-600/20",
+  expirado:
+    "bg-zinc-100 text-zinc-600 ring-1 ring-inset ring-zinc-500/20",
+  inactivo:
+    "bg-zinc-100 text-zinc-500 ring-1 ring-inset ring-zinc-400/20",
+  agotado:
+    "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20",
+};
+
+function EstadoPill({ tone, label }: { tone: EstadoTone; label: string }) {
+  const dotColor: Record<EstadoTone, string> = {
+    vigente: "bg-emerald-500",
+    programado: "bg-sky-500",
+    expirado: "bg-zinc-400",
+    inactivo: "bg-zinc-400",
+    agotado: "bg-amber-500",
+  };
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium tracking-tight ${estadoStyles[tone]}`}
+    >
+      <span className={`size-1.5 rounded-full ${dotColor[tone]}`} />
+      {label}
+    </span>
+  );
 }
 
 export default function AdminPromocodesPage() {
@@ -188,17 +220,17 @@ export default function AdminPromocodesPage() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.15 }}
-        className="rounded-xl border border-linea bg-white overflow-hidden"
+        className="rounded-2xl border border-linea/80 bg-white overflow-hidden shadow-[0_1px_2px_0_rgba(0,0,0,0.03)]"
       >
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="font-heading uppercase tracking-editorial text-xs">Código</TableHead>
-                <TableHead className="font-heading uppercase tracking-editorial text-xs">Descuento</TableHead>
-                <TableHead className="font-heading uppercase tracking-editorial text-xs hidden md:table-cell">Vigencia</TableHead>
-                <TableHead className="font-heading uppercase tracking-editorial text-xs text-center hidden sm:table-cell">Usos</TableHead>
-                <TableHead className="font-heading uppercase tracking-editorial text-xs text-center">Estado</TableHead>
+              <TableRow className="hover:bg-transparent border-b border-linea/70 bg-superficie/40">
+                <TableHead className="font-heading uppercase tracking-editorial text-[10px] text-muted-foreground/70 py-3.5">Código</TableHead>
+                <TableHead className="font-heading uppercase tracking-editorial text-[10px] text-muted-foreground/70 py-3.5">Descuento</TableHead>
+                <TableHead className="font-heading uppercase tracking-editorial text-[10px] text-muted-foreground/70 py-3.5 hidden md:table-cell">Vigencia</TableHead>
+                <TableHead className="font-heading uppercase tracking-editorial text-[10px] text-muted-foreground/70 py-3.5 text-center hidden sm:table-cell">Usos</TableHead>
+                <TableHead className="font-heading uppercase tracking-editorial text-[10px] text-muted-foreground/70 py-3.5 text-center">Estado</TableHead>
                 <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
@@ -234,57 +266,60 @@ export default function AdminPromocodesPage() {
                         variants={fadeInUp}
                         initial="hidden"
                         animate="visible"
-                        className="group border-b border-linea last:border-0 transition-colors hover:bg-superficie/50"
+                        className="group border-b border-linea/60 last:border-0 transition-colors hover:bg-superficie/40"
                       >
-                        <TableCell className="py-3">
-                          <Link
-                            href={`/admin/promocodes/${p.id}`}
-                            className="font-mono text-sm font-bold hover:text-bordo-700 transition-colors"
-                          >
-                            {p.codigo}
-                          </Link>
+                        <TableCell className="py-4">
+                          <div className="flex items-center gap-2.5">
+                            <Link
+                              href={`/admin/promocodes/${p.id}`}
+                              className="font-mono text-sm font-semibold tracking-tight text-foreground transition-colors hover:text-bordo-700"
+                            >
+                              {p.codigo}
+                            </Link>
+                            {p.acumulable_con_precio_socio && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800 ring-1 ring-inset ring-amber-600/30">
+                                <span className="size-1 rounded-full bg-amber-500" />
+                                Acumulable
+                              </span>
+                            )}
+                          </div>
                           {p.descripcion && (
-                            <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
+                            <p className="text-[11px] text-muted-foreground line-clamp-1 mt-1.5 ml-0.5">
                               {p.descripcion}
                             </p>
                           )}
-                          {p.acumulable_con_precio_socio && (
-                            <Badge variant="secondary" className="mt-1 text-[9px] h-4">
-                              Acumulable
-                            </Badge>
-                          )}
                         </TableCell>
                         <TableCell>
-                          <div className="text-sm font-medium">
+                          <div className="text-[15px] font-semibold tabular-nums text-foreground">
                             {p.tipo_descuento === "porcentaje"
                               ? `${Number(p.valor)}%`
                               : `$${Number(p.valor).toLocaleString("es-UY")}`}
                           </div>
                           {p.monto_minimo != null && (
-                            <p className="text-[11px] text-muted-foreground">
+                            <p className="text-[11px] text-muted-foreground mt-0.5">
                               Mín ${Number(p.monto_minimo).toLocaleString("es-UY")}
                             </p>
                           )}
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
-                          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                            <Calendar className="size-3.5" />
-                            <span>{formatFecha(p.fecha_inicio)}</span>
+                          <div className="inline-flex items-center gap-2 rounded-lg bg-superficie/60 px-2.5 py-1.5 text-[12px] text-muted-foreground ring-1 ring-inset ring-linea/60">
+                            <Calendar className="size-3.5 text-muted-foreground/70" />
+                            <span className="tabular-nums font-medium text-foreground/80">{formatFecha(p.fecha_inicio)}</span>
                             <span className="text-muted-foreground/40">→</span>
-                            <span>{formatFecha(p.fecha_fin)}</span>
+                            <span className="tabular-nums font-medium text-foreground/80">{formatFecha(p.fecha_fin)}</span>
                           </div>
                         </TableCell>
                         <TableCell className="text-center hidden sm:table-cell">
-                          <div className="inline-flex items-center gap-1 text-sm">
-                            <TrendingUp className="size-3.5 text-muted-foreground" />
-                            <span className="font-medium">{p.usos_actuales}</span>
-                            <span className="text-muted-foreground">
+                          <div className="inline-flex items-center gap-1.5 rounded-full bg-superficie/60 px-2.5 py-1 text-[12px] ring-1 ring-inset ring-linea/60">
+                            <TrendingUp className="size-3 text-muted-foreground/70" />
+                            <span className="font-semibold tabular-nums text-foreground">{p.usos_actuales}</span>
+                            <span className="text-muted-foreground/70">
                               /{p.usos_max ?? "∞"}
                             </span>
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
-                          <Badge variant={estado.variant}>{estado.label}</Badge>
+                          <EstadoPill tone={estado.tone} label={estado.label} />
                         </TableCell>
                         <TableCell>
                           <DropdownMenu>
