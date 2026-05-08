@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/hooks/use-cart";
+import { PromocodeInput } from "@/components/tienda/promocode-input";
 import {
   fadeInUp,
   staggerContainer,
@@ -276,6 +277,10 @@ export function CarritoClient() {
                 </span>
               </div>
             </div>
+
+            <div className="my-4 h-px bg-bordo-800/10" />
+
+            <PromocodeInput />
 
             <div className="my-5 h-px bg-bordo-800/10" />
 

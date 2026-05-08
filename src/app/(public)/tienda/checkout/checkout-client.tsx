@@ -24,6 +24,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useCart } from "@/hooks/use-cart";
 import { createBrowserClient } from "@/lib/supabase/client";
+import { PromocodeInput } from "@/components/tienda/promocode-input";
+import { previewPromocode } from "@/lib/promocodes/client";
 import {
   fadeInUp,
   staggerContainer,
@@ -62,7 +64,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export function CheckoutClient() {
-  const { items, loaded, total, totalSocio, itemCount, clearCart, idempotencyKey } = useCart();
+  const { items, loaded, total, totalSocio, itemCount, clearCart, idempotencyKey, promocode } = useCart();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [notas, setNotas] = useState("");
@@ -102,8 +104,16 @@ export function CheckoutClient() {
   }, []);
 
   const esSocio = profile?.es_socio === true;
-  const totalFinal = esSocio ? totalSocio : total;
-  const descuento = esSocio ? total - totalSocio : 0;
+  const preview = previewPromocode({
+    totalNormal: total,
+    totalSocio,
+    esSocio,
+    promo: promocode,
+  });
+  const totalFinal = preview.total;
+  const descuentoSocio = preview.descuentoSocio;
+  const descuentoCodigo = preview.descuentoCodigo;
+  const ahorro = total - totalFinal;
 
   const handleFileSelect = useCallback((file: File) => {
     const allowedTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
@@ -160,6 +170,7 @@ export function CheckoutClient() {
           notas: notas || undefined,
           metodo_pago: metodoPago,
           idempotencyKey: idempotencyKey || undefined,
+          codigoPromocion: promocode?.codigo || undefined,
         }),
       });
 
@@ -610,11 +621,27 @@ export function CheckoutClient() {
                 <span className="text-bordo-800/50">Subtotal</span>
                 <span className="text-bordo-950">${total.toLocaleString("es-UY")}</span>
               </div>
-              {descuento > 0 && (
+              {descuentoSocio > 0 && (
                 <div className="flex justify-between text-bordo-800">
                   <span>Descuento socio</span>
-                  <span className="font-bold">-${descuento.toLocaleString("es-UY")}</span>
+                  <span className="font-bold">-${descuentoSocio.toLocaleString("es-UY")}</span>
                 </div>
+              )}
+              {descuentoCodigo > 0 && (
+                <div className="flex justify-between text-bordo-800">
+                  <span>
+                    Código{" "}
+                    <span className="font-mono text-[11px]">
+                      {promocode?.codigo}
+                    </span>
+                  </span>
+                  <span className="font-bold">-${descuentoCodigo.toLocaleString("es-UY")}</span>
+                </div>
+              )}
+              {promocode && !preview.aplicoPromocode && (
+                <p className="text-[11px] text-bordo-800/60 italic">
+                  El precio socio es mejor que el descuento del código — se aplicó precio socio.
+                </p>
               )}
               <div className="flex justify-between text-bordo-800/40">
                 <span>Envío</span>
@@ -622,6 +649,10 @@ export function CheckoutClient() {
                   Retiro en club
                 </span>
               </div>
+            </div>
+
+            <div className="mt-4">
+              <PromocodeInput />
             </div>
 
             <div className="my-5 h-px bg-bordo-800/10" />
@@ -725,9 +756,9 @@ export function CheckoutClient() {
               <span className="font-heading text-[10px] uppercase tracking-editorial text-dorado-300/70">
                 {itemCount} {itemCount === 1 ? "producto" : "productos"}
               </span>
-              {descuento > 0 && (
+              {ahorro > 0 && (
                 <span className="font-heading text-[10px] uppercase tracking-editorial text-dorado-300/50">
-                  Ahorrás ${descuento.toLocaleString("es-UY")}
+                  Ahorrás ${ahorro.toLocaleString("es-UY")}
                 </span>
               )}
             </div>

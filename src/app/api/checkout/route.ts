@@ -9,6 +9,11 @@ import {
 } from "@/lib/mto/schema";
 import { calcularPrecioExtra } from "@/lib/mto/pricing";
 import type { MtoCampo } from "@/types/mto";
+import {
+  buscarPromocodeVigente,
+  validarMontoMinimo,
+} from "@/lib/promocodes/validate";
+import { aplicarPromocode } from "@/lib/promocodes/apply";
 
 const checkoutItemSchema = z.object({
   productoId: z.number().int().positive(),
@@ -23,7 +28,20 @@ const checkoutSchema = z.object({
   notas: z.string().max(500).optional(),
   metodo_pago: z.enum(["transferencia"]).default("transferencia"),
   idempotencyKey: z.string().uuid().optional(),
+  codigoPromocion: z.string().trim().min(1).max(40).optional(),
 });
+
+interface ItemPreCalc {
+  productoId: number;
+  varianteId?: number;
+  nombre: string;
+  cantidad: number;
+  precioNormal: number;
+  precioSocioUnitario: number | null;
+  precioExtra: number;
+  esEncargue: boolean;
+  personalizacion: Record<string, string | number>;
+}
 
 interface ItemConPrecio {
   productoId: number;
@@ -65,7 +83,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { items, notas, metodo_pago, idempotencyKey } = parsed.data;
+    const { items, notas, metodo_pago, idempotencyKey, codigoPromocion } =
+      parsed.data;
 
     // 3a. Idempotency check: si llega un key y ya hay un pedido para este perfil
     // con ese mismo key, devolver el existente sin volver a crear nada.
@@ -104,8 +123,10 @@ export async function POST(request: NextRequest) {
 
     const esSocio = perfil.es_socio === true;
 
-    // 4. Validate stock and calculate prices
-    const itemsConPrecio: ItemConPrecio[] = [];
+    // 4. Validate stock and calculate per-item base prices.
+    // Acumulamos `itemsPre` con precio_normal y precio_socio (cuando aplique). El cobro
+    // final por ítem se decide más abajo en función del promocode (acumulable o no).
+    const itemsPre: ItemPreCalc[] = [];
 
     for (const item of items) {
       const { data: prod } = await db
@@ -145,8 +166,6 @@ export async function POST(request: NextRequest) {
       }
 
       let precioBase = prod.precio;
-      let precioUnitario =
-        esSocio && prod.precio_socio ? prod.precio_socio : prod.precio;
       let nombreItem = prod.nombre;
       let varianteId: number | undefined;
 
@@ -177,8 +196,6 @@ export async function POST(request: NextRequest) {
         }
 
         precioBase = vari.precio_override ?? prod.precio;
-        precioUnitario =
-          esSocio && prod.precio_socio ? prod.precio_socio : precioBase;
         nombreItem = `${prod.nombre} - ${vari.nombre}`;
         varianteId = vari.id;
       } else if (!esEncargue && prod.stock_actual < item.cantidad) {
@@ -227,24 +244,102 @@ export async function POST(request: NextRequest) {
         precioExtra = calcularPrecioExtra(campos, validacion.cleaned);
       }
 
-      itemsConPrecio.push({
+      itemsPre.push({
         productoId: item.productoId,
         varianteId,
         nombre: nombreItem,
         cantidad: item.cantidad,
-        precioUnitario,
+        precioNormal: precioBase,
+        // precio_socio se toma del producto y NO depende de variant override
+        // (preserva el comportamiento previo a promocodes).
+        precioSocioUnitario:
+          prod.precio_socio != null && prod.precio_socio < precioBase
+            ? Number(prod.precio_socio)
+            : null,
         precioExtra,
         esEncargue,
         personalizacion,
-        subtotal: (precioUnitario + precioExtra) * item.cantidad,
       });
     }
 
-    // 5. Calculate totals
-    const subtotal = itemsConPrecio.reduce((sum, i) => sum + i.subtotal, 0);
-    const total = subtotal;
+    // 5. Validar promocode (si vino) y calcular totales aplicando reglas de socio/acumulable.
+    let promoAplicable: import("@/lib/promocodes/schemas").Promocode | null = null;
+    if (codigoPromocion) {
+      const validacion = await buscarPromocodeVigente(codigoPromocion);
+      if (!validacion.ok) {
+        return NextResponse.json({ error: validacion.error }, { status: 400 });
+      }
+      const subtotalNormal = itemsPre.reduce(
+        (sum, i) => sum + (i.precioNormal + i.precioExtra) * i.cantidad,
+        0
+      );
+      const minimoCheck = validarMontoMinimo(validacion.promo, subtotalNormal);
+      if (!minimoCheck.ok) {
+        return NextResponse.json({ error: minimoCheck.error }, { status: 400 });
+      }
+      promoAplicable = validacion.promo;
+    }
 
-    // 6. Create order (transferencia only — MercadoPago disabled)
+    const calc = aplicarPromocode({
+      items: itemsPre.map((i) => ({
+        precio: i.precioNormal,
+        precioSocio: i.precioSocioUnitario,
+        precioExtra: i.precioExtra,
+        cantidad: i.cantidad,
+      })),
+      esSocio,
+      promo: promoAplicable,
+    });
+
+    // Reconstruir itemsConPrecio con el precio efectivamente cobrado por ítem.
+    const itemsConPrecio: ItemConPrecio[] = itemsPre.map((i) => {
+      const usarSocio =
+        calc.aplicoPrecioSocio &&
+        i.precioSocioUnitario != null &&
+        i.precioSocioUnitario < i.precioNormal;
+      const precioUnitario = usarSocio
+        ? (i.precioSocioUnitario as number)
+        : i.precioNormal;
+      return {
+        productoId: i.productoId,
+        varianteId: i.varianteId,
+        nombre: i.nombre,
+        cantidad: i.cantidad,
+        precioUnitario,
+        precioExtra: i.precioExtra,
+        esEncargue: i.esEncargue,
+        personalizacion: i.personalizacion,
+        subtotal: (precioUnitario + i.precioExtra) * i.cantidad,
+      };
+    });
+
+    const subtotal = calc.subtotal;
+    const descuento = calc.descuento;
+    const total = calc.total;
+
+    // 6. Reservar uso del promocode antes de crear el pedido (atómico).
+    // Si no se aplicó (ej: best-price ganó precio_socio) no consumimos uso.
+    if (promoAplicable && calc.aplicoPromocode) {
+      const { data: reservado, error: rpcError } = await db.rpc(
+        "incrementar_uso_promocode",
+        { p_id: promoAplicable.id }
+      );
+      if (rpcError) {
+        console.error("Error reservando uso de promocode:", rpcError);
+        return NextResponse.json(
+          { error: "Error al aplicar el código" },
+          { status: 500 }
+        );
+      }
+      if (reservado !== true) {
+        return NextResponse.json(
+          { error: "El código ya no está disponible" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // 7. Create order (transferencia only — MercadoPago disabled)
     // Si hay algún encargue, no reservamos stock.
     const tieneEncargues = itemsConPrecio.some((i) => i.esEncargue);
     const todosEncargues = itemsConPrecio.every((i) => i.esEncargue);
@@ -256,7 +351,7 @@ export async function POST(request: NextRequest) {
         tipo: "online",
         estado: "pendiente_verificacion",
         subtotal,
-        descuento: 0,
+        descuento,
         total,
         metodo_pago: "transferencia",
         nombre_cliente: `${perfil.nombre} ${perfil.apellido}`,
@@ -266,6 +361,11 @@ export async function POST(request: NextRequest) {
         stock_reservado: !todosEncargues,
         stock_reservado_at: !todosEncargues ? new Date().toISOString() : null,
         idempotency_key: idempotencyKey ?? null,
+        promocode_id:
+          promoAplicable && calc.aplicoPromocode ? promoAplicable.id : null,
+        promocode_codigo:
+          promoAplicable && calc.aplicoPromocode ? promoAplicable.codigo : null,
+        aplico_precio_socio: calc.aplicoPrecioSocio,
       })
       .select("id, numero_pedido")
       .single();
@@ -300,7 +400,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 7. Create order items
+    // 8. Create order items
     const pedidoItems = itemsConPrecio.map((item) => ({
       pedido_id: pedido.id,
       producto_id: item.productoId,

@@ -18,6 +18,7 @@ import {
   Plus,
   Users,
   Dumbbell,
+  Megaphone,
   UserCog,
   UserCircle,
   LogOut,
@@ -31,6 +32,7 @@ import {
   Wallet,
   ArrowLeftRight,
   FileSpreadsheet,
+  TicketPercent,
 } from "lucide-react";
 import { useRoles } from "@/hooks/use-roles";
 import { RoleSwitcher } from "@/components/layout/role-switcher";
@@ -64,6 +66,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
       { href: "/admin/productos", label: "Productos", icon: Package },
       { href: "/admin/categorias", label: "Categorías", icon: Tag },
+      { href: "/admin/promocodes", label: "Promocodes", icon: TicketPercent },
       { href: "/admin/pedidos", label: "Pedidos", icon: ClipboardList },
       { href: "/admin/stock", label: "Stock", icon: BarChart3 },
       { href: "/admin/pos", label: "POS", icon: MonitorSmartphone },
@@ -101,6 +104,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/secretaria/socios", label: "Socios", icon: Users },
       { href: "/secretaria/disciplinas", label: "Disciplinas", icon: Dumbbell },
       { href: "/secretaria/staff", label: "Staff", icon: UserCog },
+      { href: "/secretaria/popups", label: "Popups", icon: Megaphone },
     ],
   },
   {

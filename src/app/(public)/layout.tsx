@@ -3,6 +3,7 @@ import { Footer } from "@/components/layout/footer";
 import { PageTransition } from "@/components/layout/page-transition";
 import { HaceteSocioCTA } from "@/components/shared/hacete-socio-cta";
 import { CartProviderWrapper } from "@/components/tienda/cart-provider-wrapper";
+import { PopupMount } from "@/components/popups/popup-mount";
 
 export default function PublicLayout({
   children,
@@ -23,6 +24,7 @@ export default function PublicLayout({
       </PageTransition>
       <HaceteSocioCTA />
       <Footer />
+      <PopupMount />
     </CartProviderWrapper>
   );
 }
