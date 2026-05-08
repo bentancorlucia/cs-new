@@ -47,6 +47,15 @@ export default async function TesoreriaHome() {
 
   return (
     <div className="space-y-6">
+      <div>
+        <h1 className="font-display text-2xl sm:text-3xl uppercase tracking-tightest text-foreground">
+          Resumen
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground font-body">
+          Saldos consolidados y accesos rápidos a los módulos financieros.
+        </p>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <KpiCard
           label="Total consolidado UYU"

@@ -20,10 +20,12 @@ export default async function CuentasPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="font-heading text-xl text-bordo-900">Cuentas</h2>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="font-display text-2xl sm:text-3xl uppercase tracking-tightest text-foreground">
+            Cuentas
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground font-body">
             Cuentas bancarias ITAÚ y caja chica. Cliquea para ver movimientos e importar extractos.
           </p>
         </div>

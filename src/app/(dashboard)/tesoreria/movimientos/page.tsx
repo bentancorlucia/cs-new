@@ -23,8 +23,10 @@ export default async function MovimientosPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="font-heading text-xl text-bordo-900">Movimientos</h2>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="font-display text-2xl sm:text-3xl uppercase tracking-tightest text-foreground">
+          Movimientos
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground font-body">
           Vista consolidada de todos los movimientos. Clasificá los que vienen de extractos importados.
         </p>
       </div>

@@ -56,6 +56,19 @@ const TABS = [
   { id: "historico", label: "Histórico" },
 ] as const;
 
+const PALETA_PATRIMONIO = [
+  "#730d32", // bordó del club
+  "#f7b643", // amarillo del club
+  "#0d7377", // teal profundo
+  "#c97064", // rosa terracota
+  "#4a5d6c", // pizarra
+  "#a64161", // ciruela
+  "#8a8b3d", // oliva
+  "#d9a679", // arena cálida
+  "#3d5a80", // azul polvoriento
+  "#b56576", // malva
+];
+
 type Tab = (typeof TABS)[number]["id"];
 
 export function ReportesCliente() {
@@ -150,10 +163,14 @@ function Panorama({ panorama, moneda }: { panorama: Panorama; moneda: Moneda }) 
         return {
           nombre: c.nombre,
           valor: Math.max(valor, 0),
-          color: c.color ?? "#730d32",
+          color: c.color ?? null,
         };
       })
-      .filter((c) => c.valor > 0);
+      .filter((c) => c.valor > 0)
+      .map((c, i) => ({
+        ...c,
+        color: c.color && c.color !== "#730d32" ? c.color : PALETA_PATRIMONIO[i % PALETA_PATRIMONIO.length],
+      }));
   }, [panorama, moneda]);
 
   return (

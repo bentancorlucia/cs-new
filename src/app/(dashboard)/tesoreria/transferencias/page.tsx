@@ -18,8 +18,10 @@ export default async function TransferenciasPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="font-heading text-xl text-bordo-900">Transferencias</h2>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="font-display text-2xl sm:text-3xl uppercase tracking-tightest text-foreground">
+          Transferencias
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground font-body">
           Movimiento de fondos entre cuentas. Cuando cruzan monedas, se calcula el tipo de cambio
           automáticamente.
         </p>

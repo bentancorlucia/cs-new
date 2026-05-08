@@ -38,8 +38,10 @@ export default async function ImportarPage({
       </Link>
 
       <div>
-        <h2 className="font-heading text-xl text-bordo-900">Importar extracto</h2>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="font-display text-2xl sm:text-3xl uppercase tracking-tightest text-foreground">
+          Importar extracto
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground font-body">
           {cuenta.nombre} · {cuenta.banco ?? cuenta.tipo} · {cuenta.moneda}
         </p>
       </div>

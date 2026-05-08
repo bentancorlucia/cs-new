@@ -14,31 +14,13 @@ export default async function CategoriasPage() {
 
   return (
     <div className="relative -mx-2 sm:mx-0">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 -top-12 h-64 opacity-60"
-        style={{
-          background:
-            "radial-gradient(ellipse 60% 100% at 12% 0%, rgba(115,13,50,0.10) 0%, transparent 70%), radial-gradient(ellipse 50% 80% at 90% 0%, rgba(247,182,67,0.14) 0%, transparent 70%)",
-        }}
-      />
-
       <div className="relative space-y-8 px-2 sm:px-0 pb-12">
         <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-3">
-            <div className="flex items-center gap-3 text-[10px] uppercase tracking-editorial text-bordo-700">
-              <span className="inline-flex items-center gap-2">
-                <span className="size-1.5 rounded-full bg-bordo-700" />
-                Tesorería
-              </span>
-              <span className="h-px w-6 bg-bordo-300" />
-              <span className="text-muted-foreground">Plan de cuentas</span>
-            </div>
-            <h2 className="font-heading text-4xl lg:text-5xl text-bordo-900 leading-[1.05] tracking-tight">
+          <div>
+            <h1 className="font-display text-2xl sm:text-3xl uppercase tracking-tightest text-foreground">
               Categorías
-              <span className="text-bordo-300">.</span>
-            </h2>
-            <p className="text-sm text-muted-foreground max-w-xl leading-relaxed">
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground font-body max-w-xl">
               Estructura jerárquica de ingresos y egresos para clasificar movimientos y armar
               presupuesto. Cada partida hereda el color de su categoría madre.
             </p>

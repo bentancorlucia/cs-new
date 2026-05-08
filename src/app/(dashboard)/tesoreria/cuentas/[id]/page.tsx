@@ -61,9 +61,11 @@ export default async function CuentaDetallePage({
           <div className="text-xs uppercase tracking-editorial text-muted-foreground font-heading">
             {cuenta.banco ?? cuenta.tipo}
           </div>
-          <h2 className="font-heading text-2xl text-bordo-900">{cuenta.nombre}</h2>
+          <h1 className="font-display text-2xl sm:text-3xl uppercase tracking-tightest text-foreground">
+            {cuenta.nombre}
+          </h1>
           {cuenta.numero_cuenta && (
-            <div className="text-sm text-muted-foreground">N° {cuenta.numero_cuenta}</div>
+            <p className="mt-1 text-sm text-muted-foreground font-body">N° {cuenta.numero_cuenta}</p>
           )}
         </div>
         <div className="text-right">

@@ -16,13 +16,7 @@ export default async function TesoreriaLayout({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-heading text-2xl text-bordo-900">Tesorería</h1>
-          <p className="text-sm text-muted-foreground">
-            Cuentas, movimientos, presupuesto y reportes financieros del club.
-          </p>
-        </div>
+      <div className="flex justify-end">
         <CotizacionBadge />
       </div>
       {children}
