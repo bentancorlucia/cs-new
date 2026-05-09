@@ -640,6 +640,17 @@ export function CheckoutClient() {
               rows={3}
             />
           </motion.div>
+
+          {/* Mobile-only promocode input */}
+          <motion.div
+            variants={fadeInUp}
+            className="lg:hidden border-b border-bordo-800/8 px-4 sm:px-0 py-5"
+          >
+            <h3 className="mb-3 font-heading text-[10px] font-bold uppercase tracking-editorial text-bordo-800/50">
+              Código de descuento
+            </h3>
+            <PromocodeInput />
+          </motion.div>
         </motion.div>
 
         {/* Right column — Summary + pay button — desktop */}

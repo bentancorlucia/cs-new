@@ -269,7 +269,7 @@ export default function AdminPromocodesPage() {
                         className="group border-b border-linea/60 last:border-0 transition-colors hover:bg-superficie/40"
                       >
                         <TableCell className="py-4">
-                          <div className="flex items-center gap-2.5">
+                          <div className="flex flex-wrap items-center gap-2">
                             <Link
                               href={`/admin/promocodes/${p.id}`}
                               className="font-mono text-sm font-semibold tracking-tight text-foreground transition-colors hover:text-bordo-700"
@@ -288,6 +288,20 @@ export default function AdminPromocodesPage() {
                               {p.descripcion}
                             </p>
                           )}
+                          {/* Mobile-only inline meta */}
+                          <div className="mt-2 flex flex-wrap items-center gap-1.5 md:hidden">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-superficie/60 px-1.5 py-0.5 text-[10px] text-muted-foreground ring-1 ring-inset ring-linea/60">
+                              <Calendar className="size-3 text-muted-foreground/70" />
+                              <span className="tabular-nums">{formatFecha(p.fecha_inicio)}</span>
+                              <span className="text-muted-foreground/40">→</span>
+                              <span className="tabular-nums">{formatFecha(p.fecha_fin)}</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1 rounded-md bg-superficie/60 px-1.5 py-0.5 text-[10px] ring-1 ring-inset ring-linea/60 sm:hidden">
+                              <TrendingUp className="size-3 text-muted-foreground/70" />
+                              <span className="font-semibold tabular-nums text-foreground">{p.usos_actuales}</span>
+                              <span className="text-muted-foreground/70">/{p.usos_max ?? "∞"}</span>
+                            </span>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="text-[15px] font-semibold tabular-nums text-foreground">
@@ -325,7 +339,7 @@ export default function AdminPromocodesPage() {
                           <DropdownMenu>
                             <DropdownMenuTrigger
                               render={
-                                <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
+                                <Button variant="ghost" size="icon-sm" className="md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100 transition-opacity">
                                   <MoreHorizontal className="size-4" />
                                 </Button>
                               }

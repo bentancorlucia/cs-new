@@ -65,16 +65,17 @@ const NAV_SECTIONS: NavSection[] = [
     requiredRoles: ["super_admin", "tienda"],
     items: [
       { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
+      { href: "/admin/pedidos", label: "Pedidos", icon: ClipboardList },
       { href: "/admin/productos", label: "Productos", icon: Package },
       { href: "/admin/categorias", label: "Categorías", icon: Tag },
       { href: "/admin/promocodes", label: "Promocodes", icon: TicketPercent },
-      { href: "/admin/donaciones", label: "Donaciones", icon: Heart },
-      { href: "/admin/pedidos", label: "Pedidos", icon: ClipboardList },
       { href: "/admin/stock", label: "Stock", icon: BarChart3 },
       { href: "/admin/pos", label: "POS", icon: MonitorSmartphone },
       { href: "/admin/proveedores", label: "Proveedores", icon: Truck },
       { href: "/admin/compras", label: "Compras", icon: ShoppingCart },
       { href: "/admin/movimientos", label: "Movimientos", icon: Receipt },
+      { href: "/admin/donaciones", label: "Donaciones", icon: Heart },
+      
     ],
   },
   {

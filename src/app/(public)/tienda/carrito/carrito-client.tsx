@@ -270,6 +270,20 @@ export function CarritoClient() {
                 Vaciar carrito
               </button>
             </motion.div>
+
+            {/* Mobile-only promocode input */}
+            <motion.div
+              layout
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="lg:hidden border-t border-bordo-800/10 px-4 sm:px-0 py-5"
+            >
+              <h3 className="mb-3 font-heading text-[10px] uppercase tracking-editorial text-bordo-800/50">
+                Código de descuento
+              </h3>
+              <PromocodeInput />
+            </motion.div>
           </motion.div>
 
           {/* Order summary — desktop */}
