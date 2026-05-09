@@ -206,6 +206,7 @@ export interface OrderPendingVerificationData {
   numeroPedido: string;
   items: { nombre: string; cantidad: number; precioUnitario: number }[];
   total: number;
+  donacionMonto?: number;
   pedidoUrl: string;
 }
 
@@ -235,6 +236,18 @@ export function orderPendingVerificationHtml(
     </p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
       ${itemsRows}
+      ${
+        data.donacionMonto && data.donacionMonto > 0
+          ? `<tr>
+        <td style="padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:${COLORS.texto};">
+          Donación a la Olla del Hogar de Cristo
+        </td>
+        <td align="right" style="padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:${COLORS.texto};">
+          $${data.donacionMonto.toLocaleString("es-UY")}
+        </td>
+      </tr>`
+          : ""
+      }
       <tr>
         <td style="padding:12px 0 0;font-size:16px;font-weight:700;color:${COLORS.bordo};">Total</td>
         <td align="right" style="padding:12px 0 0;font-size:16px;font-weight:700;color:${COLORS.bordo};">

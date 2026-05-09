@@ -253,6 +253,32 @@ export async function POST(
         console.error("Error al enviar email de confirmación:", emailError);
       }
 
+      // Marcar donación como cobrada y restarla del monto que entra a tesorería.
+      let donacionMonto = 0;
+      try {
+        const { data: donacion } = await db
+          .from("donaciones")
+          .select("id, monto, estado")
+          .eq("pedido_id", pedidoId)
+          .maybeSingle();
+
+        if (donacion && donacion.estado === "pendiente_pago") {
+          await db
+            .from("donaciones")
+            .update({
+              estado: "cobrada",
+              cobrada_at: new Date().toISOString(),
+            })
+            .eq("id", donacion.id);
+          donacionMonto = Number(donacion.monto);
+        } else if (donacion && donacion.estado === "cobrada") {
+          // idempotencia: ya estaba cobrada, igual descontamos del movimiento
+          donacionMonto = Number(donacion.monto);
+        }
+      } catch (donError) {
+        console.error("Error al marcar donación cobrada:", donError);
+      }
+
       try {
         const { registrarMovimientoVentaPedido } = await import(
           "@/lib/tienda/registrar-movimiento"
@@ -264,6 +290,9 @@ export async function POST(
           total: pedido.total,
           metodoPago: "transferencia",
           registradoPor: user?.id ?? null,
+          // La donación NO se cuenta como ingreso de tienda
+          montoOverride:
+            donacionMonto > 0 ? pedido.total - donacionMonto : undefined,
         });
       } catch (movError) {
         console.error("Error al registrar movimiento financiero:", movError);
@@ -282,6 +311,14 @@ export async function POST(
           updated_at: new Date().toISOString(),
         })
         .eq("id", pedidoId);
+
+      // 3b.1 Cancelar donación si existe (estaba en 'pendiente_pago' porque
+      // el pedido nunca llegó a verificarse).
+      await db
+        .from("donaciones")
+        .update({ estado: "cancelada" })
+        .eq("pedido_id", pedidoId)
+        .in("estado", ["pendiente_pago"]);
 
       // 4b. Update comprobante → rechazado
       await db

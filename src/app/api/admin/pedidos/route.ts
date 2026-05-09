@@ -24,7 +24,8 @@ export async function GET(request: NextRequest) {
         `
         *,
         perfiles!perfil_id(nombre, apellido, telefono),
-        pedido_items(es_encargue)
+        pedido_items(es_encargue),
+        donaciones(monto, estado)
       `,
         { count: "exact" }
       )
@@ -43,13 +44,23 @@ export async function GET(request: NextRequest) {
     const { data: rawData, error, count } = await query;
     if (error) throw error;
 
-    // Aplanar tiene_encargue por pedido y descartar el array de pedido_items
+    // Aplanar tiene_encargue + donación por pedido y descartar arrays internos
     const data = (rawData || []).map((p: any) => {
       const tiene_encargue = Array.isArray(p.pedido_items)
         ? p.pedido_items.some((i: any) => i.es_encargue)
         : false;
-      const { pedido_items, ...rest } = p;
-      return { ...rest, tiene_encargue };
+      const donacion = Array.isArray(p.donaciones) && p.donaciones.length > 0
+        ? {
+            monto: Number(p.donaciones[0].monto),
+            estado: p.donaciones[0].estado as
+              | "pendiente_pago"
+              | "cobrada"
+              | "transferida"
+              | "cancelada",
+          }
+        : null;
+      const { pedido_items, donaciones, ...rest } = p;
+      return { ...rest, tiene_encargue, donacion };
     });
 
     // Fetch counts per estado for tab badges

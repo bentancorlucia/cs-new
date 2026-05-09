@@ -29,6 +29,7 @@ const checkoutSchema = z.object({
   metodo_pago: z.enum(["transferencia"]).default("transferencia"),
   idempotencyKey: z.string().uuid().optional(),
   codigoPromocion: z.string().trim().min(1).max(40).optional(),
+  donacionMonto: z.number().positive().max(1_000_000).optional(),
 });
 
 interface ItemPreCalc {
@@ -83,8 +84,51 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { items, notas, metodo_pago, idempotencyKey, codigoPromocion } =
+    const { items, notas, metodo_pago, idempotencyKey, codigoPromocion, donacionMonto } =
       parsed.data;
+
+    // 2b. Validar donación contra config (server-side, no confiar en el cliente).
+    let donacionFinal = 0;
+    if (donacionMonto && donacionMonto > 0) {
+      const { data: donConfig } = await db
+        .from("donaciones_config")
+        .select("activo, monto_1, monto_2, monto_3, permitir_monto_custom, monto_custom_max")
+        .eq("id", 1)
+        .single();
+
+      if (!donConfig?.activo) {
+        return NextResponse.json(
+          { error: "Las donaciones no están habilitadas" },
+          { status: 400 }
+        );
+      }
+
+      const montosFijos = [
+        Number(donConfig.monto_1),
+        Number(donConfig.monto_2),
+        Number(donConfig.monto_3),
+      ];
+      const esMontoFijo = montosFijos.some(
+        (m) => Math.abs(m - donacionMonto) < 0.01
+      );
+
+      if (!esMontoFijo) {
+        if (!donConfig.permitir_monto_custom) {
+          return NextResponse.json(
+            { error: "El monto de donación no es válido" },
+            { status: 400 }
+          );
+        }
+        if (donacionMonto > Number(donConfig.monto_custom_max)) {
+          return NextResponse.json(
+            { error: "El monto de donación excede el máximo permitido" },
+            { status: 400 }
+          );
+        }
+      }
+
+      donacionFinal = donacionMonto;
+    }
 
     // 3a. Idempotency check: si llega un key y ya hay un pedido para este perfil
     // con ese mismo key, devolver el existente sin volver a crear nada.
@@ -315,7 +359,8 @@ export async function POST(request: NextRequest) {
 
     const subtotal = calc.subtotal;
     const descuento = calc.descuento;
-    const total = calc.total;
+    // El total que paga el cliente incluye la donación (se transfiere todo junto).
+    const total = calc.total + donacionFinal;
 
     // 6. Reservar uso del promocode antes de crear el pedido (atómico).
     // Si no se aplicó (ej: best-price ganó precio_socio) no consumimos uso.
@@ -426,6 +471,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 8b. Crear fila de donación si corresponde (FK ON DELETE CASCADE limpia
+    // si se borra el pedido por cualquier razón).
+    if (donacionFinal > 0) {
+      const { error: donError } = await db.from("donaciones").insert({
+        pedido_id: pedido.id,
+        monto: donacionFinal,
+        estado: "pendiente_pago",
+      });
+      if (donError) {
+        console.error("Error al registrar donación:", donError);
+        // No abortamos el pedido — la donación es opcional. Loggeamos para auditar.
+      }
+    }
+
     // 8. Send pending verification email and return
     try {
       const { sendOrderPendingVerification } = await import(
@@ -440,6 +499,7 @@ export async function POST(request: NextRequest) {
           precioUnitario: i.precioUnitario + i.precioExtra,
         })),
         total,
+        donacionMonto: donacionFinal > 0 ? donacionFinal : undefined,
         pedidoUrl: `${APP_URL}/tienda/pedido/${pedido.id}`,
       });
     } catch (emailError) {

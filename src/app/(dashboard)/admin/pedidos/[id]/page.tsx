@@ -837,10 +837,49 @@ export default function DetallePedidoPage() {
                 <span className="tabular-nums">-${pedido.descuento.toLocaleString("es-UY")}</span>
               </div>
             )}
+            {pedido.donaciones && pedido.donaciones.length > 0 && (
+              <div className="flex justify-between text-sm text-pink-700">
+                <span>
+                  Donación · Olla del Hogar de Cristo
+                  {pedido.donaciones[0].estado === "transferida" && (
+                    <span className="ml-1 text-[10px] font-bold uppercase tracking-wider text-pink-700/70">
+                      transferida
+                    </span>
+                  )}
+                  {pedido.donaciones[0].estado === "cobrada" && (
+                    <span className="ml-1 text-[10px] font-bold uppercase tracking-wider text-pink-700/70">
+                      cobrada · pendiente de transferir
+                    </span>
+                  )}
+                  {pedido.donaciones[0].estado === "pendiente_pago" && (
+                    <span className="ml-1 text-[10px] font-bold uppercase tracking-wider text-pink-700/70">
+                      pendiente de pago
+                    </span>
+                  )}
+                  {pedido.donaciones[0].estado === "cancelada" && (
+                    <span className="ml-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      cancelada
+                    </span>
+                  )}
+                </span>
+                <span className="tabular-nums">
+                  +${Number(pedido.donaciones[0].monto).toLocaleString("es-UY")}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between text-base font-bold pt-1">
               <span>Total</span>
               <span className="tabular-nums">${pedido.total.toLocaleString("es-UY")}</span>
             </div>
+            {pedido.donaciones &&
+              pedido.donaciones.length > 0 &&
+              pedido.donaciones[0].estado !== "cancelada" && (
+                <p className="pt-2 text-[11px] leading-relaxed text-muted-foreground">
+                  De este total, ${Number(pedido.donaciones[0].monto).toLocaleString("es-UY")}{" "}
+                  no son ventas de tienda — se transfieren a la Olla del Hogar
+                  de Cristo.
+                </p>
+              )}
           </div>
         </div>
       </motion.div>
@@ -867,6 +906,32 @@ export default function DetallePedidoPage() {
               Esta acción no se puede deshacer. Se devolverá el stock reservado.
             </DialogDescription>
           </DialogHeader>
+          {pedido.donaciones?.[0]?.estado === "transferida" && (
+            <div className="rounded-md border border-pink-200 bg-pink-50 p-3 text-xs text-pink-800">
+              <p className="font-bold uppercase tracking-wider">
+                Donación ya transferida a la Olla del Hogar
+              </p>
+              <p className="mt-1 leading-relaxed">
+                La donación de $
+                {Number(pedido.donaciones[0].monto).toLocaleString("es-UY")}{" "}
+                ya fue transferida y no se devuelve al cliente. Solo reembolsá
+                la parte de productos: $
+                {(
+                  pedido.total - Number(pedido.donaciones[0].monto)
+                ).toLocaleString("es-UY")}.
+              </p>
+            </div>
+          )}
+          {pedido.donaciones?.[0]?.estado === "cobrada" && (
+            <div className="rounded-md border border-pink-200 bg-pink-50 p-3 text-xs text-pink-800">
+              <p>
+                Este pedido incluye una donación de $
+                {Number(pedido.donaciones[0].monto).toLocaleString("es-UY")} que
+                aún no fue transferida a la Olla. Al cancelar, la donación
+                también se cancela y se reembolsa el total al cliente.
+              </p>
+            </div>
+          )}
           <div className="space-y-2">
             <Label className="text-sm">Motivo de cancelación</Label>
             <Textarea

@@ -46,6 +46,10 @@ interface Pedido {
   created_at: string;
   perfiles: { nombre: string; apellido: string; telefono: string | null } | null;
   tiene_encargue?: boolean;
+  donacion?: {
+    monto: number;
+    estado: "pendiente_pago" | "cobrada" | "transferida" | "cancelada";
+  } | null;
 }
 
 const tabs: { key: EstadoPedido | ""; label: string; icon: any; color: string }[] = [
@@ -320,6 +324,14 @@ export default function AdminPedidosPage() {
                         {pedido.tipo === "pos" && (
                           <span className="text-[10px] font-medium text-muted-foreground bg-muted rounded px-1 py-0.5">
                             POS
+                          </span>
+                        )}
+                        {pedido.donacion && pedido.donacion.estado !== "cancelada" && (
+                          <span
+                            className="inline-flex items-center rounded-full border border-pink-200 bg-pink-50 px-2 py-0.5 text-[10px] font-medium leading-none text-pink-700"
+                            title={`Donación Olla del Hogar de Cristo · ${pedido.donacion.estado}`}
+                          >
+                            Donación ${pedido.donacion.monto.toLocaleString("es-UY")}
                           </span>
                         )}
                       </div>

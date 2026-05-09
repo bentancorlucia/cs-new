@@ -25,6 +25,10 @@ import { Label } from "@/components/ui/label";
 import { useCart } from "@/hooks/use-cart";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { PromocodeInput } from "@/components/tienda/promocode-input";
+import {
+  DonacionStep,
+  type DonacionConfig,
+} from "@/components/tienda/donacion-step";
 import { previewPromocode } from "@/lib/promocodes/client";
 import {
   fadeInUp,
@@ -74,10 +78,12 @@ export function CheckoutClient() {
   const [comprobante, setComprobante] = useState<File | null>(null);
   const [comprobantePreview, setComprobantePreview] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [donacionConfig, setDonacionConfig] = useState<DonacionConfig | null>(null);
+  const [donacionMonto, setDonacionMonto] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const submittingRef = useRef(false);
 
-  // Cargar perfil del usuario
+  // Cargar perfil del usuario y config de donaciones
   useEffect(() => {
     async function loadProfile() {
       const supabase = createBrowserClient();
@@ -90,13 +96,34 @@ export function CheckoutClient() {
         return;
       }
 
-      const { data } = await supabase
-        .from("perfiles")
-        .select("nombre, apellido, telefono, es_socio")
-        .eq("id", user.id)
-        .single();
+      const [{ data: perfilData }, { data: donConfig }] = await Promise.all([
+        supabase
+          .from("perfiles")
+          .select("nombre, apellido, telefono, es_socio")
+          .eq("id", user.id)
+          .single(),
+        supabase
+          .from("donaciones_config")
+          .select(
+            "activo, monto_1, monto_2, monto_3, permitir_monto_custom, monto_custom_max, titulo, descripcion"
+          )
+          .eq("id", 1)
+          .single(),
+      ]);
 
-      setProfile(data as UserProfile | null);
+      setProfile(perfilData as UserProfile | null);
+      if (donConfig?.activo) {
+        setDonacionConfig({
+          activo: true,
+          monto_1: Number(donConfig.monto_1),
+          monto_2: Number(donConfig.monto_2),
+          monto_3: Number(donConfig.monto_3),
+          permitir_monto_custom: donConfig.permitir_monto_custom,
+          monto_custom_max: Number(donConfig.monto_custom_max),
+          titulo: donConfig.titulo,
+          descripcion: donConfig.descripcion,
+        });
+      }
       setLoadingProfile(false);
     }
 
@@ -110,10 +137,11 @@ export function CheckoutClient() {
     esSocio,
     promo: promocode,
   });
-  const totalFinal = preview.total;
+  const subtotalConDescuentos = preview.total;
+  const totalFinal = subtotalConDescuentos + donacionMonto;
   const descuentoSocio = preview.descuentoSocio;
   const descuentoCodigo = preview.descuentoCodigo;
-  const ahorro = total - totalFinal;
+  const ahorro = total - subtotalConDescuentos;
 
   const handleFileSelect = useCallback((file: File) => {
     const allowedTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
@@ -171,6 +199,7 @@ export function CheckoutClient() {
           metodo_pago: metodoPago,
           idempotencyKey: idempotencyKey || undefined,
           codigoPromocion: promocode?.codigo || undefined,
+          donacionMonto: donacionMonto > 0 ? donacionMonto : undefined,
         }),
       });
 
@@ -416,6 +445,15 @@ export function CheckoutClient() {
             </div>
           </motion.div>
 
+          {/* Donación opcional */}
+          {donacionConfig && (
+            <DonacionStep
+              config={donacionConfig}
+              value={donacionMonto}
+              onChange={setDonacionMonto}
+            />
+          )}
+
           {/* Método de pago */}
           <motion.div
             variants={fadeInUp}
@@ -649,6 +687,14 @@ export function CheckoutClient() {
                   Retiro en club
                 </span>
               </div>
+              {donacionMonto > 0 && (
+                <div className="flex justify-between text-bordo-800">
+                  <span>Donación · Olla Hogar de Cristo</span>
+                  <span className="font-bold">
+                    +${donacionMonto.toLocaleString("es-UY")}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="mt-4">

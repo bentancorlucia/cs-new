@@ -40,7 +40,8 @@ export async function GET(
           es_encargue, personalizacion, precio_extra_personalizacion,
           productos(id, nombre, slug, mto_campos),
           producto_variantes(id, nombre)
-        )
+        ),
+        donaciones(id, monto, estado, cobrada_at, transferencia_id)
       `
       )
       .eq("id", parseInt(id))
@@ -102,7 +103,7 @@ export async function PUT(
     // Use admin client directly (bypasses RLS for admin operations)
     const db = supabase as any;
 
-    // Si se cancela, devolver stock
+    // Si se cancela, devolver stock + cancelar donación según corresponda
     if (parsed.estado === "cancelado") {
       const user = await getCurrentUser();
       const { data: pedido } = await db
@@ -147,6 +148,15 @@ export async function PUT(
             }
           }
         }
+
+        // Donación: cancelar si está en pendiente_pago o cobrada (no transferida).
+        // Si ya estaba 'transferida' a la Olla, NO se cancela: la donación
+        // mantiene su estado y solo se devuelve la parte de productos al cliente.
+        await db
+          .from("donaciones")
+          .update({ estado: "cancelada" })
+          .eq("pedido_id", parseInt(id))
+          .in("estado", ["pendiente_pago", "cobrada"]);
       }
     }
 

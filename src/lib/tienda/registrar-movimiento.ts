@@ -48,6 +48,10 @@ export async function registrarMovimientoVentaPedido(
     total: number;
     metodoPago: MetodoPago;
     registradoPor?: string | null;
+    // Si se pasa, registra el movimiento por este monto en lugar de `total`.
+    // Caso de uso: pedidos con donación a Olla del Hogar — la donación NO
+    // se considera ingreso de tienda (queda fuera de tesorería).
+    montoOverride?: number;
   }
 ) {
   const cuenta = await getCuentaTiendaPorMetodo(db, args.metodoPago);
@@ -56,6 +60,9 @@ export async function registrarMovimientoVentaPedido(
   const slug = args.tipoPedido === "pos" ? "ventas-pos" : "ventas-online";
   const categoria = await getCategoriaPorSlug(db, slug);
   if (!categoria) return;
+
+  const monto = args.montoOverride ?? args.total;
+  if (monto <= 0) return;
 
   const descripcion =
     args.metodoPago === "efectivo"
@@ -79,7 +86,7 @@ export async function registrarMovimientoVentaPedido(
     cuenta_id: cuenta.id,
     tipo: "ingreso",
     categoria_id: categoria.id,
-    monto: args.total,
+    monto,
     moneda: "UYU",
     fecha: new Date().toISOString().split("T")[0],
     descripcion,

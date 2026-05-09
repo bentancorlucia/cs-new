@@ -487,6 +487,142 @@ export type Database = {
         }
         Relationships: []
       }
+      donaciones: {
+        Row: {
+          cobrada_at: string | null
+          created_at: string | null
+          estado: string
+          id: number
+          monto: number
+          pedido_id: number
+          transferencia_id: number | null
+        }
+        Insert: {
+          cobrada_at?: string | null
+          created_at?: string | null
+          estado?: string
+          id?: number
+          monto: number
+          pedido_id: number
+          transferencia_id?: number | null
+        }
+        Update: {
+          cobrada_at?: string | null
+          created_at?: string | null
+          estado?: string
+          id?: number
+          monto?: number
+          pedido_id?: number
+          transferencia_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "donaciones_pedido_id_fkey"
+            columns: ["pedido_id"]
+            isOneToOne: true
+            referencedRelation: "pedidos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "donaciones_transferencia_id_fkey"
+            columns: ["transferencia_id"]
+            isOneToOne: false
+            referencedRelation: "donaciones_transferencias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      donaciones_config: {
+        Row: {
+          activo: boolean
+          descripcion: string
+          id: number
+          monto_1: number
+          monto_2: number
+          monto_3: number
+          monto_custom_max: number
+          permitir_monto_custom: boolean
+          titulo: string
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          activo?: boolean
+          descripcion?: string
+          id?: number
+          monto_1?: number
+          monto_2?: number
+          monto_3?: number
+          monto_custom_max?: number
+          permitir_monto_custom?: boolean
+          titulo?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          activo?: boolean
+          descripcion?: string
+          id?: number
+          monto_1?: number
+          monto_2?: number
+          monto_3?: number
+          monto_custom_max?: number
+          permitir_monto_custom?: boolean
+          titulo?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "donaciones_config_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      donaciones_transferencias: {
+        Row: {
+          cantidad_donaciones: number
+          comprobante_url: string | null
+          creado_por: string | null
+          created_at: string | null
+          fecha_transferencia: string
+          id: number
+          monto_total: number
+          notas: string | null
+        }
+        Insert: {
+          cantidad_donaciones: number
+          comprobante_url?: string | null
+          creado_por?: string | null
+          created_at?: string | null
+          fecha_transferencia: string
+          id?: number
+          monto_total: number
+          notas?: string | null
+        }
+        Update: {
+          cantidad_donaciones?: number
+          comprobante_url?: string | null
+          creado_por?: string | null
+          created_at?: string | null
+          fecha_transferencia?: string
+          id?: number
+          monto_total?: number
+          notas?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "donaciones_transferencias_creado_por_fkey"
+            columns: ["creado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       entradas: {
         Row: {
           cedula_asistente: string | null
@@ -1430,6 +1566,7 @@ export type Database = {
       }
       pedidos: {
         Row: {
+          aplico_precio_socio: boolean
           created_at: string | null
           descuento: number | null
           descuento_motivo: string | null
@@ -1447,6 +1584,8 @@ export type Database = {
           notas: string | null
           numero_pedido: string | null
           perfil_id: string | null
+          promocode_codigo: string | null
+          promocode_id: number | null
           stock_reservado: boolean | null
           stock_reservado_at: string | null
           subtotal: number
@@ -1457,6 +1596,7 @@ export type Database = {
           vendedor_id: string | null
         }
         Insert: {
+          aplico_precio_socio?: boolean
           created_at?: string | null
           descuento?: number | null
           descuento_motivo?: string | null
@@ -1474,6 +1614,8 @@ export type Database = {
           notas?: string | null
           numero_pedido?: string | null
           perfil_id?: string | null
+          promocode_codigo?: string | null
+          promocode_id?: number | null
           stock_reservado?: boolean | null
           stock_reservado_at?: string | null
           subtotal: number
@@ -1484,6 +1626,7 @@ export type Database = {
           vendedor_id?: string | null
         }
         Update: {
+          aplico_precio_socio?: boolean
           created_at?: string | null
           descuento?: number | null
           descuento_motivo?: string | null
@@ -1501,6 +1644,8 @@ export type Database = {
           notas?: string | null
           numero_pedido?: string | null
           perfil_id?: string | null
+          promocode_codigo?: string | null
+          promocode_id?: number | null
           stock_reservado?: boolean | null
           stock_reservado_at?: string | null
           subtotal?: number
@@ -1523,6 +1668,13 @@ export type Database = {
             columns: ["perfil_id"]
             isOneToOne: false
             referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pedidos_promocode_id_fkey"
+            columns: ["promocode_id"]
+            isOneToOne: false
+            referencedRelation: "promocodes"
             referencedColumns: ["id"]
           },
           {
@@ -1632,6 +1784,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      popups: {
+        Row: {
+          body: string | null
+          buttons: Json
+          created_at: string
+          created_by: string | null
+          ends_at: string
+          id: string
+          image_url: string | null
+          pages: Json
+          priority: number
+          starts_at: string
+          status: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          body?: string | null
+          buttons?: Json
+          created_at?: string
+          created_by?: string | null
+          ends_at: string
+          id?: string
+          image_url?: string | null
+          pages?: Json
+          priority?: number
+          starts_at: string
+          status?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          body?: string | null
+          buttons?: Json
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string
+          id?: string
+          image_url?: string | null
+          pages?: Json
+          priority?: number
+          starts_at?: string
+          status?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       presupuestos: {
         Row: {
@@ -1905,6 +2105,68 @@ export type Database = {
             columns: ["categoria_id"]
             isOneToOne: false
             referencedRelation: "categorias_producto"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      promocodes: {
+        Row: {
+          activo: boolean
+          acumulable_con_precio_socio: boolean
+          codigo: string
+          created_at: string | null
+          created_by: string | null
+          descripcion: string | null
+          fecha_fin: string
+          fecha_inicio: string
+          id: number
+          monto_minimo: number | null
+          tipo_descuento: string
+          updated_at: string | null
+          usos_actuales: number
+          usos_max: number | null
+          valor: number
+        }
+        Insert: {
+          activo?: boolean
+          acumulable_con_precio_socio?: boolean
+          codigo: string
+          created_at?: string | null
+          created_by?: string | null
+          descripcion?: string | null
+          fecha_fin: string
+          fecha_inicio: string
+          id?: number
+          monto_minimo?: number | null
+          tipo_descuento: string
+          updated_at?: string | null
+          usos_actuales?: number
+          usos_max?: number | null
+          valor: number
+        }
+        Update: {
+          activo?: boolean
+          acumulable_con_precio_socio?: boolean
+          codigo?: string
+          created_at?: string | null
+          created_by?: string | null
+          descripcion?: string | null
+          fecha_fin?: string
+          fecha_inicio?: string
+          id?: number
+          monto_minimo?: number | null
+          tipo_descuento?: string
+          updated_at?: string | null
+          usos_actuales?: number
+          usos_max?: number | null
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promocodes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2418,9 +2680,23 @@ export type Database = {
         Returns: undefined
       }
       es_staff: { Args: never; Returns: boolean }
+      incrementar_uso_promocode: { Args: { p_id: number }; Returns: boolean }
       recalcular_stock_producto: {
         Args: { p_producto_id: number }
         Returns: undefined
+      }
+      registrar_transferencia_donaciones: {
+        Args: {
+          p_comprobante_url: string
+          p_creado_por: string
+          p_fecha: string
+          p_notas: string
+        }
+        Returns: {
+          cantidad: number
+          monto_total: number
+          transferencia_id: number
+        }[]
       }
       tiene_algun_rol: { Args: { roles_nombres: string[] }; Returns: boolean }
       tiene_rol: { Args: { rol_nombre: string }; Returns: boolean }
