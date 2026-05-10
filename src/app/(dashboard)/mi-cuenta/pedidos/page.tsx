@@ -58,6 +58,10 @@ interface Pedido {
   notas: string | null;
   created_at: string;
   pedido_items: PedidoItem[];
+  donacion?: {
+    monto: number;
+    estado: "pendiente_pago" | "cobrada" | "transferida" | "cancelada";
+  } | null;
 }
 
 const ESTADO_CONFIG: Record<string, { label: string; color: string }> = {
@@ -149,13 +153,21 @@ export default function MisPedidosPage() {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-mono text-sm font-bold text-foreground">
                             #{pedido.numero_pedido}
                           </span>
                           <Badge className={`text-[10px] ${config.color}`}>
                             {config.label}
                           </Badge>
+                          {pedido.donacion && pedido.donacion.estado !== "cancelada" && (
+                            <Badge
+                              className="text-[10px] bg-pink-50 text-pink-700 border border-pink-200"
+                              title="Incluye donación a la Olla del Hogar de Cristo"
+                            >
+                              Donación ${pedido.donacion.monto.toLocaleString("es-UY")}
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           {new Date(pedido.created_at).toLocaleDateString("es-UY", {
@@ -269,6 +281,14 @@ export default function MisPedidosPage() {
                                 <span>Descuento socio</span>
                                 <span className="font-mono text-xs">
                                   -${pedido.descuento.toLocaleString("es-UY")}
+                                </span>
+                              </div>
+                            )}
+                            {pedido.donacion && pedido.donacion.estado !== "cancelada" && (
+                              <div className="flex items-center justify-between text-sm text-pink-700">
+                                <span>Donación · Olla del Hogar de Cristo</span>
+                                <span className="font-mono text-xs">
+                                  +${pedido.donacion.monto.toLocaleString("es-UY")}
                                 </span>
                               </div>
                             )}

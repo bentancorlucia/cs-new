@@ -134,6 +134,35 @@ function formatChartLabel(fecha: string, bucket: ChartBucket) {
   });
 }
 
+function formatTooltipPeriod(fecha: string, bucket: ChartBucket) {
+  if (bucket === "month") {
+    const d = new Date(fecha + "-01T12:00:00Z");
+    return d.toLocaleDateString("es-UY", {
+      timeZone: "America/Montevideo",
+      month: "long",
+      year: "numeric",
+    });
+  }
+  if (bucket === "week") {
+    const start = new Date(fecha + "T12:00:00Z");
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 6);
+    const opts: Intl.DateTimeFormatOptions = {
+      timeZone: "America/Montevideo",
+      day: "numeric",
+      month: "short",
+    };
+    return `Semana ${start.toLocaleDateString("es-UY", opts)} – ${end.toLocaleDateString("es-UY", opts)}`;
+  }
+  const d = new Date(fecha + "T12:00:00Z");
+  return d.toLocaleDateString("es-UY", {
+    timeZone: "America/Montevideo",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
+
 const estadoBadge: Record<string, { label: string; className: string; icon: any }> = {
   pendiente: { label: "Pendiente", className: "bg-gray-100 text-gray-600", icon: Clock },
   pendiente_verificacion: { label: "Por conciliar", className: "bg-orange-50 text-orange-700", icon: Building2 },
@@ -231,21 +260,41 @@ function StatCard({
 
 function ChartTooltip({ active, payload, label, bucket }: any) {
   if (!active || !payload?.length) return null;
-  const formatted = label ? formatChartLabel(label, bucket || "day") : "";
+  const periodo = label ? formatTooltipPeriod(label, bucket || "day") : "";
+  const online = Number(payload.find((p: any) => p.dataKey === "online")?.value || 0);
+  const pos = Number(payload.find((p: any) => p.dataKey === "pos")?.value || 0);
+  const total = online + pos;
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="rounded-xl border bg-white/95 px-4 py-3 shadow-elevated backdrop-blur-sm"
+      className="min-w-[180px] rounded-xl border bg-white/95 px-4 py-3 shadow-elevated backdrop-blur-sm"
     >
-      <p className="mb-1 font-heading text-xs font-medium uppercase tracking-editorial text-muted-foreground">
-        {formatted}
+      <p className="mb-2 font-heading text-xs font-medium capitalize text-muted-foreground">
+        {periodo}
       </p>
-      {payload.map((p: any) => (
-        <p key={p.dataKey} className="font-body text-sm" style={{ color: p.color }}>
-          {p.dataKey === "online" ? "Online" : p.dataKey === "pos" ? "POS" : "Total"}: {formatMoney(p.value)}
-        </p>
-      ))}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between gap-4 font-body text-sm">
+          <span className="flex items-center gap-1.5 text-bordo-700">
+            <span className="h-2 w-2 rounded-full bg-bordo-600" />
+            Online
+          </span>
+          <span className="font-medium tabular-nums">{formatMoney(online)}</span>
+        </div>
+        <div className="flex items-center justify-between gap-4 font-body text-sm">
+          <span className="flex items-center gap-1.5 text-dorado-700">
+            <span className="h-2 w-2 rounded-full bg-dorado-500" />
+            POS
+          </span>
+          <span className="font-medium tabular-nums">{formatMoney(pos)}</span>
+        </div>
+        <div className="mt-1 flex items-center justify-between gap-4 border-t pt-1.5 font-body text-sm">
+          <span className="font-heading font-semibold text-foreground">Total</span>
+          <span className="font-heading font-bold tabular-nums text-foreground">
+            {formatMoney(total)}
+          </span>
+        </div>
+      </div>
     </motion.div>
   );
 }

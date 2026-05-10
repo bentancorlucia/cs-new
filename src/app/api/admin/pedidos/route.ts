@@ -49,10 +49,14 @@ export async function GET(request: NextRequest) {
       const tiene_encargue = Array.isArray(p.pedido_items)
         ? p.pedido_items.some((i: any) => i.es_encargue)
         : false;
-      const donacion = Array.isArray(p.donaciones) && p.donaciones.length > 0
+      // PostgREST devuelve un objeto (no array) por el UNIQUE en donaciones.pedido_id
+      const dRaw = Array.isArray(p.donaciones)
+        ? p.donaciones[0] ?? null
+        : p.donaciones ?? null;
+      const donacion = dRaw
         ? {
-            monto: Number(p.donaciones[0].monto),
-            estado: p.donaciones[0].estado as
+            monto: Number(dRaw.monto),
+            estado: dRaw.estado as
               | "pendiente_pago"
               | "cobrada"
               | "transferida"

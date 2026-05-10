@@ -48,6 +48,16 @@ type PedidoResult = {
     } | null;
     producto_variantes: { id: number; nombre: string } | null;
   }[];
+  donaciones:
+    | {
+        monto: number | string;
+        estado: "pendiente_pago" | "cobrada" | "transferida" | "cancelada";
+      }
+    | {
+        monto: number | string;
+        estado: "pendiente_pago" | "cobrada" | "transferida" | "cancelada";
+      }[]
+    | null;
 };
 
 export default async function PedidoPage({ params, searchParams }: PageProps) {
@@ -88,7 +98,8 @@ export default async function PedidoPage({ params, searchParams }: PageProps) {
         precio_extra_personalizacion,
         productos (id, nombre, slug, mto_campos, mto_tiempo_fabricacion_dias),
         producto_variantes (id, nombre)
-      )
+      ),
+      donaciones (monto, estado)
     `
     )
     .eq("id", pedidoId)
@@ -109,6 +120,15 @@ export default async function PedidoPage({ params, searchParams }: PageProps) {
     metodo_pago: pedido.metodo_pago,
     notas: pedido.notas,
     created_at: pedido.created_at,
+    donacion: (() => {
+      // PostgREST devuelve un objeto (no array) por el UNIQUE en donaciones.pedido_id
+      const dRaw = Array.isArray(pedido.donaciones)
+        ? pedido.donaciones[0] ?? null
+        : pedido.donaciones ?? null;
+      return dRaw
+        ? { monto: Number(dRaw.monto), estado: dRaw.estado }
+        : null;
+    })(),
     items: pedido.pedido_items.map((item) => {
       const campos = item.productos?.mto_campos ?? [];
       const personalizacion = item.personalizacion ?? {};

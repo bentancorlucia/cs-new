@@ -22,7 +22,8 @@ export async function GET() {
         es_encargue, personalizacion, precio_extra_personalizacion,
         productos(nombre, slug, mto_campos, mto_tiempo_fabricacion_dias),
         producto_variantes(nombre)
-      )
+      ),
+      donaciones(monto, estado)
     `
     )
     .eq("perfil_id", user.id)
@@ -32,5 +33,24 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data ?? []);
+  const pedidos = (data ?? []).map((p: any) => {
+    // PostgREST devuelve un objeto (no array) por el UNIQUE en donaciones.pedido_id
+    const dRaw = Array.isArray(p.donaciones)
+      ? p.donaciones[0] ?? null
+      : p.donaciones ?? null;
+    const donacion = dRaw
+      ? {
+          monto: Number(dRaw.monto),
+          estado: dRaw.estado as
+            | "pendiente_pago"
+            | "cobrada"
+            | "transferida"
+            | "cancelada",
+        }
+      : null;
+    const { donaciones, ...rest } = p;
+    return { ...rest, donacion };
+  });
+
+  return NextResponse.json(pedidos);
 }

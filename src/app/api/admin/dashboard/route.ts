@@ -26,24 +26,24 @@ export async function GET() {
       pedidosRecientesRes,
       topProductosRes,
     ] = await Promise.all([
-      // Ventas hoy (pagados/encargado/preparando/listo/retirado)
+      // Ventas hoy (pagados/encargado/preparando/listo/retirado) — sin donaciones
       supabase
         .from("pedidos")
-        .select("total")
+        .select("total, donaciones(monto, estado)")
         .gte("created_at", todayStart)
         .in("estado", ["pagado", "encargado", "preparando", "listo_retiro", "retirado"]),
 
-      // Ventas últimos 7 días
+      // Ventas últimos 7 días — sin donaciones
       supabase
         .from("pedidos")
-        .select("total")
+        .select("total, donaciones(monto, estado)")
         .gte("created_at", weekStart)
         .in("estado", ["pagado", "encargado", "preparando", "listo_retiro", "retirado"]),
 
-      // Ventas del mes
+      // Ventas del mes — sin donaciones
       supabase
         .from("pedidos")
-        .select("total")
+        .select("total, donaciones(monto, estado)")
         .gte("created_at", monthStart)
         .in("estado", ["pagado", "encargado", "preparando", "listo_retiro", "retirado"]),
 
@@ -97,13 +97,20 @@ export async function GET() {
       .sort((a, b) => a.stock_actual - b.stock_actual)
       .slice(0, 8);
 
-    // Aggregate ventas
-    const sumTotal = (rows: { total: number }[] | null) =>
-      rows?.reduce((s, r) => s + (r.total || 0), 0) || 0;
+    // Aggregate ventas — restar la donación (objeto u array por PostgREST)
+    const sumVentas = (rows: any[] | null) =>
+      rows?.reduce((s, r) => {
+        const d = Array.isArray(r.donaciones)
+          ? r.donaciones[0] ?? null
+          : r.donaciones ?? null;
+        const donacionActiva =
+          d && d.estado !== "cancelada" ? Number(d.monto) || 0 : 0;
+        return s + ((r.total || 0) - donacionActiva);
+      }, 0) || 0;
 
-    const ventasHoy = sumTotal(ventasHoyRes.data);
-    const ventasSemana = sumTotal(ventasSemanaRes.data);
-    const ventasMes = sumTotal(ventasMesRes.data);
+    const ventasHoy = sumVentas(ventasHoyRes.data);
+    const ventasSemana = sumVentas(ventasSemanaRes.data);
+    const ventasMes = sumVentas(ventasMesRes.data);
 
     // Aggregate top productos
     const productoMap = new Map<number, { nombre: string; cantidad: number; total: number; stock: number }>();

@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await supabase
       .from("pedidos")
-      .select("total, created_at, tipo")
+      .select("total, created_at, tipo, donaciones(monto, estado)")
       .gte("created_at", startISO)
       .in("estado", ["pagado", "encargado", "preparando", "listo_retiro", "retirado"])
       .order("created_at", { ascending: true });
@@ -55,15 +55,23 @@ export async function GET(req: NextRequest) {
       if (!buckets[key]) buckets[key] = { online: 0, pos: 0, total: 0 };
     }
 
-    data?.forEach((p: { total: number; created_at: string | null; tipo: string }) => {
+    data?.forEach((p: any) => {
       if (!p.created_at) return;
       const dayKey = uruguayDateKey(p.created_at);
       const key = bucketKey(dayKey, config.bucket);
-      if (buckets[key]) {
-        buckets[key].total += p.total || 0;
-        if (p.tipo === "online") buckets[key].online += p.total || 0;
-        else buckets[key].pos += p.total || 0;
-      }
+      if (!buckets[key]) return;
+
+      // Restar donación (objeto u array por PostgREST)
+      const d = Array.isArray(p.donaciones)
+        ? p.donaciones[0] ?? null
+        : p.donaciones ?? null;
+      const donacionActiva =
+        d && d.estado !== "cancelada" ? Number(d.monto) || 0 : 0;
+      const venta = (p.total || 0) - donacionActiva;
+
+      buckets[key].total += venta;
+      if (p.tipo === "online") buckets[key].online += venta;
+      else buckets[key].pos += venta;
     });
 
     const chartData = Object.entries(buckets)

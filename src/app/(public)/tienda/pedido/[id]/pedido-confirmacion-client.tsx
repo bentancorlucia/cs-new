@@ -45,6 +45,10 @@ interface Pedido {
   notas: string | null;
   created_at: string;
   items: PedidoItem[];
+  donacion: {
+    monto: number;
+    estado: "pendiente_pago" | "cobrada" | "transferida" | "cancelada";
+  } | null;
 }
 
 interface Props {
@@ -388,6 +392,12 @@ export function PedidoConfirmacionClient({ pedido, paymentStatus }: Props) {
                 <span>-${pedido.descuento.toLocaleString("es-UY")}</span>
               </div>
             )}
+            {pedido.donacion && pedido.donacion.estado !== "cancelada" && (
+              <div className="flex justify-between text-pink-700">
+                <span>Donación · Olla del Hogar de Cristo</span>
+                <span>+${pedido.donacion.monto.toLocaleString("es-UY")}</span>
+              </div>
+            )}
           </div>
 
           <Separator className="my-3" />
@@ -396,6 +406,13 @@ export function PedidoConfirmacionClient({ pedido, paymentStatus }: Props) {
             <span>Total</span>
             <span>${pedido.total.toLocaleString("es-UY")}</span>
           </div>
+
+          {pedido.donacion && pedido.donacion.estado !== "cancelada" && (
+            <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+              ¡Gracias! ${pedido.donacion.monto.toLocaleString("es-UY")} de
+              este total se transfieren a la Olla del Hogar de Cristo.
+            </p>
+          )}
         </motion.div>
 
         {/* Retiro info */}

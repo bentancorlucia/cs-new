@@ -51,6 +51,10 @@ export async function GET(
       return NextResponse.json({ error: "Pedido no encontrado" }, { status: 404 });
     }
 
+    // Normalizar donaciones a array (PostgREST devuelve objeto único por UNIQUE en pedido_id)
+    const dRaw = (data as any).donaciones;
+    (data as any).donaciones = dRaw == null ? [] : Array.isArray(dRaw) ? dRaw : [dRaw];
+
     const { data: comprobantesData } = await supabase
       .from("comprobantes")
       .select(
