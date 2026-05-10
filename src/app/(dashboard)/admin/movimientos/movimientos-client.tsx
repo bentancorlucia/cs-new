@@ -96,6 +96,7 @@ interface Movimiento {
   referencia: string | null;
   notas: string | null;
   created_at: string;
+  donacion_monto: number | null;
   cuentas_financieras: { id: number; nombre: string; tipo: string; moneda: string; color: string } | null;
   categorias_financieras: { id: number; nombre: string; slug: string; color: string; icono: string } | null;
 }
@@ -638,6 +639,12 @@ export default function MovimientosTiendaClient() {
                           <span className="ml-1 text-xs text-muted-foreground font-body">
                             {mov.moneda}
                           </span>
+                        )}
+                        {mov.donacion_monto != null && mov.donacion_monto > 0 && (
+                          <div className="text-xs text-muted-foreground font-body mt-0.5">
+                            +${formatMonto(mov.donacion_monto)} don. → $
+                            {formatMonto(mov.monto + mov.donacion_monto)}
+                          </div>
                         )}
                       </TableCell>
                       <TableCell className="py-3 text-right">

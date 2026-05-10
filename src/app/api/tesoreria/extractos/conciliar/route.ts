@@ -18,6 +18,8 @@ type Candidato = {
   origen_tipo: string | null;
   origen_id: number | null;
   categoria_nombre: string | null;
+  donacion_monto: number | null;
+  monto_match: number;
 };
 
 type LineaAnalizada = {
@@ -145,6 +147,28 @@ export async function POST(request: NextRequest) {
     candidatosTodos = (candData ?? []) as never;
   }
 
+  // Enriquecer con donaciones cobradas/transferidas asociadas a pedidos.
+  // El extracto bancario refleja el monto bruto (movimiento + donación), por lo
+  // que aceptamos match contra el bruto cuando exista donación.
+  const pedidoIdsConCandidato = Array.from(
+    new Set(
+      candidatosTodos
+        .filter((c) => c.origen_tipo === "pedido" && c.origen_id != null)
+        .map((c) => c.origen_id as number)
+    )
+  );
+  const donacionPorPedido = new Map<number, number>();
+  if (pedidoIdsConCandidato.length > 0) {
+    const { data: donaData } = await supabase
+      .from("donaciones")
+      .select("pedido_id, monto, estado")
+      .in("pedido_id", pedidoIdsConCandidato)
+      .in("estado", ["cobrada", "transferida"]);
+    for (const d of (donaData ?? []) as Array<{ pedido_id: number; monto: number | string }>) {
+      donacionPorPedido.set(d.pedido_id, Number(d.monto));
+    }
+  }
+
   // Detectar líneas del extracto que comparten fecha+monto+tipo con otras del MISMO extracto
   const claveCount = new Map<string, number>();
   for (const m of parsed.movimientos) {
@@ -176,21 +200,37 @@ export async function POST(request: NextRequest) {
     const candidatos: Candidato[] = candidatosTodos
       .filter((c) => {
         if (c.tipo !== m.tipo) return false;
-        if (Number(c.monto) !== m.monto) return false;
         if (diffDias(c.fecha, m.fecha) > VENTANA_DIAS) return false;
-        return true;
+        const montoNeto = Number(c.monto);
+        const donacion =
+          c.origen_tipo === "pedido" && c.origen_id != null
+            ? (donacionPorPedido.get(c.origen_id) ?? 0)
+            : 0;
+        const montoBruto = montoNeto + donacion;
+        return montoNeto === m.monto || (donacion > 0 && montoBruto === m.monto);
       })
-      .map((c) => ({
-        id: c.id,
-        fecha: c.fecha,
-        descripcion: c.descripcion,
-        monto: Number(c.monto),
-        tipo: c.tipo,
-        referencia: c.referencia,
-        origen_tipo: c.origen_tipo,
-        origen_id: c.origen_id,
-        categoria_nombre: c.categorias_financieras?.nombre ?? null,
-      }));
+      .map((c) => {
+        const montoNeto = Number(c.monto);
+        const donacion =
+          c.origen_tipo === "pedido" && c.origen_id != null
+            ? (donacionPorPedido.get(c.origen_id) ?? null)
+            : null;
+        const montoBruto = montoNeto + (donacion ?? 0);
+        const matchPorBruto = donacion != null && donacion > 0 && montoBruto === m.monto;
+        return {
+          id: c.id,
+          fecha: c.fecha,
+          descripcion: c.descripcion,
+          monto: montoNeto,
+          tipo: c.tipo,
+          referencia: c.referencia,
+          origen_tipo: c.origen_tipo,
+          origen_id: c.origen_id,
+          categoria_nombre: c.categorias_financieras?.nombre ?? null,
+          donacion_monto: donacion,
+          monto_match: matchPorBruto ? montoBruto : montoNeto,
+        };
+      });
 
     // Si la línea ITAU tiene referencia y un candidato la comparte → match único forzado
     if (m.referencia && candidatos.length > 1) {

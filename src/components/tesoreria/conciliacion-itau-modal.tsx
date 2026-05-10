@@ -36,6 +36,8 @@ type Candidato = {
   origen_tipo: string | null;
   origen_id: number | null;
   categoria_nombre: string | null;
+  donacion_monto: number | null;
+  monto_match: number;
 };
 
 type Linea = {
@@ -596,6 +598,15 @@ function FilaLinea({
                       <span className="font-medium text-foreground">{c.descripcion}</span>
                       <span className="tabular-nums whitespace-nowrap">{fmtFecha(c.fecha)}</span>
                     </div>
+                    {c.donacion_monto != null && c.donacion_monto > 0 && (
+                      <div className="text-[11px] mt-0.5 text-emerald-700">
+                        {formatearMoneda(c.monto, moneda)} +{" "}
+                        {formatearMoneda(c.donacion_monto, moneda)} don. ={" "}
+                        <span className="font-medium">
+                          {formatearMoneda(c.monto + c.donacion_monto, moneda)}
+                        </span>
+                      </div>
+                    )}
                     {(c.categoria_nombre || c.origen_tipo) && (
                       <div className="text-[11px] mt-0.5">
                         {c.categoria_nombre && <span>{c.categoria_nombre}</span>}

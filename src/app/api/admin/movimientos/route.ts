@@ -72,6 +72,39 @@ export async function GET(request: NextRequest) {
     const { data, error, count } = await query;
     if (error) throw error;
 
+    // Enriquecer con monto de donación asociada al pedido (cobrada/transferida).
+    // El extracto bancario refleja el bruto (monto + donación), por eso lo mostramos
+    // junto al monto neto en la grilla.
+    const pedidoIds = Array.from(
+      new Set(
+        ((data ?? []) as any[])
+          .filter((m) => m.origen_tipo === "pedido" && m.origen_id != null)
+          .map((m) => m.origen_id as number)
+      )
+    );
+    let movimientosConDonacion = (data ?? []) as any[];
+    if (pedidoIds.length > 0) {
+      const { data: donaData } = await supabase
+        .from("donaciones")
+        .select("pedido_id, monto, estado")
+        .in("pedido_id", pedidoIds)
+        .in("estado", ["cobrada", "transferida"]);
+      const donacionPorPedido = new Map<number, number>();
+      for (const d of (donaData ?? []) as Array<{
+        pedido_id: number;
+        monto: number | string;
+      }>) {
+        donacionPorPedido.set(d.pedido_id, Number(d.monto));
+      }
+      movimientosConDonacion = movimientosConDonacion.map((m) => ({
+        ...m,
+        donacion_monto:
+          m.origen_tipo === "pedido" && m.origen_id != null
+            ? (donacionPorPedido.get(m.origen_id) ?? null)
+            : null,
+      }));
+    }
+
     // Totals for filtered period
     let totalsQuery = supabase
       .from("movimientos_financieros")
@@ -121,7 +154,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      movimientos: data,
+      movimientos: movimientosConDonacion,
       cuentas: cuentas.map((c: any) => ({
         id: c.id,
         nombre: c.nombre,
