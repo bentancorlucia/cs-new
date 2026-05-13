@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Tag, X, Loader2, Check, AlertCircle } from "lucide-react";
 import { useCart, type CartPromocode } from "@/hooks/use-cart";
@@ -8,16 +10,19 @@ import { springSmooth } from "@/lib/motion";
 
 export function PromocodeInput() {
   const { items, promocode, setPromocode } = useCart();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [codigo, setCodigo] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsAuth, setNeedsAuth] = useState(false);
 
   async function aplicar() {
     const trimmed = codigo.trim().toUpperCase();
     if (!trimmed) return;
     setLoading(true);
     setError(null);
+    setNeedsAuth(false);
     try {
       const res = await fetch("/api/promocodes/validar", {
         method: "POST",
@@ -35,7 +40,12 @@ export function PromocodeInput() {
 
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "No se pudo aplicar el código");
+        if (res.status === 401) {
+          setNeedsAuth(true);
+          setError(null);
+        } else {
+          setError(data.error || "No se pudo aplicar el código");
+        }
         return;
       }
       const p = data.promocode as CartPromocode;
@@ -115,6 +125,7 @@ export function PromocodeInput() {
                   onChange={(e) => {
                     setCodigo(e.target.value.toUpperCase());
                     setError(null);
+                    setNeedsAuth(false);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -157,8 +168,28 @@ export function PromocodeInput() {
               </motion.button>
             </div>
             <AnimatePresence>
-              {error && (
+              {needsAuth ? (
                 <motion.div
+                  key="auth"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mt-1.5 flex items-center gap-1.5 text-[11px] text-bordo-800"
+                >
+                  <AlertCircle className="size-3 shrink-0" />
+                  <span>
+                    <Link
+                      href={`/login?redirect=${encodeURIComponent(pathname || "/tienda/carrito")}`}
+                      className="font-semibold underline underline-offset-2 hover:text-bordo-950"
+                    >
+                      Iniciá sesión
+                    </Link>{" "}
+                    para usar códigos de descuento
+                  </span>
+                </motion.div>
+              ) : error ? (
+                <motion.div
+                  key="error"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
@@ -167,7 +198,7 @@ export function PromocodeInput() {
                   <AlertCircle className="size-3" />
                   {error}
                 </motion.div>
-              )}
+              ) : null}
             </AnimatePresence>
           </motion.div>
         )}
