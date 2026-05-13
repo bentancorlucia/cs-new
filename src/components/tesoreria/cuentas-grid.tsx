@@ -22,6 +22,7 @@ type Cuenta = {
   saldo_inicial?: number | string | null;
   color: string | null;
   modulo: string | null;
+  donaciones_pendientes?: number;
 };
 
 const ICONS: Record<Cuenta["tipo"], React.ComponentType<{ className?: string }>> = {
@@ -167,6 +168,15 @@ export function CuentasGrid({
                   <div className="min-h-[1rem] text-xs text-muted-foreground tabular-nums">
                     {equivalente !== null ? `≈ ${formatearMoneda(equivalente, vista)}` : ""}
                   </div>
+                  {cuenta.donaciones_pendientes && cuenta.donaciones_pendientes > 0 ? (
+                    <div className="mt-1 text-xs text-muted-foreground tabular-nums">
+                      con donaciones:{" "}
+                      {formatearMoneda(saldo + cuenta.donaciones_pendientes, cuenta.moneda)}{" "}
+                      <span className="text-bordo-700">
+                        (+{formatearMoneda(cuenta.donaciones_pendientes, cuenta.moneda)})
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
               </Link>
             </motion.div>

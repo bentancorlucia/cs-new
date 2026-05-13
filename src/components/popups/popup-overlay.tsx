@@ -9,10 +9,6 @@ import type { PopupRow, PopupButton } from "@/lib/popups/types";
 
 const SHOW_DELAY_MS = 400;
 
-function storageKey(id: string) {
-  return `cs-popup-dismissed:${id}`;
-}
-
 function isInternal(url: string) {
   return url.startsWith("/");
 }
@@ -62,11 +58,6 @@ export function PopupOverlay({ popup }: { popup: PopupRow }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    try {
-      if (sessionStorage.getItem(storageKey(popup.id))) return;
-    } catch {
-      /* ignore */
-    }
     const t = setTimeout(() => setOpen(true), SHOW_DELAY_MS);
     return () => clearTimeout(t);
   }, [popup.id]);
@@ -87,11 +78,6 @@ export function PopupOverlay({ popup }: { popup: PopupRow }) {
   }, [open]);
 
   function handleClose() {
-    try {
-      sessionStorage.setItem(storageKey(popup.id), "1");
-    } catch {
-      /* ignore */
-    }
     setOpen(false);
   }
 

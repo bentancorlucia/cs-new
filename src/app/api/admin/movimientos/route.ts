@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireRole, getCurrentUser } from "@/lib/supabase/roles";
 import { getCuentasTienda, getCuentasTiendaIds } from "@/lib/tienda/cuentas";
+import { getDonacionesPendientesPorCuenta } from "@/lib/tesoreria/donaciones-pendientes";
 import { z } from "zod";
 
 const TIENDA_ROLES = ["super_admin", "tienda"];
@@ -153,6 +154,11 @@ export async function GET(request: NextRequest) {
       categorias = [...categorias, ...(catsHijas || [])];
     }
 
+    const donacionesPendientesPorCuenta = await getDonacionesPendientesPorCuenta(
+      supabase,
+      cuentaIds
+    );
+
     return NextResponse.json({
       movimientos: movimientosConDonacion,
       cuentas: cuentas.map((c: any) => ({
@@ -162,6 +168,7 @@ export async function GET(request: NextRequest) {
         moneda: c.moneda,
         color: c.color,
         saldo_actual: c.saldo_actual,
+        donaciones_pendientes: donacionesPendientesPorCuenta.get(c.id) ?? 0,
       })),
       categorias: categorias || [],
       totals: { ...totals, neto: totals.ingresos - totals.egresos },

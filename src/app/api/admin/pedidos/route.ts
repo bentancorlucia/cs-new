@@ -31,7 +31,12 @@ export async function GET(request: NextRequest) {
       )
       .order("created_at", { ascending: false });
 
-    if (estado) query = query.eq("estado", estado as "pendiente" | "pendiente_verificacion" | "pagado" | "encargado" | "preparando" | "listo_retiro" | "retirado" | "cancelado");
+    if (estado) {
+      query = query.eq("estado", estado as "pendiente" | "pendiente_verificacion" | "pagado" | "encargado" | "preparando" | "listo_retiro" | "retirado" | "cancelado");
+    } else {
+      // En "Todos" no mostrar cancelados
+      query = query.neq("estado", "cancelado");
+    }
     if (tipo) query = query.eq("tipo", tipo as "online" | "pos");
     if (search) {
       query = query.or(

@@ -2,13 +2,14 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { createServerClient } from "@/lib/supabase/server";
 import { getCotizacionVigente } from "@/lib/tesoreria/bcu";
+import { getDonacionesPendientesPorCuenta } from "@/lib/tesoreria/donaciones-pendientes";
 import { CuentasGrid } from "@/components/tesoreria/cuentas-grid";
 
 export const dynamic = "force-dynamic";
 
 export default async function CuentasPage() {
   const supabase = await createServerClient();
-  const [{ data: cuentas }, cotizacion] = await Promise.all([
+  const [{ data: cuentas }, cotizacion, donacionesPendientes] = await Promise.all([
     supabase
       .from("cuentas_financieras")
       .select("id, nombre, tipo, moneda, banco, numero_cuenta, titular, descripcion, saldo_actual, saldo_inicial, color, modulo")
@@ -16,7 +17,13 @@ export default async function CuentasPage() {
       .order("tipo", { ascending: true })
       .order("nombre", { ascending: true }),
     getCotizacionVigente(),
+    getDonacionesPendientesPorCuenta(supabase),
   ]);
+
+  const cuentasConDonaciones = ((cuentas ?? []) as Array<{ id: number }>).map((c) => ({
+    ...c,
+    donaciones_pendientes: donacionesPendientes.get(c.id) ?? 0,
+  }));
 
   return (
     <div className="space-y-5">
@@ -37,7 +44,7 @@ export default async function CuentasPage() {
         </Link>
       </div>
 
-      <CuentasGrid cuentas={(cuentas ?? []) as never} cotizacion={cotizacion} />
+      <CuentasGrid cuentas={cuentasConDonaciones as never} cotizacion={cotizacion} />
     </div>
   );
 }

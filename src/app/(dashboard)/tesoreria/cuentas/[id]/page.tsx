@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft, Upload } from "lucide-react";
 import { createServerClient } from "@/lib/supabase/server";
 import { formatearMoneda, type Moneda } from "@/lib/tesoreria/conversion";
+import { getDonacionesPendientesPorCuenta } from "@/lib/tesoreria/donaciones-pendientes";
 import { CuentaDetalleClient } from "@/components/tesoreria/cuenta-detalle-client";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +46,8 @@ export default async function CuentaDetallePage({
   const moneda = cuenta.moneda as Moneda;
   const esBancaria = cuenta.tipo === "bancaria";
   const sinClasificar = ((movimientos ?? []) as Array<{ clasificado: boolean }>).filter((m) => !m.clasificado).length;
+  const donacionesPorCuenta = await getDonacionesPendientesPorCuenta(supabase, [cuenta.id]);
+  const donacionesPendientes = donacionesPorCuenta.get(cuenta.id) ?? 0;
 
   return (
     <div className="space-y-5">
@@ -75,6 +78,15 @@ export default async function CuentaDetallePage({
           <div className="font-heading text-3xl text-foreground tabular-nums">
             {formatearMoneda(saldo, moneda)}
           </div>
+          {donacionesPendientes > 0 && (
+            <div className="mt-1 text-xs text-muted-foreground tabular-nums">
+              con donaciones:{" "}
+              {formatearMoneda(saldo + donacionesPendientes, moneda)}{" "}
+              <span className="text-bordo-700">
+                (+{formatearMoneda(donacionesPendientes, moneda)})
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

@@ -69,6 +69,7 @@ interface CuentaTienda {
   moneda: "UYU" | "USD";
   color: string;
   saldo_actual: number;
+  donaciones_pendientes: number;
   banco: string | null;
   modulo: string | null;
 }
@@ -412,6 +413,15 @@ export default function MovimientosTiendaClient() {
                   <p className="font-display text-xl tracking-tight">
                     ${formatMonto(cuenta.saldo_actual)}
                   </p>
+                  {cuenta.donaciones_pendientes > 0 && (
+                    <p className="font-body text-xs text-muted-foreground mt-0.5">
+                      con donaciones: $
+                      {formatMonto(cuenta.saldo_actual + cuenta.donaciones_pendientes)}{" "}
+                      <span className="text-bordo-700">
+                        (+${formatMonto(cuenta.donaciones_pendientes)})
+                      </span>
+                    </p>
+                  )}
                 </div>
                 {cuentaFilter === String(cuenta.id) && (
                   <Badge variant="secondary" className="bg-bordo-50 text-bordo-700 border-bordo-200 shrink-0">
