@@ -32,12 +32,15 @@ export async function GET(request: NextRequest) {
     const desdeConversionIso = `${desdeConversion}T00:00:00`;
     const rangoIncluyeDonaciones = rango.hasta >= FECHA_INICIO_DONACIONES;
 
+    // Donaciones solo se cobran en checkout online, así que para todos los
+    // cálculos (numerador y denominador) filtramos pedidos.tipo = 'online'.
     const pedidosQuery = rangoIncluyeDonaciones
       ? db
           .from("pedidos")
           .select("id", { count: "exact", head: true })
           .gte("created_at", desdeConversionIso)
           .lte("created_at", hastaIso)
+          .eq("tipo", "online")
           .in("estado", ESTADOS_VENTA_EFECTIVA as unknown as string[])
       : Promise.resolve({ count: 0, error: null });
 
@@ -45,10 +48,11 @@ export async function GET(request: NextRequest) {
       db
         .from("donaciones")
         .select(
-          "id, pedido_id, monto, estado, created_at, pedidos!inner(numero_pedido)"
+          "id, pedido_id, monto, estado, created_at, pedidos!inner(numero_pedido, tipo)"
         )
         .gte("created_at", desdeIso)
-        .lte("created_at", hastaIso),
+        .lte("created_at", hastaIso)
+        .eq("pedidos.tipo", "online"),
       pedidosQuery,
       db
         .from("donaciones_config")
@@ -66,7 +70,7 @@ export async function GET(request: NextRequest) {
       monto: number;
       estado: string;
       created_at: string;
-      pedidos: { numero_pedido: string | null } | null;
+      pedidos: { numero_pedido: string | null; tipo: string } | null;
     }>;
 
     const totalDonado = donaciones.reduce((acc, d) => acc + Number(d.monto), 0);
