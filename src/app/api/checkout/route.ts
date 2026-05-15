@@ -216,7 +216,7 @@ export async function POST(request: NextRequest) {
       if (item.varianteId) {
         const { data: vari } = await db
           .from("producto_variantes")
-          .select("id, nombre, precio_override, stock_actual")
+          .select("id, nombre, precio_override")
           .eq("id", item.varianteId)
           .eq("producto_id", item.productoId)
           .eq("activo", true)
@@ -229,27 +229,13 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // Para encargue, no validar stock de variante.
-        if (!esEncargue && vari.stock_actual < item.cantidad) {
-          return NextResponse.json(
-            {
-              error: `Stock insuficiente para ${prod.nombre} (${vari.nombre}). Disponible: ${vari.stock_actual}`,
-            },
-            { status: 400 }
-          );
-        }
-
+        // La validación real de stock (vs reservas concurrentes) se hace de
+        // forma atómica en la RPC `reservar_stock_pedido` más abajo.
         precioBase = vari.precio_override ?? prod.precio;
         nombreItem = `${prod.nombre} - ${vari.nombre}`;
         varianteId = vari.id;
-      } else if (!esEncargue && prod.stock_actual < item.cantidad) {
-        return NextResponse.json(
-          {
-            error: `Stock insuficiente para ${prod.nombre}. Disponible: ${prod.stock_actual}`,
-          },
-          { status: 400 }
-        );
       }
+      // Stock del producto (sin variante) también se valida en la RPC atómica.
 
       // Validar personalización
       let precioExtra = 0;
@@ -445,11 +431,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 8. Create order items
-    const pedidoItems = itemsConPrecio.map((item) => ({
-      pedido_id: pedido.id,
+    // 8. Reservar stock e insertar pedido_items de forma atómica.
+    // La RPC toma FOR UPDATE sobre productos/variantes y descuenta reservas
+    // de otros pedidos en 'pendiente_verificacion' antes de insertar. Si
+    // algún ítem no tiene stock disponible devuelve {ok:false, faltantes:[...]}
+    // y no inserta nada.
+    const itemsPayload = itemsConPrecio.map((item) => ({
       producto_id: item.productoId,
-      variante_id: item.varianteId || null,
+      variante_id: item.varianteId ?? null,
       cantidad: item.cantidad,
       precio_unitario: item.precioUnitario,
       subtotal: item.subtotal,
@@ -458,16 +447,41 @@ export async function POST(request: NextRequest) {
       precio_extra_personalizacion: item.precioExtra,
     }));
 
-    const { error: itemsError } = await db
-      .from("pedido_items")
-      .insert(pedidoItems);
+    const { data: reservaResult, error: reservaError } = await db.rpc(
+      "reservar_stock_pedido",
+      { p_pedido_id: pedido.id, p_items: itemsPayload }
+    );
 
-    if (itemsError) {
-      console.error("Error al crear items del pedido:", itemsError);
+    const limpiarPedido = async () => {
+      // Borrar el pedido huérfano (FK ON DELETE CASCADE limpia donaciones).
       await db.from("pedidos").delete().eq("id", pedido.id);
+      // Devolver el uso del promocode si lo habíamos consumido.
+      if (promoAplicable && calc.aplicoPromocode) {
+        await db.rpc("decrementar_uso_promocode", { p_id: promoAplicable.id });
+      }
+    };
+
+    if (reservaError) {
+      console.error("Error en reservar_stock_pedido:", reservaError);
+      await limpiarPedido();
       return NextResponse.json(
-        { error: "Error al crear los items del pedido" },
+        { error: "Error al reservar stock del pedido" },
         { status: 500 }
+      );
+    }
+
+    if (reservaResult?.ok === false) {
+      await limpiarPedido();
+      const faltantes = Array.isArray(reservaResult.faltantes)
+        ? reservaResult.faltantes
+        : [];
+      const primero = faltantes[0];
+      const mensaje = primero
+        ? `Stock insuficiente para ${primero.nombre}. Disponible: ${primero.disponible}`
+        : "Stock insuficiente";
+      return NextResponse.json(
+        { error: mensaje, faltantes },
+        { status: 409 }
       );
     }
 
