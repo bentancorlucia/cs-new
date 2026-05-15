@@ -1497,6 +1497,7 @@ export type Database = {
       pedido_items: {
         Row: {
           cantidad: number
+          costo_unitario_venta: number | null
           created_at: string | null
           descuento_tipo: string | null
           descuento_unitario: number | null
@@ -1512,6 +1513,7 @@ export type Database = {
         }
         Insert: {
           cantidad: number
+          costo_unitario_venta?: number | null
           created_at?: string | null
           descuento_tipo?: string | null
           descuento_unitario?: number | null
@@ -1527,6 +1529,7 @@ export type Database = {
         }
         Update: {
           cantidad?: number
+          costo_unitario_venta?: number | null
           created_at?: string | null
           descuento_tipo?: string | null
           descuento_unitario?: number | null
@@ -1986,6 +1989,7 @@ export type Database = {
         Row: {
           activo: boolean | null
           atributos: Json | null
+          costo_promedio: number | null
           created_at: string | null
           id: number
           nombre: string
@@ -1997,6 +2001,7 @@ export type Database = {
         Insert: {
           activo?: boolean | null
           atributos?: Json | null
+          costo_promedio?: number | null
           created_at?: string | null
           id?: number
           nombre: string
@@ -2008,6 +2013,7 @@ export type Database = {
         Update: {
           activo?: boolean | null
           atributos?: Json | null
+          costo_promedio?: number | null
           created_at?: string | null
           id?: number
           nombre?: string
@@ -2030,6 +2036,7 @@ export type Database = {
         Row: {
           activo: boolean | null
           categoria_id: number | null
+          costo_promedio: number | null
           created_at: string | null
           descripcion: string | null
           descripcion_corta: string | null
@@ -2054,6 +2061,7 @@ export type Database = {
         Insert: {
           activo?: boolean | null
           categoria_id?: number | null
+          costo_promedio?: number | null
           created_at?: string | null
           descripcion?: string | null
           descripcion_corta?: string | null
@@ -2078,6 +2086,7 @@ export type Database = {
         Update: {
           activo?: boolean | null
           categoria_id?: number | null
+          costo_promedio?: number | null
           created_at?: string | null
           descripcion?: string | null
           descripcion_corta?: string | null

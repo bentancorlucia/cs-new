@@ -75,7 +75,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/admin/compras", label: "Compras", icon: ShoppingCart },
       { href: "/admin/movimientos", label: "Movimientos", icon: Receipt },
       { href: "/admin/donaciones", label: "Donaciones", icon: Heart },
-      
+      { href: "/admin/reportes", label: "Reportes", icon: FileSpreadsheet },
     ],
   },
   {
