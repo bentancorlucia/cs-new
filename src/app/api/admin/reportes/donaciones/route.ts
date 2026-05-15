@@ -12,6 +12,11 @@ export const dynamic = "force-dynamic";
 
 const TIENDA_ROLES = ["super_admin", "tienda"];
 
+// Fecha desde la cual existe el prompt de donación en checkout.
+// Pedidos previos a esta fecha no podían donar, así que no cuentan en el
+// denominador de la tasa de conversión.
+const FECHA_INICIO_DONACIONES = "2026-05-13";
+
 export async function GET(request: NextRequest) {
   try {
     await requireRole(TIENDA_ROLES);
@@ -21,6 +26,21 @@ export async function GET(request: NextRequest) {
     const rango = parseRango(searchParams);
     const { desdeIso, hastaIso } = rangoToTimestamps(rango);
 
+    // Denominador de conversión: solo cuentan pedidos desde que el prompt existe.
+    const desdeConversion =
+      rango.desde >= FECHA_INICIO_DONACIONES ? rango.desde : FECHA_INICIO_DONACIONES;
+    const desdeConversionIso = `${desdeConversion}T00:00:00`;
+    const rangoIncluyeDonaciones = rango.hasta >= FECHA_INICIO_DONACIONES;
+
+    const pedidosQuery = rangoIncluyeDonaciones
+      ? db
+          .from("pedidos")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", desdeConversionIso)
+          .lte("created_at", hastaIso)
+          .in("estado", ESTADOS_VENTA_EFECTIVA as unknown as string[])
+      : Promise.resolve({ count: 0, error: null });
+
     const [donRes, pedRes, configRes] = await Promise.all([
       db
         .from("donaciones")
@@ -29,12 +49,7 @@ export async function GET(request: NextRequest) {
         )
         .gte("created_at", desdeIso)
         .lte("created_at", hastaIso),
-      db
-        .from("pedidos")
-        .select("id", { count: "exact", head: true })
-        .gte("created_at", desdeIso)
-        .lte("created_at", hastaIso)
-        .in("estado", ESTADOS_VENTA_EFECTIVA as unknown as string[]),
+      pedidosQuery,
       db
         .from("donaciones_config")
         .select("activo")
@@ -43,7 +58,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     if (donRes.error) throw donRes.error;
-    if (pedRes.error) throw pedRes.error;
+    if ("error" in pedRes && pedRes.error) throw pedRes.error;
 
     const donaciones = (donRes.data || []) as Array<{
       id: number;
@@ -60,6 +75,7 @@ export async function GET(request: NextRequest) {
     const pedidosPagados = pedRes.count || 0;
     const tasaConversionPct =
       pedidosPagados > 0 ? (cantidad / pedidosPagados) * 100 : null;
+    const conversionRecortada = rango.desde < FECHA_INICIO_DONACIONES;
 
     // Desglose por estado
     const estadoMap = new Map<string, { cantidad: number; total: number }>();
@@ -110,6 +126,8 @@ export async function GET(request: NextRequest) {
       promedio,
       pedidosPagados,
       tasaConversionPct,
+      conversionDesde: rangoIncluyeDonaciones ? desdeConversion : null,
+      conversionRecortada,
       porEstado,
       serie,
       detalle,

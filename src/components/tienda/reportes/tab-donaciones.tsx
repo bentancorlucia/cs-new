@@ -74,7 +74,15 @@ export function TabDonaciones({ data }: Props) {
               ? "—"
               : `${data.tasaConversionPct.toFixed(1)}%`
           }
-          hint={`${data.cantidad} / ${data.pedidosPagados} pedidos pagados`}
+          hint={
+            data.conversionDesde
+              ? `${data.cantidad} / ${data.pedidosPagados} pedidos${
+                  data.conversionRecortada
+                    ? ` (desde ${formatearFechaCorta(data.conversionDesde)})`
+                    : ""
+                }`
+              : "Sin pedidos elegibles en el rango"
+          }
         />
       </div>
 
@@ -186,6 +194,12 @@ export function TabDonaciones({ data }: Props) {
       </ChartCard>
     </div>
   );
+}
+
+function formatearFechaCorta(iso: string): string {
+  if (!iso) return "—";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y.slice(2)}`;
 }
 
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {

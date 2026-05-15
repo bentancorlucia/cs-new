@@ -96,6 +96,10 @@ export interface ReporteDonaciones {
   promedio: number;
   pedidosPagados: number;
   tasaConversionPct: number | null;
+  /** Fecha desde la que se cuentan pedidos en el denominador (null si el rango no incluye donaciones). */
+  conversionDesde: string | null;
+  /** True si el rango pedido empezaba antes de que existiera el feature. */
+  conversionRecortada: boolean;
   porEstado: ConteoPorClave[];
   serie: { fecha: string; monto: number; cantidad: number }[];
   detalle: DonacionRow[];
