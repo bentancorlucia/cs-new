@@ -31,6 +31,8 @@ export interface SerieDiaria {
   ventas: number;
   cogs: number;
   margen: number;
+  cantidad: number; // cantidad de pedidos en el bucket
+  promocodesActivos: string[]; // códigos de promocode vigentes en el bucket
 }
 
 export interface ConteoPorClave {

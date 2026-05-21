@@ -8,8 +8,11 @@ import {
   variacionPct,
   debeAgruparPorSemana,
   claveBucket,
+  claveDeYmd,
   generarClaves,
+  iterarDias,
 } from "@/lib/reportes/rango";
+import { uruguayDateKey } from "@/lib/timezone";
 import {
   ESTADOS_VENTA_EFECTIVA,
   type KpiComparado,
@@ -64,9 +67,10 @@ export async function GET(request: NextRequest) {
     const rango = parseRango(searchParams);
     const previo = rangoAnterior(rango);
 
-    const [actual, anterior] = await Promise.all([
+    const [actual, anterior, promocodesVigencia] = await Promise.all([
       fetchPeriodo(db, rango),
       fetchPeriodo(db, previo),
+      fetchPromocodesVigencia(db, rango),
     ]);
 
     // KPIs (solo venta efectiva para facturación, COGS, margen)
@@ -89,7 +93,8 @@ export async function GET(request: NextRequest) {
       actual.pedidosEfectivos,
       actual.items,
       porSemana,
-      rango
+      rango,
+      promocodesVigencia
     );
 
     // Mix por método de pago, canal y estado
@@ -233,7 +238,8 @@ function computeSerie(
   pedidos: PedidoRow[],
   items: ItemRow[],
   porSemana: boolean,
-  rango: { desde: string; hasta: string }
+  rango: { desde: string; hasta: string },
+  promocodes: PromocodeVigencia[]
 ): SerieDiaria[] {
   const cogsPorPedido = new Map<number, number>();
   items.forEach((i) => {
@@ -244,25 +250,73 @@ function computeSerie(
     );
   });
 
-  const acc = new Map<string, { ventas: number; cogs: number }>();
+  const acc = new Map<string, { ventas: number; cogs: number; cantidad: number }>();
   pedidos.forEach((p) => {
     const clave = claveBucket(p.created_at, porSemana);
     const v = Number(p.total || 0);
     const c = cogsPorPedido.get(p.id) || 0;
-    const prev = acc.get(clave) || { ventas: 0, cogs: 0 };
-    acc.set(clave, { ventas: prev.ventas + v, cogs: prev.cogs + c });
+    const prev = acc.get(clave) || { ventas: 0, cogs: 0, cantidad: 0 };
+    acc.set(clave, {
+      ventas: prev.ventas + v,
+      cogs: prev.cogs + c,
+      cantidad: prev.cantidad + 1,
+    });
   });
+
+  // Promocodes vigentes por bucket: recorrer día a día y unir códigos.
+  const promosPorClave = new Map<string, Set<string>>();
+  for (const dia of iterarDias(rango)) {
+    const clave = claveDeYmd(dia, porSemana);
+    let set = promosPorClave.get(clave);
+    if (!set) {
+      set = new Set<string>();
+      promosPorClave.set(clave, set);
+    }
+    for (const pc of promocodes) {
+      if (dia >= pc.desde && dia <= pc.hasta) set.add(pc.codigo);
+    }
+  }
 
   // Generar TODAS las claves del intervalo (incluso días/semanas sin ventas).
   return generarClaves(rango, porSemana).map((fecha) => {
-    const v = acc.get(fecha) || { ventas: 0, cogs: 0 };
+    const v = acc.get(fecha) || { ventas: 0, cogs: 0, cantidad: 0 };
     return {
       fecha,
       ventas: v.ventas,
       cogs: v.cogs,
       margen: v.ventas - v.cogs,
+      cantidad: v.cantidad,
+      promocodesActivos: Array.from(promosPorClave.get(fecha) || []).sort(),
     };
   });
+}
+
+type PromocodeVigencia = { codigo: string; desde: string; hasta: string };
+
+/**
+ * Promocodes cuya ventana de vigencia (fecha_inicio..fecha_fin) se solapa
+ * con el rango del reporte. Las fechas se devuelven como YYYY-MM-DD en hora UY.
+ */
+async function fetchPromocodesVigencia(
+  db: AdminDb,
+  rango: { desde: string; hasta: string }
+): Promise<PromocodeVigencia[]> {
+  const { desdeIso, hastaIso } = rangoToTimestamps(rango);
+  const { data, error } = await db
+    .from("promocodes")
+    .select("codigo, fecha_inicio, fecha_fin")
+    .lte("fecha_inicio", hastaIso)
+    .gte("fecha_fin", desdeIso);
+  if (error) throw error;
+  return ((data || []) as Array<{
+    codigo: string;
+    fecha_inicio: string;
+    fecha_fin: string;
+  }>).map((p) => ({
+    codigo: p.codigo,
+    desde: uruguayDateKey(p.fecha_inicio),
+    hasta: uruguayDateKey(p.fecha_fin),
+  }));
 }
 
 function agruparPor(

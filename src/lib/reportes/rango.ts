@@ -64,6 +64,23 @@ export function claveBucket(createdAt: string, porSemana: boolean): string {
   return porSemana ? semanaIsoDeYmd(ymd) : ymd;
 }
 
+/** Clave de agrupación de una fecha calendaria YYYY-MM-DD. */
+export function claveDeYmd(ymd: string, porSemana: boolean): string {
+  return porSemana ? semanaIsoDeYmd(ymd) : ymd;
+}
+
+/** Itera las fechas calendarias (YYYY-MM-DD) del rango, inclusive. */
+export function iterarDias(rango: RangoFechas): string[] {
+  const dias: string[] = [];
+  const cursor = new Date(rango.desde + "T00:00:00Z");
+  const fin = new Date(rango.hasta + "T00:00:00Z");
+  while (cursor.getTime() <= fin.getTime()) {
+    dias.push(ymdUTC(cursor));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dias;
+}
+
 /** Todas las claves del intervalo (día o semana ISO), ordenadas. */
 export function generarClaves(
   rango: RangoFechas,

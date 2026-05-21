@@ -36,8 +36,15 @@ export async function exportarReporteExcel(
     ]);
 
     addSheet(wb, "Serie temporal", [
-      ["Fecha", "Ventas", "COGS", "Margen"],
-      ...r.serie.map((s) => [s.fecha, s.ventas, s.cogs, s.margen]),
+      ["Fecha", "Ventas", "COGS", "Margen", "Pedidos", "Promocodes activos"],
+      ...r.serie.map((s) => [
+        s.fecha,
+        s.ventas,
+        s.cogs,
+        s.margen,
+        s.cantidad,
+        s.promocodesActivos.join(", "),
+      ]),
     ]);
 
     addSheet(wb, "Top productos", [

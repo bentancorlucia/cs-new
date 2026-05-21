@@ -3,14 +3,15 @@
 import { motion } from "framer-motion";
 import {
   Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Legend,
   Pie,
   PieChart,
+  ReferenceArea,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -59,6 +60,7 @@ interface Props {
 export function TabGeneral({ data }: Props) {
   const onlinePedidos = data.onlineVsPos.pedidosOnline;
   const posPedidos = data.onlineVsPos.pedidosPos;
+  const promocodeSpans = computePromocodeSpans(data.serie);
 
   return (
     <div className="space-y-5">
@@ -133,8 +135,14 @@ export function TabGeneral({ data }: Props) {
 
       {/* Evolución temporal */}
       <ChartCard title="Evolución de ventas vs COGS">
+        {promocodeSpans.length > 0 && (
+          <div className="flex items-center gap-2 mb-2 text-[11px] text-muted-foreground font-body">
+            <span className="inline-block h-3 w-5 rounded-sm bg-[#0d7377]/15 border border-[#0d7377]/40" />
+            Período con promocodes activos
+          </div>
+        )}
         <ResponsiveContainer width="100%" height={280}>
-          <AreaChart data={data.serie} margin={{ top: 5, right: 12, bottom: 0, left: 0 }}>
+          <ComposedChart data={data.serie} margin={{ top: 5, right: 12, bottom: 0, left: 0 }}>
             <defs>
               <linearGradient id="gVentas" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#730d32" stopOpacity={0.55} />
@@ -147,25 +155,90 @@ export function TabGeneral({ data }: Props) {
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis dataKey="fecha" tick={{ fontSize: 10 }} />
-            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => formatearMonedaCompacta(Number(v), "UYU")} />
+            <YAxis
+              yAxisId="money"
+              tick={{ fontSize: 10 }}
+              tickFormatter={(v) => formatearMonedaCompacta(Number(v), "UYU")}
+            />
+            <YAxis
+              yAxisId="cant"
+              orientation="right"
+              tick={{ fontSize: 10 }}
+              allowDecimals={false}
+            />
+            {promocodeSpans.map((s, i) => (
+              <ReferenceArea
+                key={i}
+                yAxisId="money"
+                x1={s.x1}
+                x2={s.x2}
+                fill="#0d7377"
+                fillOpacity={0.08}
+                stroke="#0d7377"
+                strokeOpacity={0.25}
+                strokeDasharray="4 3"
+              />
+            ))}
             <Tooltip
-              content={({ active, payload, label }) =>
-                active && payload?.length ? (
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null;
+                const row = payload[0]?.payload as
+                  | {
+                      cantidad?: number;
+                      promocodesActivos?: string[];
+                    }
+                  | undefined;
+                return (
                   <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
                     <p className="font-heading mb-1">{label}</p>
-                    {payload.map((p, i) => (
-                      <p key={i} style={{ color: p.color }}>
-                        {p.name}: {formatearMoneda(Number(p.value), "UYU")}
+                    {payload
+                      .filter((p) => p.dataKey === "ventas" || p.dataKey === "cogs")
+                      .map((p, i) => (
+                        <p key={i} style={{ color: p.color }}>
+                          {p.name}: {formatearMoneda(Number(p.value), "UYU")}
+                        </p>
+                      ))}
+                    <p className="text-foreground">
+                      Pedidos: {row?.cantidad ?? 0}
+                    </p>
+                    {row?.promocodesActivos && row.promocodesActivos.length > 0 && (
+                      <p className="text-[#0d7377] mt-1">
+                        Promocodes: {row.promocodesActivos.join(", ")}
                       </p>
-                    ))}
+                    )}
                   </div>
-                ) : null
-              }
+                );
+              }}
             />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Area type="monotone" dataKey="ventas" name="Ventas" stroke="#730d32" fill="url(#gVentas)" strokeWidth={2} />
-            <Area type="monotone" dataKey="cogs" name="COGS" stroke="#f7b643" fill="url(#gCogs)" strokeWidth={2} />
-          </AreaChart>
+            <Area
+              yAxisId="money"
+              type="monotone"
+              dataKey="ventas"
+              name="Ventas"
+              stroke="#730d32"
+              fill="url(#gVentas)"
+              strokeWidth={2}
+            />
+            <Area
+              yAxisId="money"
+              type="monotone"
+              dataKey="cogs"
+              name="COGS"
+              stroke="#f7b643"
+              fill="url(#gCogs)"
+              strokeWidth={2}
+            />
+            <Bar
+              yAxisId="cant"
+              dataKey="cantidad"
+              name="Cantidad de pedidos"
+              fill="#4a5d6c"
+              fillOpacity={0.35}
+              barSize={10}
+              radius={[3, 3, 0, 0]}
+            />
+          </ComposedChart>
         </ResponsiveContainer>
       </ChartCard>
 
@@ -323,4 +396,29 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
       {children}
     </motion.div>
   );
+}
+
+/** Runs contiguos de la serie donde hubo promocodes activos. */
+function computePromocodeSpans(
+  serie: ReporteTienda["serie"]
+): { x1: string; x2: string }[] {
+  const spans: { x1: string; x2: string }[] = [];
+  let inicio: string | null = null;
+  let anterior: string | null = null;
+
+  for (const punto of serie) {
+    const activo = punto.promocodesActivos.length > 0;
+    if (activo) {
+      if (inicio == null) inicio = punto.fecha;
+      anterior = punto.fecha;
+    } else if (inicio != null && anterior != null) {
+      spans.push({ x1: inicio, x2: anterior });
+      inicio = null;
+      anterior = null;
+    }
+  }
+  if (inicio != null && anterior != null) {
+    spans.push({ x1: inicio, x2: anterior });
+  }
+  return spans;
 }
