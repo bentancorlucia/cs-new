@@ -13,7 +13,6 @@ import {
   Pie,
   PieChart,
   ReferenceArea,
-  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -294,6 +293,50 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
   );
 }
 
+/**
+ * Shape custom para el ReferenceArea de promocodes: relleno + solo las
+ * líneas punteadas de los costados (sin borde arriba ni abajo). Recharts
+ * inyecta x/y/width/height calculados.
+ */
+function PromoSpanShape(props: {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+}) {
+  const { x = 0, y = 0, width = 0, height = 0 } = props;
+  return (
+    <g>
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        fill="#0d7377"
+        fillOpacity={0.08}
+      />
+      <line
+        x1={x}
+        y1={y}
+        x2={x}
+        y2={y + height}
+        stroke="#0d7377"
+        strokeOpacity={0.4}
+        strokeDasharray="4 3"
+      />
+      <line
+        x1={x + width}
+        y1={y}
+        x2={x + width}
+        y2={y + height}
+        stroke="#0d7377"
+        strokeOpacity={0.4}
+        strokeDasharray="4 3"
+      />
+    </g>
+  );
+}
+
 type VariableId = "ventas" | "cogs" | "cantidad";
 
 const VARIABLES: { id: VariableId; label: string; color: string }[] = [
@@ -405,29 +448,9 @@ function EvolucionChart({
               yAxisId={refAxis}
               x1={s.x1}
               x2={s.x2}
-              fill="#0d7377"
-              fillOpacity={0.08}
-              stroke="none"
+              shape={<PromoSpanShape />}
             />
           ))}
-          {promocodeSpans.flatMap((s, i) => [
-            <ReferenceLine
-              key={`l-${i}`}
-              yAxisId={refAxis}
-              x={s.x1}
-              stroke="#0d7377"
-              strokeOpacity={0.4}
-              strokeDasharray="4 3"
-            />,
-            <ReferenceLine
-              key={`r-${i}`}
-              yAxisId={refAxis}
-              x={s.x2}
-              stroke="#0d7377"
-              strokeOpacity={0.4}
-              strokeDasharray="4 3"
-            />,
-          ])}
           <Tooltip
             content={({ active, payload, label }) => {
               if (!active || !payload?.length) return null;
