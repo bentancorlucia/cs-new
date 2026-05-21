@@ -108,9 +108,11 @@ export async function GET(request: NextRequest) {
         cantidad: prev.cantidad + 1,
       });
     });
-    const serie = Array.from(serieMap.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([fecha, v]) => ({ fecha, monto: v.monto, cantidad: v.cantidad }));
+    // Rellenar todas las claves del intervalo (incluso días sin donaciones).
+    const serie = generarClaves(rango, porSemana).map((fecha) => {
+      const v = serieMap.get(fecha) || { monto: 0, cantidad: 0 };
+      return { fecha, monto: v.monto, cantidad: v.cantidad };
+    });
 
     const detalle = donaciones
       .map((d) => ({
@@ -162,4 +164,24 @@ function toClaveSemana(d: Date): string {
   const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
   const weekNum = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
   return `${date.getUTCFullYear()}-W${String(weekNum).padStart(2, "0")}`;
+}
+
+/** Lista ordenada de todas las claves (día o semana ISO) del rango. */
+function generarClaves(
+  rango: { desde: string; hasta: string },
+  porSemana: boolean
+): string[] {
+  const claves: string[] = [];
+  const vistas = new Set<string>();
+  const cursor = new Date(rango.desde + "T00:00:00");
+  const fin = new Date(rango.hasta + "T00:00:00");
+  while (cursor.getTime() <= fin.getTime()) {
+    const clave = porSemana ? toClaveSemana(cursor) : toYmd(cursor);
+    if (!vistas.has(clave)) {
+      vistas.add(clave);
+      claves.push(clave);
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return claves;
 }

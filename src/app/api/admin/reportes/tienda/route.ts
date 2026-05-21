@@ -83,7 +83,12 @@ export async function GET(request: NextRequest) {
 
     // Serie temporal
     const porSemana = debeAgruparPorSemana(rango);
-    const serie = computeSerie(actual.pedidosEfectivos, actual.items, porSemana);
+    const serie = computeSerie(
+      actual.pedidosEfectivos,
+      actual.items,
+      porSemana,
+      rango
+    );
 
     // Mix por método de pago, canal y estado
     const porMetodoPago = agruparPor(
@@ -225,11 +230,9 @@ function computeKpis(pedidos: PedidoRow[], items: ItemRow[]) {
 function computeSerie(
   pedidos: PedidoRow[],
   items: ItemRow[],
-  porSemana: boolean
+  porSemana: boolean,
+  rango: { desde: string; hasta: string }
 ): SerieDiaria[] {
-  const ventasPorPedido = new Map<number, number>();
-  pedidos.forEach((p) => ventasPorPedido.set(p.id, Number(p.total || 0)));
-
   const cogsPorPedido = new Map<number, number>();
   items.forEach((i) => {
     const costo = i.costo_unitario_venta == null ? 0 : Number(i.costo_unitario_venta);
@@ -243,20 +246,44 @@ function computeSerie(
   pedidos.forEach((p) => {
     const fecha = new Date(p.created_at);
     const clave = porSemana ? toClaveSemana(fecha) : toYmd(fecha);
-    const v = ventasPorPedido.get(p.id) || 0;
+    const v = Number(p.total || 0);
     const c = cogsPorPedido.get(p.id) || 0;
     const prev = acc.get(clave) || { ventas: 0, cogs: 0 };
     acc.set(clave, { ventas: prev.ventas + v, cogs: prev.cogs + c });
   });
 
-  return Array.from(acc.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([fecha, v]) => ({
+  // Generar TODAS las claves del intervalo (incluso días/semanas sin ventas).
+  const claves = generarClaves(rango, porSemana);
+
+  return claves.map((fecha) => {
+    const v = acc.get(fecha) || { ventas: 0, cogs: 0 };
+    return {
       fecha,
       ventas: v.ventas,
       cogs: v.cogs,
       margen: v.ventas - v.cogs,
-    }));
+    };
+  });
+}
+
+/** Lista ordenada de todas las claves (día o semana ISO) del rango. */
+function generarClaves(
+  rango: { desde: string; hasta: string },
+  porSemana: boolean
+): string[] {
+  const claves: string[] = [];
+  const vistas = new Set<string>();
+  const cursor = new Date(rango.desde + "T00:00:00");
+  const fin = new Date(rango.hasta + "T00:00:00");
+  while (cursor.getTime() <= fin.getTime()) {
+    const clave = porSemana ? toClaveSemana(cursor) : toYmd(cursor);
+    if (!vistas.has(clave)) {
+      vistas.add(clave);
+      claves.push(clave);
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return claves;
 }
 
 function agruparPor(
