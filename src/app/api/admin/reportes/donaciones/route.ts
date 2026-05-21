@@ -5,6 +5,8 @@ import {
   parseRango,
   rangoToTimestamps,
   debeAgruparPorSemana,
+  claveBucket,
+  generarClaves,
 } from "@/lib/reportes/rango";
 import { ESTADOS_VENTA_EFECTIVA, type ReporteDonaciones } from "@/types/reportes";
 
@@ -29,7 +31,10 @@ export async function GET(request: NextRequest) {
     // Denominador de conversión: solo cuentan pedidos desde que el prompt existe.
     const desdeConversion =
       rango.desde >= FECHA_INICIO_DONACIONES ? rango.desde : FECHA_INICIO_DONACIONES;
-    const desdeConversionIso = `${desdeConversion}T00:00:00`;
+    const desdeConversionIso = rangoToTimestamps({
+      desde: desdeConversion,
+      hasta: rango.hasta,
+    }).desdeIso;
     const rangoIncluyeDonaciones = rango.hasta >= FECHA_INICIO_DONACIONES;
 
     // Donaciones solo se cobran en checkout online, así que para todos los
@@ -100,8 +105,7 @@ export async function GET(request: NextRequest) {
     const porSemana = debeAgruparPorSemana(rango);
     const serieMap = new Map<string, { monto: number; cantidad: number }>();
     donaciones.forEach((d) => {
-      const fecha = new Date(d.created_at);
-      const clave = porSemana ? toClaveSemana(fecha) : toYmd(fecha);
+      const clave = claveBucket(d.created_at, porSemana);
       const prev = serieMap.get(clave) || { monto: 0, cantidad: 0 };
       serieMap.set(clave, {
         monto: prev.monto + Number(d.monto),
@@ -150,38 +154,3 @@ export async function GET(request: NextRequest) {
   }
 }
 
-function toYmd(d: Date): string {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function toClaveSemana(d: Date): string {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  const weekNum = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-  return `${date.getUTCFullYear()}-W${String(weekNum).padStart(2, "0")}`;
-}
-
-/** Lista ordenada de todas las claves (día o semana ISO) del rango. */
-function generarClaves(
-  rango: { desde: string; hasta: string },
-  porSemana: boolean
-): string[] {
-  const claves: string[] = [];
-  const vistas = new Set<string>();
-  const cursor = new Date(rango.desde + "T00:00:00");
-  const fin = new Date(rango.hasta + "T00:00:00");
-  while (cursor.getTime() <= fin.getTime()) {
-    const clave = porSemana ? toClaveSemana(cursor) : toYmd(cursor);
-    if (!vistas.has(clave)) {
-      vistas.add(clave);
-      claves.push(clave);
-    }
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return claves;
-}

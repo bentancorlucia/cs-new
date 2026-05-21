@@ -7,6 +7,8 @@ import {
   rangoToTimestamps,
   variacionPct,
   debeAgruparPorSemana,
+  claveBucket,
+  generarClaves,
 } from "@/lib/reportes/rango";
 import {
   ESTADOS_VENTA_EFECTIVA,
@@ -244,8 +246,7 @@ function computeSerie(
 
   const acc = new Map<string, { ventas: number; cogs: number }>();
   pedidos.forEach((p) => {
-    const fecha = new Date(p.created_at);
-    const clave = porSemana ? toClaveSemana(fecha) : toYmd(fecha);
+    const clave = claveBucket(p.created_at, porSemana);
     const v = Number(p.total || 0);
     const c = cogsPorPedido.get(p.id) || 0;
     const prev = acc.get(clave) || { ventas: 0, cogs: 0 };
@@ -253,9 +254,7 @@ function computeSerie(
   });
 
   // Generar TODAS las claves del intervalo (incluso días/semanas sin ventas).
-  const claves = generarClaves(rango, porSemana);
-
-  return claves.map((fecha) => {
+  return generarClaves(rango, porSemana).map((fecha) => {
     const v = acc.get(fecha) || { ventas: 0, cogs: 0 };
     return {
       fecha,
@@ -264,26 +263,6 @@ function computeSerie(
       margen: v.ventas - v.cogs,
     };
   });
-}
-
-/** Lista ordenada de todas las claves (día o semana ISO) del rango. */
-function generarClaves(
-  rango: { desde: string; hasta: string },
-  porSemana: boolean
-): string[] {
-  const claves: string[] = [];
-  const vistas = new Set<string>();
-  const cursor = new Date(rango.desde + "T00:00:00");
-  const fin = new Date(rango.hasta + "T00:00:00");
-  while (cursor.getTime() <= fin.getTime()) {
-    const clave = porSemana ? toClaveSemana(cursor) : toYmd(cursor);
-    if (!vistas.has(clave)) {
-      vistas.add(clave);
-      claves.push(clave);
-    }
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return claves;
 }
 
 function agruparPor(
@@ -402,21 +381,4 @@ function computeMargenPorCategoria(
       };
     })
     .sort((a, b) => b.margen - a.margen);
-}
-
-function toYmd(d: Date): string {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function toClaveSemana(d: Date): string {
-  // ISO week: año-Wxx
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  const weekNum = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-  return `${date.getUTCFullYear()}-W${String(weekNum).padStart(2, "0")}`;
 }
