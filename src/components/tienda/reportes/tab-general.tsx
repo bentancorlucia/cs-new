@@ -13,6 +13,7 @@ import {
   Pie,
   PieChart,
   ReferenceArea,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -400,17 +401,33 @@ function EvolucionChart({
           )}
           {promocodeSpans.map((s, i) => (
             <ReferenceArea
-              key={i}
+              key={`area-${i}`}
               yAxisId={refAxis}
               x1={s.x1}
               x2={s.x2}
               fill="#0d7377"
               fillOpacity={0.08}
-              stroke="#0d7377"
-              strokeOpacity={0.25}
-              strokeDasharray="4 3"
+              stroke="none"
             />
           ))}
+          {promocodeSpans.flatMap((s, i) => [
+            <ReferenceLine
+              key={`l-${i}`}
+              yAxisId={refAxis}
+              x={s.x1}
+              stroke="#0d7377"
+              strokeOpacity={0.4}
+              strokeDasharray="4 3"
+            />,
+            <ReferenceLine
+              key={`r-${i}`}
+              yAxisId={refAxis}
+              x={s.x2}
+              stroke="#0d7377"
+              strokeOpacity={0.4}
+              strokeDasharray="4 3"
+            />,
+          ])}
           <Tooltip
             content={({ active, payload, label }) => {
               if (!active || !payload?.length) return null;
