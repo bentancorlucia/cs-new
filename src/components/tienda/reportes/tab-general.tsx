@@ -481,6 +481,18 @@ function EvolucionChart({
           />
           <Legend wrapperStyle={{ fontSize: 11 }} />
 
+          {/* Orden de render = z-order. Barras abajo, Ventas, COGS arriba. */}
+          {visibles.cantidad && (
+            <Bar
+              yAxisId="cant"
+              dataKey="cantidad"
+              name="Cantidad de pedidos"
+              fill="#4a5d6c"
+              fillOpacity={showMontos ? 0.35 : 0.8}
+              barSize={showMontos ? 10 : undefined}
+              radius={[3, 3, 0, 0]}
+            />
+          )}
           {visibles.ventas && (
             <Area
               yAxisId="money"
@@ -501,17 +513,6 @@ function EvolucionChart({
               stroke="#f7b643"
               fill="url(#gCogs)"
               strokeWidth={2}
-            />
-          )}
-          {visibles.cantidad && (
-            <Bar
-              yAxisId="cant"
-              dataKey="cantidad"
-              name="Cantidad de pedidos"
-              fill="#4a5d6c"
-              fillOpacity={showMontos ? 0.35 : 0.8}
-              barSize={showMontos ? 10 : undefined}
-              radius={[3, 3, 0, 0]}
             />
           )}
         </ComposedChart>
