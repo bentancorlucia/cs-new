@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   Area,
@@ -9,6 +10,7 @@ import {
   Cell,
   ComposedChart,
   Legend,
+  Line,
   Pie,
   PieChart,
   ReferenceArea,
@@ -134,113 +136,7 @@ export function TabGeneral({ data }: Props) {
       </div>
 
       {/* Evolución temporal */}
-      <ChartCard title="Evolución de ventas vs COGS">
-        {promocodeSpans.length > 0 && (
-          <div className="flex items-center gap-2 mb-2 text-[11px] text-muted-foreground font-body">
-            <span className="inline-block h-3 w-5 rounded-sm bg-[#0d7377]/15 border border-[#0d7377]/40" />
-            Período con promocodes activos
-          </div>
-        )}
-        <ResponsiveContainer width="100%" height={280}>
-          <ComposedChart data={data.serie} margin={{ top: 5, right: 12, bottom: 0, left: 0 }}>
-            <defs>
-              <linearGradient id="gVentas" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#730d32" stopOpacity={0.55} />
-                <stop offset="100%" stopColor="#730d32" stopOpacity={0.02} />
-              </linearGradient>
-              <linearGradient id="gCogs" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#f7b643" stopOpacity={0.5} />
-                <stop offset="100%" stopColor="#f7b643" stopOpacity={0.02} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="fecha" tick={{ fontSize: 10 }} />
-            <YAxis
-              yAxisId="money"
-              tick={{ fontSize: 10 }}
-              tickFormatter={(v) => formatearMonedaCompacta(Number(v), "UYU")}
-            />
-            <YAxis
-              yAxisId="cant"
-              orientation="right"
-              tick={{ fontSize: 10 }}
-              allowDecimals={false}
-            />
-            {promocodeSpans.map((s, i) => (
-              <ReferenceArea
-                key={i}
-                yAxisId="money"
-                x1={s.x1}
-                x2={s.x2}
-                fill="#0d7377"
-                fillOpacity={0.08}
-                stroke="#0d7377"
-                strokeOpacity={0.25}
-                strokeDasharray="4 3"
-              />
-            ))}
-            <Tooltip
-              content={({ active, payload, label }) => {
-                if (!active || !payload?.length) return null;
-                const row = payload[0]?.payload as
-                  | {
-                      cantidad?: number;
-                      promocodesActivos?: string[];
-                    }
-                  | undefined;
-                return (
-                  <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
-                    <p className="font-heading mb-1">{label}</p>
-                    {payload
-                      .filter((p) => p.dataKey === "ventas" || p.dataKey === "cogs")
-                      .map((p, i) => (
-                        <p key={i} style={{ color: p.color }}>
-                          {p.name}: {formatearMoneda(Number(p.value), "UYU")}
-                        </p>
-                      ))}
-                    <p className="text-foreground">
-                      Pedidos: {row?.cantidad ?? 0}
-                    </p>
-                    {row?.promocodesActivos && row.promocodesActivos.length > 0 && (
-                      <p className="text-[#0d7377] mt-1">
-                        Promocodes: {row.promocodesActivos.join(", ")}
-                      </p>
-                    )}
-                  </div>
-                );
-              }}
-            />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Area
-              yAxisId="money"
-              type="monotone"
-              dataKey="ventas"
-              name="Ventas"
-              stroke="#730d32"
-              fill="url(#gVentas)"
-              strokeWidth={2}
-            />
-            <Area
-              yAxisId="money"
-              type="monotone"
-              dataKey="cogs"
-              name="COGS"
-              stroke="#f7b643"
-              fill="url(#gCogs)"
-              strokeWidth={2}
-            />
-            <Bar
-              yAxisId="cant"
-              dataKey="cantidad"
-              name="Cantidad de pedidos"
-              fill="#4a5d6c"
-              fillOpacity={0.35}
-              barSize={10}
-              radius={[3, 3, 0, 0]}
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </ChartCard>
+      <EvolucionChart serie={data.serie} promocodeSpans={promocodeSpans} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard title="Método de pago">
@@ -394,6 +290,235 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
         {title}
       </h3>
       {children}
+    </motion.div>
+  );
+}
+
+type Metrica = "todo" | "montos" | "cantidad";
+type TipoGrafico = "area" | "barras";
+
+const METRICA_OPTS: { id: Metrica; label: string }[] = [
+  { id: "todo", label: "Todo" },
+  { id: "montos", label: "Montos" },
+  { id: "cantidad", label: "Cantidad" },
+];
+
+const TIPO_OPTS: { id: TipoGrafico; label: string }[] = [
+  { id: "area", label: "Área" },
+  { id: "barras", label: "Barras" },
+];
+
+function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: { id: T; label: string }[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="inline-flex rounded-full border border-border bg-card p-0.5 text-[11px]">
+      {options.map((o) => (
+        <button
+          key={o.id}
+          onClick={() => onChange(o.id)}
+          className={`relative px-2.5 py-1 rounded-full font-heading transition-colors ${
+            value === o.id
+              ? "text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {value === o.id && (
+            <motion.span
+              layoutId={`seg-${options.map((x) => x.id).join("")}`}
+              className="absolute inset-0 rounded-full bg-primary"
+              transition={springSmooth}
+            />
+          )}
+          <span className="relative z-10">{o.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function EvolucionChart({
+  serie,
+  promocodeSpans,
+}: {
+  serie: ReporteTienda["serie"];
+  promocodeSpans: { x1: string; x2: string }[];
+}) {
+  const [metrica, setMetrica] = useState<Metrica>("todo");
+  const [tipo, setTipo] = useState<TipoGrafico>("area");
+
+  const showMontos = metrica !== "cantidad";
+  const showCantidad = metrica !== "montos";
+  const refAxis = showMontos ? "money" : "cant";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={springSmooth}
+      className="rounded-2xl border border-border bg-card p-4 sm:p-5"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <h3 className="text-xs uppercase tracking-wider font-heading text-muted-foreground">
+          Evolución temporal
+        </h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <Segmented value={metrica} options={METRICA_OPTS} onChange={setMetrica} />
+          <Segmented value={tipo} options={TIPO_OPTS} onChange={setTipo} />
+        </div>
+      </div>
+
+      {promocodeSpans.length > 0 && (
+        <div className="flex items-center gap-2 mb-2 text-[11px] text-muted-foreground font-body">
+          <span className="inline-block h-3 w-5 rounded-sm bg-[#0d7377]/15 border border-[#0d7377]/40" />
+          Período con promocodes activos
+        </div>
+      )}
+
+      <ResponsiveContainer width="100%" height={280}>
+        <ComposedChart data={serie} margin={{ top: 5, right: 12, bottom: 0, left: 0 }}>
+          <defs>
+            <linearGradient id="gVentas" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#730d32" stopOpacity={0.55} />
+              <stop offset="100%" stopColor="#730d32" stopOpacity={0.02} />
+            </linearGradient>
+            <linearGradient id="gCogs" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#f7b643" stopOpacity={0.5} />
+              <stop offset="100%" stopColor="#f7b643" stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+          <XAxis dataKey="fecha" tick={{ fontSize: 10 }} />
+          {showMontos && (
+            <YAxis
+              yAxisId="money"
+              tick={{ fontSize: 10 }}
+              tickFormatter={(v) => formatearMonedaCompacta(Number(v), "UYU")}
+            />
+          )}
+          {showCantidad && (
+            <YAxis
+              yAxisId="cant"
+              orientation={showMontos ? "right" : "left"}
+              tick={{ fontSize: 10 }}
+              allowDecimals={false}
+            />
+          )}
+          {promocodeSpans.map((s, i) => (
+            <ReferenceArea
+              key={i}
+              yAxisId={refAxis}
+              x1={s.x1}
+              x2={s.x2}
+              fill="#0d7377"
+              fillOpacity={0.08}
+              stroke="#0d7377"
+              strokeOpacity={0.25}
+              strokeDasharray="4 3"
+            />
+          ))}
+          <Tooltip
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null;
+              const row = payload[0]?.payload as
+                | { cantidad?: number; promocodesActivos?: string[] }
+                | undefined;
+              return (
+                <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
+                  <p className="font-heading mb-1">{label}</p>
+                  {showMontos &&
+                    payload
+                      .filter((p) => p.dataKey === "ventas" || p.dataKey === "cogs")
+                      .map((p, i) => (
+                        <p key={i} style={{ color: p.color }}>
+                          {p.name}: {formatearMoneda(Number(p.value), "UYU")}
+                        </p>
+                      ))}
+                  {showCantidad && (
+                    <p className="text-foreground">Pedidos: {row?.cantidad ?? 0}</p>
+                  )}
+                  {row?.promocodesActivos && row.promocodesActivos.length > 0 && (
+                    <p className="text-[#0d7377] mt-1">
+                      Promocodes: {row.promocodesActivos.join(", ")}
+                    </p>
+                  )}
+                </div>
+              );
+            }}
+          />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+
+          {showMontos && tipo === "area" && (
+            <Area
+              yAxisId="money"
+              type="monotone"
+              dataKey="ventas"
+              name="Ventas"
+              stroke="#730d32"
+              fill="url(#gVentas)"
+              strokeWidth={2}
+            />
+          )}
+          {showMontos && tipo === "area" && (
+            <Area
+              yAxisId="money"
+              type="monotone"
+              dataKey="cogs"
+              name="COGS"
+              stroke="#f7b643"
+              fill="url(#gCogs)"
+              strokeWidth={2}
+            />
+          )}
+          {showMontos && tipo === "barras" && (
+            <Bar
+              yAxisId="money"
+              dataKey="ventas"
+              name="Ventas"
+              fill="#730d32"
+              radius={[4, 4, 0, 0]}
+            />
+          )}
+          {showMontos && tipo === "barras" && (
+            <Bar
+              yAxisId="money"
+              dataKey="cogs"
+              name="COGS"
+              fill="#f7b643"
+              radius={[4, 4, 0, 0]}
+            />
+          )}
+
+          {showCantidad && tipo === "barras" && (
+            <Bar
+              yAxisId="cant"
+              dataKey="cantidad"
+              name="Cantidad de pedidos"
+              fill="#4a5d6c"
+              fillOpacity={metrica === "cantidad" ? 0.85 : 0.35}
+              barSize={metrica === "cantidad" ? undefined : 10}
+              radius={[3, 3, 0, 0]}
+            />
+          )}
+          {showCantidad && tipo === "area" && (
+            <Line
+              yAxisId="cant"
+              type="monotone"
+              dataKey="cantidad"
+              name="Cantidad de pedidos"
+              stroke="#4a5d6c"
+              strokeWidth={2}
+              dot={{ r: 2 }}
+            />
+          )}
+        </ComposedChart>
+      </ResponsiveContainer>
     </motion.div>
   );
 }
