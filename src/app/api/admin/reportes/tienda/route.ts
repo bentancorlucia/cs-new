@@ -172,6 +172,26 @@ async function fetchPeriodo(
   if (errP) throw errP;
 
   const pedidosTodos = (pedidos || []) as PedidoRow[];
+
+  // Descontar donaciones: pedidos.total las incluye (ver checkout), pero la
+  // donación se transfiere a la Olla del Hogar — no es venta de la tienda.
+  const pedidoIds = pedidosTodos.map((p) => p.id);
+  if (pedidoIds.length > 0) {
+    const { data: donRows, error: errD } = await db
+      .from("donaciones")
+      .select("pedido_id, monto")
+      .in("pedido_id", pedidoIds);
+    if (errD) throw errD;
+    const donacionPorPedido = new Map<number, number>();
+    (donRows || []).forEach((d: { pedido_id: number; monto: number }) => {
+      donacionPorPedido.set(d.pedido_id, Number(d.monto || 0));
+    });
+    pedidosTodos.forEach((p) => {
+      const don = donacionPorPedido.get(p.id);
+      if (don) p.total = Number(p.total || 0) - don;
+    });
+  }
+
   const pedidosEfectivos = pedidosTodos.filter((p) =>
     (ESTADOS_VENTA_EFECTIVA as readonly string[]).includes(p.estado)
   );

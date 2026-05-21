@@ -75,6 +75,25 @@ export async function GET(request: NextRequest) {
     const pedidos = (pedRes.data || []) as PedidoConCodigo[];
     const promocodes = (codesRes.data || []) as PromocodeRow[];
 
+    // Descontar donaciones: pedidos.total las incluye, pero la donación se
+    // transfiere a la Olla del Hogar — no es venta de la tienda.
+    const pedidoIds = pedidos.map((p) => p.id);
+    if (pedidoIds.length > 0) {
+      const { data: donRows, error: errD } = await db
+        .from("donaciones")
+        .select("pedido_id, monto")
+        .in("pedido_id", pedidoIds);
+      if (errD) throw errD;
+      const donacionPorPedido = new Map<number, number>();
+      (donRows || []).forEach((d: { pedido_id: number; monto: number }) => {
+        donacionPorPedido.set(d.pedido_id, Number(d.monto || 0));
+      });
+      pedidos.forEach((p) => {
+        const don = donacionPorPedido.get(p.id);
+        if (don) p.total = Number(p.total || 0) - don;
+      });
+    }
+
     const pedidosConCodigo = pedidos.filter((p) => p.promocode_id != null);
     const pedidosSinCodigo = pedidos.filter((p) => p.promocode_id == null);
 
