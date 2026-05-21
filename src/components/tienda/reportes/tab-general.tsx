@@ -10,7 +10,6 @@ import {
   Cell,
   ComposedChart,
   Legend,
-  Line,
   Pie,
   PieChart,
   ReferenceArea,
@@ -294,54 +293,13 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
   );
 }
 
-type Metrica = "todo" | "montos" | "cantidad";
-type TipoGrafico = "area" | "barras";
+type VariableId = "ventas" | "cogs" | "cantidad";
 
-const METRICA_OPTS: { id: Metrica; label: string }[] = [
-  { id: "todo", label: "Todo" },
-  { id: "montos", label: "Montos" },
-  { id: "cantidad", label: "Cantidad" },
+const VARIABLES: { id: VariableId; label: string; color: string }[] = [
+  { id: "ventas", label: "Ventas", color: "#730d32" },
+  { id: "cogs", label: "COGS", color: "#f7b643" },
+  { id: "cantidad", label: "Cantidad de pedidos", color: "#4a5d6c" },
 ];
-
-const TIPO_OPTS: { id: TipoGrafico; label: string }[] = [
-  { id: "area", label: "Área" },
-  { id: "barras", label: "Barras" },
-];
-
-function Segmented<T extends string>({
-  value,
-  options,
-  onChange,
-}: {
-  value: T;
-  options: { id: T; label: string }[];
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div className="inline-flex rounded-full border border-border bg-card p-0.5 text-[11px]">
-      {options.map((o) => (
-        <button
-          key={o.id}
-          onClick={() => onChange(o.id)}
-          className={`relative px-2.5 py-1 rounded-full font-heading transition-colors ${
-            value === o.id
-              ? "text-primary-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {value === o.id && (
-            <motion.span
-              layoutId={`seg-${options.map((x) => x.id).join("")}`}
-              className="absolute inset-0 rounded-full bg-primary"
-              transition={springSmooth}
-            />
-          )}
-          <span className="relative z-10">{o.label}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
 
 function EvolucionChart({
   serie,
@@ -350,11 +308,23 @@ function EvolucionChart({
   serie: ReporteTienda["serie"];
   promocodeSpans: { x1: string; x2: string }[];
 }) {
-  const [metrica, setMetrica] = useState<Metrica>("todo");
-  const [tipo, setTipo] = useState<TipoGrafico>("area");
+  const [visibles, setVisibles] = useState<Record<VariableId, boolean>>({
+    ventas: true,
+    cogs: true,
+    cantidad: true,
+  });
 
-  const showMontos = metrica !== "cantidad";
-  const showCantidad = metrica !== "montos";
+  const toggle = (id: VariableId) => {
+    setVisibles((prev) => {
+      const next = { ...prev, [id]: !prev[id] };
+      // No permitir apagar todas: si quedaría vacío, no aplicar.
+      if (!next.ventas && !next.cogs && !next.cantidad) return prev;
+      return next;
+    });
+  };
+
+  const showMontos = visibles.ventas || visibles.cogs;
+  const showCantidad = visibles.cantidad;
   const refAxis = showMontos ? "money" : "cant";
 
   return (
@@ -368,9 +338,27 @@ function EvolucionChart({
         <h3 className="text-xs uppercase tracking-wider font-heading text-muted-foreground">
           Evolución temporal
         </h3>
-        <div className="flex flex-wrap items-center gap-2">
-          <Segmented value={metrica} options={METRICA_OPTS} onChange={setMetrica} />
-          <Segmented value={tipo} options={TIPO_OPTS} onChange={setTipo} />
+        <div className="flex flex-wrap items-center gap-1.5">
+          {VARIABLES.map((v) => {
+            const on = visibles[v.id];
+            return (
+              <button
+                key={v.id}
+                onClick={() => toggle(v.id)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-heading transition-all ${
+                  on
+                    ? "border-border bg-card text-foreground"
+                    : "border-dashed border-border bg-transparent text-muted-foreground/60"
+                }`}
+              >
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-full transition-opacity"
+                  style={{ backgroundColor: v.color, opacity: on ? 1 : 0.3 }}
+                />
+                {v.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -432,14 +420,13 @@ function EvolucionChart({
               return (
                 <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
                   <p className="font-heading mb-1">{label}</p>
-                  {showMontos &&
-                    payload
-                      .filter((p) => p.dataKey === "ventas" || p.dataKey === "cogs")
-                      .map((p, i) => (
-                        <p key={i} style={{ color: p.color }}>
-                          {p.name}: {formatearMoneda(Number(p.value), "UYU")}
-                        </p>
-                      ))}
+                  {payload
+                    .filter((p) => p.dataKey === "ventas" || p.dataKey === "cogs")
+                    .map((p, i) => (
+                      <p key={i} style={{ color: p.color }}>
+                        {p.name}: {formatearMoneda(Number(p.value), "UYU")}
+                      </p>
+                    ))}
                   {showCantidad && (
                     <p className="text-foreground">Pedidos: {row?.cantidad ?? 0}</p>
                   )}
@@ -454,7 +441,7 @@ function EvolucionChart({
           />
           <Legend wrapperStyle={{ fontSize: 11 }} />
 
-          {showMontos && tipo === "area" && (
+          {visibles.ventas && (
             <Area
               yAxisId="money"
               type="monotone"
@@ -465,7 +452,7 @@ function EvolucionChart({
               strokeWidth={2}
             />
           )}
-          {showMontos && tipo === "area" && (
+          {visibles.cogs && (
             <Area
               yAxisId="money"
               type="monotone"
@@ -476,45 +463,15 @@ function EvolucionChart({
               strokeWidth={2}
             />
           )}
-          {showMontos && tipo === "barras" && (
-            <Bar
-              yAxisId="money"
-              dataKey="ventas"
-              name="Ventas"
-              fill="#730d32"
-              radius={[4, 4, 0, 0]}
-            />
-          )}
-          {showMontos && tipo === "barras" && (
-            <Bar
-              yAxisId="money"
-              dataKey="cogs"
-              name="COGS"
-              fill="#f7b643"
-              radius={[4, 4, 0, 0]}
-            />
-          )}
-
-          {showCantidad && tipo === "barras" && (
+          {visibles.cantidad && (
             <Bar
               yAxisId="cant"
               dataKey="cantidad"
               name="Cantidad de pedidos"
               fill="#4a5d6c"
-              fillOpacity={metrica === "cantidad" ? 0.85 : 0.35}
-              barSize={metrica === "cantidad" ? undefined : 10}
+              fillOpacity={showMontos ? 0.35 : 0.8}
+              barSize={showMontos ? 10 : undefined}
               radius={[3, 3, 0, 0]}
-            />
-          )}
-          {showCantidad && tipo === "area" && (
-            <Line
-              yAxisId="cant"
-              type="monotone"
-              dataKey="cantidad"
-              name="Cantidad de pedidos"
-              stroke="#4a5d6c"
-              strokeWidth={2}
-              dot={{ r: 2 }}
             />
           )}
         </ComposedChart>
