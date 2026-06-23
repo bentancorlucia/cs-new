@@ -373,13 +373,14 @@ export function POSClient() {
     const val = parseFloat(descuentoManualValor) || 0;
     if (val <= 0) return 0;
     if (descuentoManualTipo === "porcentaje") {
-      return Math.round(subtotal * (val / 100));
+      const pct = Math.min(val, 100);
+      return Math.min(Math.round(subtotal * (pct / 100)), subtotal);
     }
     return Math.min(val, subtotal);
   }, [subtotal, descuentoManualTipo, descuentoManualValor]);
 
   const descuentoManualPct = descuentoManualTipo === "porcentaje"
-    ? (parseFloat(descuentoManualValor) || 0)
+    ? Math.min(parseFloat(descuentoManualValor) || 0, 100)
     : 0;
 
   const total = subtotal - descuentoManualMonto;
@@ -555,14 +556,13 @@ export function POSClient() {
       setProcesando(true);
 
       try {
+        // Enviamos el precio de lista; el descuento de socio viaja en
+        // `descuento` para no restarlo dos veces en el backend.
         const items = cart.map((item) => ({
           producto_id: item.producto_id,
           variante_id: item.variante_id,
           cantidad: item.cantidad,
-          precio_unitario:
-            usarPrecioSocio && item.precio_socio
-              ? item.precio_socio
-              : item.precio,
+          precio_unitario: item.precio,
         }));
 
         const res = await fetch("/api/admin/pos/venta", {
@@ -618,14 +618,13 @@ export function POSClient() {
 
     try {
       // 1. Create order with transferencia
+      // Enviamos el precio de lista; el descuento de socio viaja en
+      // `descuento` para no restarlo dos veces en el backend.
       const items = cart.map((item) => ({
         producto_id: item.producto_id,
         variante_id: item.variante_id,
         cantidad: item.cantidad,
-        precio_unitario:
-          usarPrecioSocio && item.precio_socio
-            ? item.precio_socio
-            : item.precio,
+        precio_unitario: item.precio,
       }));
 
       const res = await fetch("/api/admin/pos/venta", {

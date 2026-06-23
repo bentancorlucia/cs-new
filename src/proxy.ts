@@ -12,6 +12,11 @@ const PUBLIC_ROUTES = [
   "/eventos",
   "/login",
   "/registro",
+  // Flujo de auth: deben ser accesibles sin sesión previa
+  "/recuperar",
+  "/cambiar-password",
+  "/confirmar-email",
+  "/auth", // cubre /auth/callback (intercambio de código de reset/signup)
 ];
 
 // Sub-rutas de /tienda que SI requieren auth (checkout, pedido)

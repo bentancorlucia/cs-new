@@ -18,6 +18,12 @@ const ventaSchema = z.object({
   nombre_cliente: z.string().optional().nullable(),
   perfil_socio_id: z.string().optional().nullable(),
   descuento: z.number().min(0).default(0),
+  descuento_tipo: z
+    .enum(["porcentaje", "fijo", "socio", "lista_precio"])
+    .optional()
+    .nullable(),
+  descuento_porcentaje: z.number().min(0).max(100).optional().nullable(),
+  descuento_motivo: z.string().optional().nullable(),
   notas: z.string().optional().nullable(),
 });
 
@@ -37,10 +43,22 @@ export async function POST(request: NextRequest) {
     // `descontar_stock_pedido`. No validamos aquí para evitar el race condition.
 
     // 2. Calcular totales
+    // `precio_unitario` es el precio de lista (sin descuento). Todos los
+    // descuentos (socio + manual) llegan agregados en `descuento`, por lo que
+    // el total nunca debe restar el descuento de socio dos veces.
     const subtotal = parsed.items.reduce(
       (sum, item) => sum + item.precio_unitario * item.cantidad,
       0
     );
+
+    // El descuento no puede superar el subtotal (evita totales negativos).
+    if (parsed.descuento > subtotal) {
+      return NextResponse.json(
+        { error: "El descuento no puede ser mayor que el subtotal" },
+        { status: 400 }
+      );
+    }
+
     const total = subtotal - parsed.descuento;
 
     // 3. Crear pedido
@@ -57,6 +75,9 @@ export async function POST(request: NextRequest) {
       estado: estadoInicial,
       subtotal,
       descuento: parsed.descuento,
+      descuento_tipo: parsed.descuento_tipo ?? null,
+      descuento_porcentaje: parsed.descuento_porcentaje ?? null,
+      descuento_motivo: parsed.descuento_motivo || null,
       total,
       metodo_pago: parsed.metodo_pago,
       nombre_cliente: parsed.nombre_cliente || null,
