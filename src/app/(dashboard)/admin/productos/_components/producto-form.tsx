@@ -26,6 +26,7 @@ import {
   Layers,
   Crosshair,
   Sparkles,
+  Store,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -91,6 +92,7 @@ const schema = z.object({
   stock_minimo: z.string(),
   unidad: z.string().default("un"),
   activo: z.boolean(),
+  activo_pos: z.boolean(),
   destacado: z.boolean(),
   mto_disponible: z.boolean(),
   mto_solo: z.boolean(),
@@ -947,6 +949,7 @@ export function ProductoForm({ producto }: Props) {
       stock_minimo: producto?.stock_minimo?.toString() || "5",
       unidad: producto?.unidad || "un",
       activo: producto?.activo ?? true,
+      activo_pos: producto?.activo_pos ?? true,
       destacado: producto?.destacado ?? false,
       mto_disponible: producto?.mto_disponible ?? false,
       mto_solo: producto?.mto_solo ?? false,
@@ -957,6 +960,7 @@ export function ProductoForm({ producto }: Props) {
 
   const nombre = watch("nombre");
   const activo = watch("activo");
+  const activoPos = watch("activo_pos");
   const destacado = watch("destacado");
   const precio = watch("precio");
   const precioSocio = watch("precio_socio");
@@ -1003,6 +1007,7 @@ export function ProductoForm({ producto }: Props) {
         stock_minimo: parseInt(data.stock_minimo),
         unidad: data.unidad,
         activo: data.activo,
+        activo_pos: data.activo_pos,
         destacado: data.destacado,
         mto_disponible: data.mto_disponible,
         mto_solo: data.mto_disponible ? data.mto_solo : false,
@@ -1633,15 +1638,50 @@ export function ProductoForm({ producto }: Props) {
                     />
                   </motion.div>
                   <div>
-                    <p className="text-sm font-medium">Activo</p>
+                    <p className="text-sm font-medium">Activo en web</p>
                     <p className="text-[11px] text-muted-foreground">
-                      Visible en la tienda
+                      Visible en la tienda online
                     </p>
                   </div>
                 </div>
                 <Switch
                   checked={activo}
                   onCheckedChange={(v) => setValue("activo", v, { shouldDirty: true })}
+                />
+              </div>
+
+              <div
+                className={`flex items-center justify-between rounded-xl border p-3.5 transition-colors ${
+                  activoPos
+                    ? "border-emerald-200 bg-emerald-50/50"
+                    : "border-border/50 bg-muted/20"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <motion.div
+                    animate={{
+                      backgroundColor: activoPos
+                        ? "rgb(16 185 129 / 0.15)"
+                        : "rgb(156 163 175 / 0.15)",
+                    }}
+                    className="flex size-8 items-center justify-center rounded-lg"
+                  >
+                    <Store
+                      className={`size-4 transition-colors ${
+                        activoPos ? "text-emerald-600" : "text-muted-foreground"
+                      }`}
+                    />
+                  </motion.div>
+                  <div>
+                    <p className="text-sm font-medium">Activo en POS</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Disponible en el punto de venta
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={activoPos}
+                  onCheckedChange={(v) => setValue("activo_pos", v, { shouldDirty: true })}
                 />
               </div>
 

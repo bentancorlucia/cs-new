@@ -50,6 +50,8 @@ const ESTADO_LABELS: Record<string, string> = {
 const METODO_LABELS: Record<string, string> = {
   mercadopago: "MercadoPago",
   efectivo: "Efectivo",
+  transferencia: "Transferencia",
+  mixto: "Efectivo + Transf.",
   mercadopago_qr: "MP QR",
   sin_metodo: "Sin método",
 };

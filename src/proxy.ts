@@ -96,7 +96,8 @@ export async function proxy(request: NextRequest) {
   // If not authenticated, redirect to login
   if (!user) {
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("redirect", pathname);
+    // Conservar el query string: /oauth/consent necesita ?authorization_id=
+    loginUrl.searchParams.set("redirect", pathname + request.nextUrl.search);
     return NextResponse.redirect(loginUrl);
   }
 

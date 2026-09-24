@@ -1575,6 +1575,7 @@ export type Database = {
           descuento_motivo: string | null
           descuento_porcentaje: number | null
           descuento_tipo: string | null
+          email_cliente: string | null
           disciplina_id: number | null
           estado: string
           id: number
@@ -1582,6 +1583,8 @@ export type Database = {
           mercadopago_payment_id: string | null
           mercadopago_preference_id: string | null
           metodo_pago: string | null
+          monto_efectivo: number | null
+          monto_transferencia: number | null
           moneda: string | null
           nombre_cliente: string | null
           notas: string | null
@@ -1605,6 +1608,7 @@ export type Database = {
           descuento_motivo?: string | null
           descuento_porcentaje?: number | null
           descuento_tipo?: string | null
+          email_cliente?: string | null
           disciplina_id?: number | null
           estado?: string
           id?: number
@@ -1612,6 +1616,8 @@ export type Database = {
           mercadopago_payment_id?: string | null
           mercadopago_preference_id?: string | null
           metodo_pago?: string | null
+          monto_efectivo?: number | null
+          monto_transferencia?: number | null
           moneda?: string | null
           nombre_cliente?: string | null
           notas?: string | null
@@ -1635,6 +1641,7 @@ export type Database = {
           descuento_motivo?: string | null
           descuento_porcentaje?: number | null
           descuento_tipo?: string | null
+          email_cliente?: string | null
           disciplina_id?: number | null
           estado?: string
           id?: number
@@ -1642,6 +1649,8 @@ export type Database = {
           mercadopago_payment_id?: string | null
           mercadopago_preference_id?: string | null
           metodo_pago?: string | null
+          monto_efectivo?: number | null
+          monto_transferencia?: number | null
           moneda?: string | null
           nombre_cliente?: string | null
           notas?: string | null
@@ -2035,6 +2044,7 @@ export type Database = {
       productos: {
         Row: {
           activo: boolean | null
+          activo_pos: boolean
           categoria_id: number | null
           costo_promedio: number | null
           created_at: string | null
@@ -2060,6 +2070,7 @@ export type Database = {
         }
         Insert: {
           activo?: boolean | null
+          activo_pos?: boolean
           categoria_id?: number | null
           costo_promedio?: number | null
           created_at?: string | null
@@ -2085,6 +2096,7 @@ export type Database = {
         }
         Update: {
           activo?: boolean | null
+          activo_pos?: boolean
           categoria_id?: number | null
           costo_promedio?: number | null
           created_at?: string | null

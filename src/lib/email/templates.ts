@@ -74,7 +74,8 @@ export interface OrderConfirmationData {
   numeroPedido: string;
   items: { nombre: string; cantidad: number; precioUnitario: number }[];
   total: number;
-  pedidoUrl: string;
+  /** Omitir para clientes sin cuenta (la página del pedido requiere sesión). */
+  pedidoUrl?: string;
 }
 
 export function orderConfirmationHtml(data: OrderConfirmationData) {
@@ -108,7 +109,7 @@ export function orderConfirmationHtml(data: OrderConfirmationData) {
         </td>
       </tr>
     </table>
-    ${button("Ver mi pedido", data.pedidoUrl)}
+    ${data.pedidoUrl ? button("Ver mi pedido", data.pedidoUrl) : ""}
     <p style="margin:24px 0 0;font-size:13px;color:${COLORS.textoSecundario};text-align:center;">
       Te avisaremos cuando tu pedido esté listo para retirar.
     </p>
@@ -121,7 +122,8 @@ export function orderConfirmationHtml(data: OrderConfirmationData) {
 export interface OrderReadyData {
   nombreCliente: string;
   numeroPedido: string;
-  pedidoUrl: string;
+  /** Omitir para clientes sin cuenta (la página del pedido requiere sesión). */
+  pedidoUrl?: string;
 }
 
 export function orderReadyHtml(data: OrderReadyData) {
@@ -139,7 +141,7 @@ export function orderReadyHtml(data: OrderReadyData) {
     <p style="margin:0 0 16px;font-size:13px;color:${COLORS.textoSecundario};">
       ¿Necesitás envío? Contactanos al <a href="https://wa.me/59891498409" style="color:${COLORS.bordo};text-decoration:none;font-weight:600;">+598 91 965 438</a>.
     </p>
-    ${button("Ver detalles del pedido", data.pedidoUrl)}
+    ${data.pedidoUrl ? button("Ver detalles del pedido", data.pedidoUrl) : ""}
   `);
 }
 

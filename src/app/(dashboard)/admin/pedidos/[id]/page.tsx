@@ -29,8 +29,11 @@ import {
   Calendar,
   Hash,
   Landmark,
+  Mail,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -75,6 +78,134 @@ const estadoStepsNormal: { estado: EstadoPedido; label: string; icon: any }[] = 
   { estado: "listo_retiro", label: "Listo para retiro", icon: Truck },
   { estado: "retirado", label: "Retirado", icon: CheckCircle },
 ];
+
+// Pedidos no-transferencia con encargues (ej. POS en efectivo): quedan
+// 'encargado' hasta que llega el producto.
+const estadoStepsNormalEncargue: { estado: EstadoPedido; label: string; icon: any }[] = [
+  { estado: "pagado", label: "Pagado", icon: CreditCard },
+  { estado: "encargado", label: "Encargado", icon: Clock },
+  { estado: "preparando", label: "Preparando", icon: Package },
+  { estado: "listo_retiro", label: "Listo para retiro", icon: Truck },
+  { estado: "retirado", label: "Retirado", icon: CheckCircle },
+];
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Email para avisos de pedidos sin cuenta (clientes presenciales).
+function EmailAvisos({
+  pedidoId,
+  email,
+  onSaved,
+}: {
+  pedidoId: string;
+  email: string | null;
+  onSaved: (email: string | null) => void;
+}) {
+  const [editando, setEditando] = useState(false);
+  const [valor, setValor] = useState(email ?? "");
+  const [guardando, setGuardando] = useState(false);
+  const valorTrim = valor.trim();
+  const valido = valorTrim === "" || EMAIL_RE.test(valorTrim);
+
+  async function guardar(e: React.FormEvent) {
+    e.preventDefault();
+    if (!valido) return;
+    setGuardando(true);
+    try {
+      const res = await fetch(`/api/admin/pedidos/${pedidoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email_cliente: valorTrim }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error || "No se pudo guardar el email");
+        return;
+      }
+      onSaved(json.data.email_cliente);
+      setEditando(false);
+      toast.success(
+        json.data.email_cliente
+          ? "Email guardado — recibirá los avisos del pedido"
+          : "Email eliminado"
+      );
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      {editando ? (
+        <motion.form
+          key="editar"
+          onSubmit={guardar}
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={springSmooth}
+          className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center"
+        >
+          <Input
+            type="email"
+            inputMode="email"
+            autoFocus
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            placeholder="email@ejemplo.com"
+            aria-invalid={!valido}
+            className="h-8 text-sm sm:max-w-64"
+          />
+          <div className="flex gap-1.5">
+            <Button type="submit" size="sm" disabled={!valido || guardando} className="h-8">
+              {guardando ? <Loader2 className="size-3.5 animate-spin" /> : "Guardar"}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8"
+              onClick={() => {
+                setValor(email ?? "");
+                setEditando(false);
+              }}
+              disabled={guardando}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </motion.form>
+      ) : (
+        <motion.div
+          key="ver"
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={springSmooth}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground"
+        >
+          <Mail className="size-3" />
+          {email ? (
+            <span className="truncate">{email}</span>
+          ) : (
+            <span className="text-amber-700">Sin email para avisos</span>
+          )}
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setEditando(true)}
+            className="ml-1 inline-flex items-center gap-0.5 rounded px-1 text-bordo-700 hover:bg-bordo-50 transition-colors"
+          >
+            <Pencil className="size-3" />
+            {email ? "Editar" : "Agregar"}
+          </motion.button>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
 
 const nextEstado: Record<string, EstadoPedido> = {
   pagado: "preparando",
@@ -372,14 +503,18 @@ export default function DetallePedidoPage() {
     );
   }
 
-  const isTransferencia = pedido.metodo_pago === "transferencia";
+  const isMixto = pedido.metodo_pago === "mixto";
+  // Mixto también pasa por verificación de la parte transferida.
+  const isTransferencia = pedido.metodo_pago === "transferencia" || isMixto;
   const isPendingVerification = pedido.estado === "pendiente_verificacion";
   const tieneEncargues = pedido.pedido_items?.some((it: any) => it.es_encargue) === true;
   const steps = isTransferencia
     ? tieneEncargues
       ? estadoStepsEncargue
       : estadoSteps
-    : estadoStepsNormal;
+    : tieneEncargues
+      ? estadoStepsNormalEncargue
+      : estadoStepsNormal;
   const estadoActualIdx = steps.findIndex((s) => s.estado === pedido.estado);
   const cancelado = pedido.estado === "cancelado";
   const completado = pedido.estado === "retirado";
@@ -424,7 +559,7 @@ export default function DetallePedidoPage() {
             </Badge>
             {isTransferencia && (
               <Badge className="bg-orange-50 text-orange-700 border-orange-200 text-[10px]">
-                Transferencia
+                {isMixto ? "Efectivo + Transferencia" : "Transferencia"}
               </Badge>
             )}
           </div>
@@ -638,7 +773,9 @@ export default function DetallePedidoPage() {
             {comprobante.datos_extraidos && (
               <OcrIndicators
                 datos={comprobante.datos_extraidos}
-                totalPedido={pedido.total}
+                totalPedido={
+                  isMixto ? Number(pedido.monto_transferencia) : pedido.total
+                }
               />
             )}
 
@@ -726,6 +863,15 @@ export default function DetallePedidoPage() {
                     <Phone className="size-3" />
                     {pedido.perfiles?.telefono || pedido.telefono_cliente}
                   </p>
+                )}
+                {!pedido.perfil_id && (
+                  <EmailAvisos
+                    pedidoId={id}
+                    email={pedido.email_cliente ?? null}
+                    onSaved={(email_cliente) =>
+                      setPedido((prev: any) => ({ ...prev, email_cliente }))
+                    }
+                  />
                 )}
               </div>
             </div>
@@ -871,6 +1017,29 @@ export default function DetallePedidoPage() {
               <span>Total</span>
               <span className="tabular-nums">${pedido.total.toLocaleString("es-UY")}</span>
             </div>
+            {isMixto && (
+              <div className="space-y-1 pt-1 text-sm">
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Pagado en efectivo</span>
+                  <span className="tabular-nums">
+                    ${Number(pedido.monto_efectivo).toLocaleString("es-UY")}
+                  </span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>
+                    Por transferencia
+                    {isPendingVerification && (
+                      <span className="ml-1 text-[10px] font-bold uppercase tracking-wider text-orange-600">
+                        por conciliar
+                      </span>
+                    )}
+                  </span>
+                  <span className="tabular-nums">
+                    ${Number(pedido.monto_transferencia).toLocaleString("es-UY")}
+                  </span>
+                </div>
+              </div>
+            )}
             {pedido.donaciones &&
               pedido.donaciones.length > 0 &&
               pedido.donaciones[0].estado !== "cancelada" && (

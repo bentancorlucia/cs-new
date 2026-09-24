@@ -52,6 +52,9 @@ export async function registrarMovimientoVentaPedido(
     // Caso de uso: pedidos con donación a Olla del Hogar — la donación NO
     // se considera ingreso de tienda (queda fuera de tesorería).
     montoOverride?: number;
+    // Pago mixto POS: el movimiento cubre solo una parte del pedido
+    // (efectivo o transferencia) y se aclara en la descripción.
+    pagoParcial?: boolean;
   }
 ) {
   const cuenta = await getCuentaTiendaPorMetodo(db, args.metodoPago);
@@ -64,7 +67,7 @@ export async function registrarMovimientoVentaPedido(
   const monto = args.montoOverride ?? args.total;
   if (monto <= 0) return;
 
-  const descripcion =
+  const descripcionBase =
     args.metodoPago === "efectivo"
       ? `Venta POS efectivo — Pedido #${args.numeroPedido}`
       : args.metodoPago === "transferencia"
@@ -72,6 +75,9 @@ export async function registrarMovimientoVentaPedido(
         : args.metodoPago === "mercadopago"
           ? `Pago MercadoPago — Pedido #${args.numeroPedido}`
           : `Venta — Pedido #${args.numeroPedido}`;
+  const descripcion = args.pagoParcial
+    ? `${descripcionBase} (pago mixto)`
+    : descripcionBase;
 
   const referenciaPrefix =
     args.metodoPago === "efectivo"

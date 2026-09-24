@@ -21,6 +21,9 @@ import {
   Upload,
   Copy,
   FileImage,
+  Coins,
+  Mail,
+  Sparkles,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -36,6 +39,10 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { createBrowserClient } from "@/lib/supabase/client";
+import { MtoForm, calcularExtraSeguro } from "@/components/tienda/mto-form";
+import { validarValoresMto, validarRestriccionSocios } from "@/lib/mto/schema";
+import { resumirPersonalizacion } from "@/lib/mto/pricing";
+import type { MtoCampo, MtoValores } from "@/types/mto";
 import { toast } from "sonner";
 import {
   fadeInUp,
@@ -73,6 +80,10 @@ interface Producto {
   imagen_url: string | null;
   imagen_focal_point: string | null;
   variantes: ProductoVariante[];
+  mto_disponible: boolean;
+  mto_solo: boolean;
+  mto_campos: MtoCampo[];
+  mto_tiempo_fabricacion_dias: number | null;
 }
 
 interface Categoria {
@@ -82,6 +93,8 @@ interface Categoria {
 }
 
 interface POSCartItem {
+  /** Identidad de la línea: producto+variante para stock, única por encargue. */
+  key: string;
   producto_id: number;
   variante_id: number | null;
   nombre: string;
@@ -91,7 +104,16 @@ interface POSCartItem {
   stock_actual: number;
   imagen_url: string | null;
   imagen_focal_point: string | null;
+  es_encargue: boolean;
+  personalizacion: MtoValores;
+  /** Recargo por unidad de la personalización (0 si no es encargue). */
+  precio_extra: number;
+  resumen: string | null;
 }
+
+// Tope de unidades por línea de encargue (no depende de stock).
+const MAX_CANTIDAD_ENCARGUE = 99;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface SocioInfo {
   id: string;
@@ -135,19 +157,22 @@ function POSProductCard({
     ? producto.precio_socio
     : producto.precio;
   const sinStock = producto.stock_actual <= 0;
+  // Sin stock pero con encargue: se puede seguir vendiendo bajo encargue.
+  const bloqueado = sinStock && !producto.mto_disponible;
+  const soloEncargue = producto.mto_disponible && (producto.mto_solo || sinStock);
 
   return (
     <motion.button
       variants={fadeInUp}
-      whileHover={sinStock ? {} : { scale: 1.03, y: -2 }}
-      whileTap={sinStock ? {} : { scale: 0.97 }}
+      whileHover={bloqueado ? {} : { scale: 1.03, y: -2 }}
+      whileTap={bloqueado ? {} : { scale: 0.97 }}
       transition={springBouncy}
-      onClick={() => !sinStock && onAdd(producto)}
-      disabled={sinStock}
+      onClick={() => !bloqueado && onAdd(producto)}
+      disabled={bloqueado}
       className={`
         relative flex flex-col items-center rounded-xl border bg-white p-3 text-center
         transition-shadow duration-200 cursor-pointer select-none
-        ${sinStock
+        ${bloqueado
           ? "opacity-50 cursor-not-allowed border-gray-200"
           : "border-linea hover:shadow-card hover:border-bordo-200 active:shadow-sm"
         }
@@ -169,7 +194,7 @@ function POSProductCard({
             <PackageOpen className="size-8" strokeWidth={1} />
           </div>
         )}
-        {sinStock && (
+        {bloqueado && (
           <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
             <Badge variant="destructive" className="text-xs">Agotado</Badge>
           </div>
@@ -190,9 +215,19 @@ function POSProductCard({
       )}
 
       {/* Stock badge */}
-      <span className="text-[10px] text-muted-foreground mt-1">
-        Stock: {producto.stock_actual}
-      </span>
+      {!producto.mto_solo && (
+        <span className="text-[10px] text-muted-foreground mt-1">
+          Stock: {producto.stock_actual}
+        </span>
+      )}
+
+      {/* Encargue indicator */}
+      {producto.mto_disponible && (
+        <Badge className="mt-1 gap-1 text-[9px] px-1.5 py-0 bg-dorado-300/20 text-bordo-800 border border-dorado-300/60">
+          <Sparkles className="size-2.5" />
+          {soloEncargue ? "Bajo encargue" : "Stock o encargue"}
+        </Badge>
+      )}
 
       {/* Variants indicator */}
       {producto.variantes.length > 0 && (
@@ -202,7 +237,7 @@ function POSProductCard({
       )}
 
       {/* Add overlay */}
-      {!sinStock && (
+      {!bloqueado && (
         <motion.div
           initial={{ opacity: 0 }}
           whileHover={{ opacity: 1 }}
@@ -227,12 +262,12 @@ function CartItemRow({
 }: {
   item: POSCartItem;
   usarPrecioSocio: boolean;
-  onUpdateQty: (productoId: number, varianteId: number | null, qty: number) => void;
-  onRemove: (productoId: number, varianteId: number | null) => void;
+  onUpdateQty: (key: string, qty: number) => void;
+  onRemove: (key: string) => void;
 }) {
-  const precio = usarPrecioSocio && item.precio_socio
+  const precio = (usarPrecioSocio && item.precio_socio
     ? item.precio_socio
-    : item.precio;
+    : item.precio) + item.precio_extra;
 
   return (
     <motion.div
@@ -266,6 +301,14 @@ function CartItemRow({
         <p className="font-body font-medium text-sm leading-tight truncate">
           {item.nombre}
         </p>
+        {item.es_encargue && (
+          <p className="flex items-center gap-1 text-[11px] text-bordo-700 truncate">
+            <Sparkles className="size-3 shrink-0" />
+            <span className="truncate">
+              Encargue{item.resumen ? ` · ${item.resumen}` : ""}
+            </span>
+          </p>
+        )}
         <p className="text-xs text-muted-foreground">
           ${precio.toLocaleString("es-UY")} c/u
         </p>
@@ -275,7 +318,7 @@ function CartItemRow({
       <div className="flex items-center gap-1">
         <motion.button
           whileTap={{ scale: 0.85 }}
-          onClick={() => onUpdateQty(item.producto_id, item.variante_id, item.cantidad - 1)}
+          onClick={() => onUpdateQty(item.key, item.cantidad - 1)}
           className="size-7 rounded-md bg-superficie flex items-center justify-center text-foreground hover:bg-gray-200 transition-colors"
         >
           <Minus className="size-3.5" />
@@ -285,7 +328,7 @@ function CartItemRow({
         </span>
         <motion.button
           whileTap={{ scale: 0.85 }}
-          onClick={() => onUpdateQty(item.producto_id, item.variante_id, item.cantidad + 1)}
+          onClick={() => onUpdateQty(item.key, item.cantidad + 1)}
           disabled={item.cantidad >= item.stock_actual}
           className="size-7 rounded-md bg-superficie flex items-center justify-center text-foreground hover:bg-gray-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
@@ -301,7 +344,7 @@ function CartItemRow({
       {/* Remove */}
       <motion.button
         whileTap={{ scale: 0.85 }}
-        onClick={() => onRemove(item.producto_id, item.variante_id)}
+        onClick={() => onRemove(item.key)}
         className="size-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
       >
         <Trash2 className="size-3.5" />
@@ -323,6 +366,7 @@ export function POSClient() {
   const [categoriaActiva, setCategoriaActiva] = useState<number | null>(null);
   const [cart, setCart] = useState<POSCartItem[]>([]);
   const [nombreCliente, setNombreCliente] = useState("");
+  const [emailCliente, setEmailCliente] = useState("");
   const [socio, setSocio] = useState<SocioInfo | null>(null);
   const [buscandoSocio, setBuscandoSocio] = useState(false);
   const [cedulaBusqueda, setCedulaBusqueda] = useState("");
@@ -336,6 +380,9 @@ export function POSClient() {
   const [descuentoManualValor, setDescuentoManualValor] = useState("");
   const [descuentoManualMotivo, setDescuentoManualMotivo] = useState("");
   const [showTransferenciaModal, setShowTransferenciaModal] = useState(false);
+  // Pago mixto: el modal de transferencia pide además cuánto se cobra en efectivo.
+  const [modoMixto, setModoMixto] = useState(false);
+  const [montoEfectivoMixto, setMontoEfectivoMixto] = useState("");
   const [comprobanteFile, setComprobanteFile] = useState<File | null>(null);
   const [comprobantePreview, setComprobantePreview] = useState<string | null>(null);
   const [subiendoComprobante, setSubiendoComprobante] = useState(false);
@@ -343,19 +390,23 @@ export function POSClient() {
   const [cuentaCopiada, setCuentaCopiada] = useState(false);
   const [showVariantePicker, setShowVariantePicker] = useState(false);
   const [productoVarianteSeleccion, setProductoVarianteSeleccion] = useState<Producto | null>(null);
+  const [productoEncargue, setProductoEncargue] = useState<Producto | null>(null);
+  const [mtoValores, setMtoValores] = useState<MtoValores>({});
   const comprobanteInputRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Computed
-  const usarPrecioSocio = socio?.es_socio === true;
+  const esSocio = socio?.es_socio === true;
+  const usarPrecioSocio = esSocio;
 
+  // Los encargues suman su recargo de personalización por unidad.
   const subtotal = useMemo(
     () =>
       cart.reduce((sum, item) => {
         const precio = usarPrecioSocio && item.precio_socio
           ? item.precio_socio
           : item.precio;
-        return sum + precio * item.cantidad;
+        return sum + (precio + item.precio_extra) * item.cantidad;
       }, 0),
     [cart, usarPrecioSocio]
   );
@@ -363,7 +414,7 @@ export function POSClient() {
   const descuentoSocio = useMemo(() => {
     if (!usarPrecioSocio) return 0;
     const totalSinDesc = cart.reduce(
-      (sum, item) => sum + item.precio * item.cantidad,
+      (sum, item) => sum + (item.precio + item.precio_extra) * item.cantidad,
       0
     );
     return totalSinDesc - subtotal;
@@ -385,6 +436,51 @@ export function POSClient() {
 
   const total = subtotal - descuentoManualMonto;
 
+  // Encargues: email para avisar al cliente presencial (si no hay socio
+  // vinculado, que ya recibe los avisos en el email de su cuenta).
+  const hayEncargues = cart.some((item) => item.es_encargue);
+  const emailClienteTrim = emailCliente.trim();
+  const pideEmail = hayEncargues && !socio;
+  const emailValido = !pideEmail || emailClienteTrim === "" || EMAIL_RE.test(emailClienteTrim);
+  const emailClienteParaVenta = pideEmail && emailClienteTrim ? emailClienteTrim : null;
+
+  // Se envía el precio de lista; el descuento de socio viaja en `descuento`
+  // para no restarlo dos veces en el backend. El recargo del encargue lo
+  // recalcula el backend a partir de la personalización.
+  const itemsPayload = useMemo(
+    () =>
+      cart.map((item) => ({
+        producto_id: item.producto_id,
+        variante_id: item.variante_id,
+        cantidad: item.cantidad,
+        precio_unitario: item.precio,
+        es_encargue: item.es_encargue,
+        personalizacion: item.personalizacion,
+      })),
+    [cart]
+  );
+
+  // Diálogo de encargue
+  const mtoValidacion = useMemo(() => {
+    if (!productoEncargue) return null;
+    const campos = productoEncargue.mto_campos;
+    const validacion = validarValoresMto(campos, mtoValores);
+    const bloqueos = validarRestriccionSocios(campos, validacion.cleaned, esSocio);
+    const base = usarPrecioSocio && productoEncargue.precio_socio
+      ? productoEncargue.precio_socio
+      : productoEncargue.precio;
+    return {
+      validacion,
+      valido: validacion.valid && bloqueos.length === 0,
+      precio: base + calcularExtraSeguro(campos, validacion.cleaned, esSocio),
+    };
+  }, [productoEncargue, mtoValores, esSocio, usarPrecioSocio]);
+
+  const efectivoMixto = Math.round((parseFloat(montoEfectivoMixto) || 0) * 100) / 100;
+  const transferenciaMixto = Math.round((total - efectivoMixto) * 100) / 100;
+  const mixtoValido = efectivoMixto > 0 && efectivoMixto < total;
+  const montoATransferir = modoMixto ? Math.max(transferenciaMixto, 0) : total;
+
   // ─── Data fetching ─────────────────────────────────────────
 
   const fetchProductos = useCallback(async () => {
@@ -393,8 +489,8 @@ export function POSClient() {
 
     const { data: prods } = await db
       .from("productos")
-      .select("id, nombre, slug, precio, precio_socio, stock_actual, categoria_id, activo, producto_imagenes(url, es_principal, focal_point), producto_variantes(id, nombre, sku, precio_override, stock_actual, atributos, activo)")
-      .eq("activo", true)
+      .select("id, nombre, slug, precio, precio_socio, stock_actual, categoria_id, activo, mto_disponible, mto_solo, mto_campos, mto_tiempo_fabricacion_dias, producto_imagenes(url, es_principal, focal_point), producto_variantes(id, nombre, sku, precio_override, stock_actual, atributos, activo)")
+      .eq("activo_pos", true)
       .order("nombre");
 
     const { data: cats } = await db
@@ -418,6 +514,10 @@ export function POSClient() {
         imagen_url: img?.url || null,
         imagen_focal_point: img?.focal_point || null,
         variantes,
+        mto_disponible: p.mto_disponible === true,
+        mto_solo: p.mto_solo === true,
+        mto_campos: Array.isArray(p.mto_campos) ? p.mto_campos : [],
+        mto_tiempo_fabricacion_dias: p.mto_tiempo_fabricacion_dias ?? null,
       };
     });
 
@@ -459,20 +559,17 @@ export function POSClient() {
       : producto.nombre;
 
     setCart((prev) => {
-      const existing = prev.find(
-        (i) => cartKey(i.producto_id, i.variante_id) === key
-      );
+      const existing = prev.find((i) => i.key === key);
       if (existing) {
         if (existing.cantidad >= stock) return prev;
         return prev.map((i) =>
-          cartKey(i.producto_id, i.variante_id) === key
-            ? { ...i, cantidad: i.cantidad + 1 }
-            : i
+          i.key === key ? { ...i, cantidad: i.cantidad + 1 } : i
         );
       }
       return [
         ...prev,
         {
+          key,
           producto_id: producto.id,
           variante_id: variante?.id ?? null,
           nombre,
@@ -482,6 +579,10 @@ export function POSClient() {
           stock_actual: stock,
           imagen_url: producto.imagen_url,
           imagen_focal_point: producto.imagen_focal_point,
+          es_encargue: false,
+          personalizacion: {},
+          precio_extra: 0,
+          resumen: null,
         },
       ];
     });
@@ -491,35 +592,78 @@ export function POSClient() {
     setProductoVarianteSeleccion(null);
   }, []);
 
+  const abrirEncargue = useCallback((producto: Producto) => {
+    setShowVariantePicker(false);
+    setProductoVarianteSeleccion(null);
+    setMtoValores({});
+    setProductoEncargue(producto);
+  }, []);
+
   const handleProductClick = useCallback((producto: Producto) => {
-    if (producto.variantes.length > 0) {
+    const puedeStock = !producto.mto_solo && producto.stock_actual > 0;
+    if (producto.mto_disponible && !puedeStock) {
+      abrirEncargue(producto);
+    } else if (producto.variantes.length > 0 || producto.mto_disponible) {
+      // El picker ofrece variantes del stock y, si aplica, "Encargar".
       setProductoVarianteSeleccion(producto);
       setShowVariantePicker(true);
     } else {
       addToCartDirect(producto, null);
     }
-  }, [addToCartDirect]);
+  }, [addToCartDirect, abrirEncargue]);
 
-  const updateCartQty = useCallback((productoId: number, varianteId: number | null, qty: number) => {
-    const key = cartKey(productoId, varianteId);
+  const agregarEncargue = useCallback(() => {
+    if (!productoEncargue || !mtoValidacion?.valido) return;
+    const campos = productoEncargue.mto_campos;
+    const cleaned = mtoValidacion.validacion.cleaned;
+    const resumen = resumirPersonalizacion(campos, cleaned)
+      .map((r) => `${r.label}: ${r.valor}`)
+      .join(" · ");
+
+    setCart((prev) => [
+      ...prev,
+      {
+        // Cada encargue es su propia línea (personalizaciones distintas).
+        key: `mto-${productoEncargue.id}-${Date.now()}`,
+        producto_id: productoEncargue.id,
+        variante_id: null,
+        nombre: productoEncargue.nombre,
+        precio: productoEncargue.precio,
+        precio_socio: productoEncargue.precio_socio,
+        cantidad: 1,
+        stock_actual: MAX_CANTIDAD_ENCARGUE,
+        imagen_url: productoEncargue.imagen_url,
+        imagen_focal_point: productoEncargue.imagen_focal_point,
+        es_encargue: true,
+        personalizacion: cleaned,
+        precio_extra: calcularExtraSeguro(campos, cleaned, esSocio),
+        resumen: resumen || null,
+      },
+    ]);
+    toast.success(`${productoEncargue.nombre} agregado como encargue`);
+    setProductoEncargue(null);
+    setMtoValores({});
+  }, [productoEncargue, mtoValidacion, esSocio]);
+
+  const updateCartQty = useCallback((key: string, qty: number) => {
     setCart((prev) => {
-      if (qty <= 0) return prev.filter((i) => cartKey(i.producto_id, i.variante_id) !== key);
+      if (qty <= 0) return prev.filter((i) => i.key !== key);
       return prev.map((i) =>
-        cartKey(i.producto_id, i.variante_id) === key
+        i.key === key
           ? { ...i, cantidad: Math.min(qty, i.stock_actual) }
           : i
       );
     });
   }, []);
 
-  const removeFromCart = useCallback((productoId: number, varianteId: number | null) => {
-    const key = cartKey(productoId, varianteId);
-    setCart((prev) => prev.filter((i) => cartKey(i.producto_id, i.variante_id) !== key));
+  const removeFromCart = useCallback((key: string) => {
+    setCart((prev) => prev.filter((i) => i.key !== key));
   }, []);
 
   const clearCart = useCallback(() => {
     setCart([]);
     setNombreCliente("");
+    setEmailCliente("");
     setSocio(null);
     setCedulaBusqueda("");
   }, []);
@@ -556,14 +700,7 @@ export function POSClient() {
       setProcesando(true);
 
       try {
-        // Enviamos el precio de lista; el descuento de socio viaja en
-        // `descuento` para no restarlo dos veces en el backend.
-        const items = cart.map((item) => ({
-          producto_id: item.producto_id,
-          variante_id: item.variante_id,
-          cantidad: item.cantidad,
-          precio_unitario: item.precio,
-        }));
+        const items = itemsPayload;
 
         const res = await fetch("/api/admin/pos/venta", {
           method: "POST",
@@ -573,6 +710,7 @@ export function POSClient() {
             metodo_pago: "efectivo",
             nombre_cliente: nombreCliente || null,
             perfil_socio_id: socio?.id || null,
+            email_cliente: emailClienteParaVenta,
             descuento: descuentoSocio + descuentoManualMonto,
             descuento_tipo: descuentoManualMonto > 0 ? descuentoManualTipo : (descuentoSocio > 0 ? "socio" : null),
             descuento_porcentaje: descuentoManualPct > 0 ? descuentoManualPct : null,
@@ -607,34 +745,30 @@ export function POSClient() {
         setProcesando(false);
       }
     },
-    [cart, nombreCliente, socio, usarPrecioSocio, descuentoSocio, descuentoManualMonto, descuentoManualTipo, descuentoManualPct, descuentoManualMotivo, clearCart, fetchProductos]
+    [cart, itemsPayload, emailClienteParaVenta, nombreCliente, socio, usarPrecioSocio, descuentoSocio, descuentoManualMonto, descuentoManualTipo, descuentoManualPct, descuentoManualMotivo, clearCart, fetchProductos]
   );
 
   // ─── Process transfer sale ───────────────────────────────
 
   const procesarTransferencia = useCallback(async () => {
     if (cart.length === 0 || !comprobanteFile) return;
+    if (modoMixto && !mixtoValido) return;
     setSubiendoComprobante(true);
 
     try {
       // 1. Create order with transferencia
-      // Enviamos el precio de lista; el descuento de socio viaja en
-      // `descuento` para no restarlo dos veces en el backend.
-      const items = cart.map((item) => ({
-        producto_id: item.producto_id,
-        variante_id: item.variante_id,
-        cantidad: item.cantidad,
-        precio_unitario: item.precio,
-      }));
+      const items = itemsPayload;
 
       const res = await fetch("/api/admin/pos/venta", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           items,
-          metodo_pago: "transferencia",
+          metodo_pago: modoMixto ? "mixto" : "transferencia",
+          monto_efectivo: modoMixto ? efectivoMixto : null,
           nombre_cliente: nombreCliente || null,
           perfil_socio_id: socio?.id || null,
+          email_cliente: emailClienteParaVenta,
           descuento: descuentoSocio + descuentoManualMonto,
           descuento_tipo: descuentoManualMonto > 0 ? descuentoManualTipo : (descuentoSocio > 0 ? "socio" : null),
           descuento_porcentaje: descuentoManualPct > 0 ? descuentoManualPct : null,
@@ -670,7 +804,11 @@ export function POSClient() {
 
       // 3. Success
       setTransferExitosa(true);
-      toast.success(`Venta #${json.data.numero_pedido} pendiente de verificación`);
+      toast.success(
+        modoMixto
+          ? `Venta #${json.data.numero_pedido}: efectivo registrado, transferencia pendiente de verificación`
+          : `Venta #${json.data.numero_pedido} pendiente de verificación`
+      );
       fetchProductos();
 
       setTimeout(() => {
@@ -678,6 +816,8 @@ export function POSClient() {
         setShowTransferenciaModal(false);
         setComprobanteFile(null);
         setComprobantePreview(null);
+        setModoMixto(false);
+        setMontoEfectivoMixto("");
         clearCart();
       }, 2000);
     } catch (err) {
@@ -685,7 +825,7 @@ export function POSClient() {
     } finally {
       setSubiendoComprobante(false);
     }
-  }, [cart, comprobanteFile, nombreCliente, socio, usarPrecioSocio, descuentoSocio, descuentoManualMonto, descuentoManualTipo, descuentoManualPct, descuentoManualMotivo, clearCart, fetchProductos]);
+  }, [cart, itemsPayload, emailClienteParaVenta, comprobanteFile, modoMixto, mixtoValido, efectivoMixto, nombreCliente, socio, usarPrecioSocio, descuentoSocio, descuentoManualMonto, descuentoManualTipo, descuentoManualPct, descuentoManualMotivo, clearCart, fetchProductos]);
 
   // Handle file selection for comprobante
   const handleComprobanteSelect = useCallback((file: File | null) => {
@@ -919,7 +1059,7 @@ export function POSClient() {
             <AnimatePresence mode="popLayout">
               {cart.map((item) => (
                 <CartItemRow
-                  key={`${item.producto_id}-${item.variante_id ?? "base"}`}
+                  key={item.key}
                   item={item}
                   usarPrecioSocio={usarPrecioSocio}
                   onUpdateQty={updateCartQty}
@@ -939,6 +1079,54 @@ export function POSClient() {
             placeholder="Nombre del cliente (opcional)"
             className="h-9 text-sm bg-superficie border-none rounded-lg"
           />
+
+          {/* Email para avisos del encargue */}
+          <AnimatePresence initial={false}>
+            {hayEncargues && (
+              <motion.div
+                key="email-avisos"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={springSmooth}
+                className="overflow-hidden"
+              >
+                {socio ? (
+                  <p className="flex items-center gap-1.5 rounded-lg bg-superficie px-3 py-2 text-xs text-muted-foreground">
+                    <Mail className="size-3.5 shrink-0" />
+                    Los avisos del encargue van al email de la cuenta del socio.
+                  </p>
+                ) : (
+                  <div className="space-y-1">
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                      <Input
+                        type="email"
+                        inputMode="email"
+                        autoComplete="off"
+                        value={emailCliente}
+                        onChange={(e) => setEmailCliente(e.target.value)}
+                        placeholder="Email para avisos del encargue"
+                        aria-invalid={!emailValido}
+                        className="h-9 pl-8 text-sm bg-superficie border-none rounded-lg"
+                      />
+                    </div>
+                    <p
+                      className={`text-[11px] font-body ${
+                        !emailValido ? "text-red-600" : emailClienteTrim ? "text-green-700" : "text-amber-700"
+                      }`}
+                    >
+                      {!emailValido
+                        ? "Email inválido"
+                        : emailClienteTrim
+                          ? "Le avisamos por mail cuando esté listo para retirar."
+                          : "Sin email no se le puede avisar cuando esté listo."}
+                    </p>
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Socio lookup */}
           {socio ? (
@@ -1106,7 +1294,7 @@ export function POSClient() {
             <motion.div whileTap={{ scale: 0.97 }}>
               <Button
                 onClick={() => setShowEfectivoModal(true)}
-                disabled={cart.length === 0 || procesando}
+                disabled={cart.length === 0 || procesando || !emailValido}
                 className="w-full h-14 bg-green-600 hover:bg-green-700 text-white rounded-xl font-heading font-bold text-sm gap-1.5"
               >
                 <Banknote className="size-5" />
@@ -1115,12 +1303,30 @@ export function POSClient() {
             </motion.div>
             <motion.div whileTap={{ scale: 0.97 }}>
               <Button
-                onClick={() => setShowTransferenciaModal(true)}
-                disabled={cart.length === 0 || procesando}
+                onClick={() => {
+                  setModoMixto(false);
+                  setShowTransferenciaModal(true);
+                }}
+                disabled={cart.length === 0 || procesando || !emailValido}
                 className="w-full h-14 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-heading font-bold text-sm gap-1.5"
               >
                 <Building2 className="size-5" />
                 Transferencia
+              </Button>
+            </motion.div>
+            <motion.div whileTap={{ scale: 0.97 }} className="col-span-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setModoMixto(true);
+                  setMontoEfectivoMixto("");
+                  setShowTransferenciaModal(true);
+                }}
+                disabled={cart.length === 0 || procesando || !emailValido}
+                className="w-full h-11 rounded-xl font-heading font-bold text-sm gap-1.5 border-bordo-200 text-bordo-800 hover:bg-bordo-50 hover:text-bordo-900"
+              >
+                <Coins className="size-4" />
+                Mixto: efectivo + transferencia
               </Button>
             </motion.div>
           </div>
@@ -1143,7 +1349,9 @@ export function POSClient() {
               {productoVarianteSeleccion?.nombre}
             </DialogTitle>
             <DialogDescription>
-              Elegí la variante para agregar al carrito.
+              {productoVarianteSeleccion?.mto_disponible
+                ? "Vendé del stock o tomá un encargue personalizado."
+                : "Elegí la variante para agregar al carrito."}
             </DialogDescription>
           </DialogHeader>
           {productoVarianteSeleccion && (
@@ -1153,6 +1361,28 @@ export function POSClient() {
               animate="visible"
               className="grid gap-2 py-2 max-h-[60vh] overflow-y-auto"
             >
+              {productoVarianteSeleccion.variantes.length === 0 && (
+                <motion.button
+                  variants={fadeInUp}
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => addToCartDirect(productoVarianteSeleccion, null)}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-linea p-3 text-left transition-all hover:border-bordo-300 hover:bg-bordo-50/50 cursor-pointer"
+                >
+                  <p className="flex-1 font-body font-medium text-sm">Del stock</p>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-xs text-muted-foreground">
+                      Stock: {productoVarianteSeleccion.stock_actual}
+                    </span>
+                    <span className="font-heading font-bold text-sm text-bordo-700">
+                      ${productoVarianteSeleccion.precio.toLocaleString("es-UY")}
+                    </span>
+                    <div className="size-7 rounded-lg bg-bordo-800 text-white flex items-center justify-center">
+                      <Plus className="size-4" />
+                    </div>
+                  </div>
+                </motion.button>
+              )}
               {productoVarianteSeleccion.variantes.map((v) => {
                 const precio = v.precio_override ?? productoVarianteSeleccion.precio;
                 const sinStock = v.stock_actual <= 0;
@@ -1197,6 +1427,83 @@ export function POSClient() {
               })}
             </motion.div>
           )}
+          {productoVarianteSeleccion?.mto_disponible && (
+            <motion.button
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={springSmooth}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => abrirEncargue(productoVarianteSeleccion)}
+              className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-dorado-300 bg-dorado-300/10 p-3 text-left transition-colors hover:border-bordo-300 hover:bg-dorado-300/20"
+            >
+              <span className="flex items-center gap-2 font-body font-medium text-sm text-bordo-800">
+                <Sparkles className="size-4" />
+                Encargar personalizado
+              </span>
+              <span className="text-xs text-muted-foreground">No descuenta stock</span>
+            </motion.button>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Encargue (MTO) Modal */}
+      <Dialog
+        open={!!productoEncargue}
+        onOpenChange={(open) => {
+          if (!open) {
+            setProductoEncargue(null);
+            setMtoValores({});
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-heading flex items-center gap-2">
+              <Sparkles className="size-4 text-bordo-700" />
+              Encargue — {productoEncargue?.nombre}
+            </DialogTitle>
+            <DialogDescription>
+              Completá la personalización. No descuenta stock: el pedido queda
+              como Encargado hasta que llegue el producto.
+            </DialogDescription>
+          </DialogHeader>
+          {productoEncargue && (
+            <div className="py-2">
+              <MtoForm
+                campos={productoEncargue.mto_campos}
+                valores={mtoValores}
+                onChange={setMtoValores}
+                esSocio={esSocio}
+                tiempoFabricacionDias={productoEncargue.mto_tiempo_fabricacion_dias}
+                contexto="pos"
+              />
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:items-center">
+            <p className="mr-auto font-heading font-bold text-lg text-bordo-800">
+              <AnimatedPrice value={mtoValidacion?.precio ?? 0} />
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setProductoEncargue(null);
+                setMtoValores({});
+              }}
+            >
+              Cancelar
+            </Button>
+            <motion.div whileTap={{ scale: 0.97 }}>
+              <Button
+                onClick={agregarEncargue}
+                disabled={!mtoValidacion?.valido}
+                className="gap-2"
+              >
+                <Plus className="size-4" />
+                Agregar encargue
+              </Button>
+            </motion.div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -1260,19 +1567,24 @@ export function POSClient() {
                 <DialogHeader>
                   <DialogTitle className="font-heading">Confirmar cobro en efectivo</DialogTitle>
                   <DialogDescription>
-                    Se registrará la venta y se descontará el stock.
+                    {hayEncargues
+                      ? "Se registrará la venta. Los encargues no descuentan stock y quedan como Encargado hasta que lleguen."
+                      : "Se registrará la venta y se descontará el stock."}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="py-4">
                   <div className="bg-superficie rounded-xl p-4 space-y-2">
                     {cart.map((item) => {
-                      const precio = usarPrecioSocio && item.precio_socio
+                      const precio = (usarPrecioSocio && item.precio_socio
                         ? item.precio_socio
-                        : item.precio;
+                        : item.precio) + item.precio_extra;
                       return (
-                        <div key={`${item.producto_id}-${item.variante_id ?? "base"}`} className="flex justify-between text-sm font-body">
+                        <div key={item.key} className="flex justify-between text-sm font-body">
                           <span>
                             {item.nombre} × {item.cantidad}
+                            {item.es_encargue && (
+                              <span className="ml-1.5 text-xs text-bordo-700">(encargue)</span>
+                            )}
                           </span>
                           <span className="font-medium">
                             ${(precio * item.cantidad).toLocaleString("es-UY")}
@@ -1286,6 +1598,12 @@ export function POSClient() {
                       <span>${total.toLocaleString("es-UY")}</span>
                     </div>
                   </div>
+                  {emailClienteParaVenta && (
+                    <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Mail className="size-3.5 shrink-0" />
+                      Se enviará la confirmación a {emailClienteParaVenta}
+                    </p>
+                  )}
                 </div>
                 <DialogFooter>
                   <Button
@@ -1322,6 +1640,7 @@ export function POSClient() {
           if (!open && !transferExitosa) {
             setComprobanteFile(null);
             setComprobantePreview(null);
+            setMontoEfectivoMixto("");
           }
         }}
       >
@@ -1352,13 +1671,87 @@ export function POSClient() {
             ) : (
               <motion.div key="transfer-form">
                 <DialogHeader>
-                  <DialogTitle className="font-heading">Pago por transferencia</DialogTitle>
+                  <DialogTitle className="font-heading">
+                    {modoMixto ? "Pago mixto" : "Pago por transferencia"}
+                  </DialogTitle>
                   <DialogDescription>
-                    Datos bancarios para la transferencia y comprobante.
+                    {modoMixto
+                      ? "Indicá cuánto se cobra en efectivo; el resto se transfiere."
+                      : "Datos bancarios para la transferencia y comprobante."}
                   </DialogDescription>
                 </DialogHeader>
 
                 <div className="py-4 space-y-4">
+                  {/* Split efectivo / transferencia */}
+                  {modoMixto && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="rounded-xl border border-linea p-4 space-y-3"
+                    >
+                      <div className="flex justify-between text-sm font-body">
+                        <span className="text-muted-foreground">Total de la venta</span>
+                        <span className="font-heading font-bold">
+                          ${total.toLocaleString("es-UY")}
+                        </span>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label
+                          htmlFor="monto-efectivo-mixto"
+                          className="flex items-center gap-1.5 text-sm font-body font-medium"
+                        >
+                          <Banknote className="size-4 text-green-600" />
+                          Monto en efectivo
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                            $
+                          </span>
+                          <Input
+                            id="monto-efectivo-mixto"
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            max={total}
+                            step="1"
+                            value={montoEfectivoMixto}
+                            onChange={(e) => setMontoEfectivoMixto(e.target.value)}
+                            placeholder="0"
+                            className="pl-7 tabular-nums"
+                            autoFocus
+                          />
+                        </div>
+                        <AnimatePresence>
+                          {montoEfectivoMixto !== "" && !mixtoValido && (
+                            <motion.p
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="text-xs text-red-600"
+                            >
+                              Debe ser mayor a $0 y menor al total
+                            </motion.p>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                      <Separator />
+                      <div className="grid grid-cols-2 gap-2 text-sm font-body">
+                        <div className="rounded-lg bg-green-50 px-3 py-2">
+                          <p className="text-xs text-green-700">Efectivo</p>
+                          <p className="font-heading font-bold text-green-700">
+                            <AnimatedPrice value={mixtoValido ? efectivoMixto : 0} />
+                          </p>
+                        </div>
+                        <div className="rounded-lg bg-amber-50 px-3 py-2">
+                          <p className="text-xs text-amber-700">Transferencia</p>
+                          <p className="font-heading font-bold text-amber-700">
+                            <AnimatedPrice value={mixtoValido ? transferenciaMixto : 0} />
+                          </p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
                   {/* Bank details */}
                   <motion.div
                     initial={{ opacity: 0, y: 8 }}
@@ -1396,7 +1789,7 @@ export function POSClient() {
                     <div className="pt-2 border-t border-linea mt-2">
                       <div className="flex justify-between font-heading font-bold text-lg">
                         <span>Total a transferir:</span>
-                        <span className="text-bordo-800">${total.toLocaleString("es-UY")}</span>
+                        <span className="text-bordo-800">${montoATransferir.toLocaleString("es-UY")}</span>
                       </div>
                     </div>
                   </motion.div>
@@ -1496,6 +1889,7 @@ export function POSClient() {
                       setShowTransferenciaModal(false);
                       setComprobanteFile(null);
                       setComprobantePreview(null);
+                      setMontoEfectivoMixto("");
                     }}
                     disabled={subiendoComprobante}
                   >
@@ -1503,7 +1897,11 @@ export function POSClient() {
                   </Button>
                   <Button
                     onClick={procesarTransferencia}
-                    disabled={!comprobanteFile || subiendoComprobante}
+                    disabled={
+                      !comprobanteFile ||
+                      subiendoComprobante ||
+                      (modoMixto && !mixtoValido)
+                    }
                     className="bg-amber-500 hover:bg-amber-600 text-white gap-2"
                   >
                     {subiendoComprobante ? (

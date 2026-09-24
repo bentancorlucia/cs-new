@@ -65,6 +65,7 @@ interface Producto {
   stock_minimo: number;
   stock_reservado: number;
   activo: boolean;
+  activo_pos: boolean;
   destacado: boolean;
   created_at: string;
   mto_disponible: boolean;
@@ -190,8 +191,9 @@ export default function AdminProductosPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todos</SelectItem>
-            <SelectItem value="activo">Activos</SelectItem>
-            <SelectItem value="inactivo">Inactivos</SelectItem>
+            <SelectItem value="activo">Activos en web</SelectItem>
+            <SelectItem value="inactivo">Inactivos en web</SelectItem>
+            <SelectItem value="inactivo_pos">Inactivos en POS</SelectItem>
             <SelectItem value="agotado">Agotados</SelectItem>
           </SelectContent>
         </Select>
@@ -320,7 +322,10 @@ export default function AdminProductosPage() {
                                 </span>
                               )}
                               {!prod.activo && (
-                                <Badge variant="outline" className="text-[9px] py-0 h-4">Inactivo</Badge>
+                                <Badge variant="outline" className="text-[9px] py-0 h-4">Inactivo web</Badge>
+                              )}
+                              {!prod.activo_pos && (
+                                <Badge variant="outline" className="text-[9px] py-0 h-4">Inactivo POS</Badge>
                               )}
                             </div>
                           </div>
@@ -353,11 +358,14 @@ export default function AdminProductosPage() {
                           </div>
                         </TableCell>
                         <TableCell className="text-center hidden lg:table-cell">
-                          {prod.activo ? (
-                            <Badge variant="secondary">Activo</Badge>
-                          ) : (
-                            <Badge variant="outline">Inactivo</Badge>
-                          )}
+                          <div className="flex flex-col items-center gap-1">
+                            <Badge variant={prod.activo ? "secondary" : "outline"}>
+                              Web: {prod.activo ? "Activo" : "Inactivo"}
+                            </Badge>
+                            <Badge variant={prod.activo_pos ? "secondary" : "outline"}>
+                              POS: {prod.activo_pos ? "Activo" : "Inactivo"}
+                            </Badge>
+                          </div>
                         </TableCell>
                         <TableCell className="py-3">
                           <DropdownMenu>

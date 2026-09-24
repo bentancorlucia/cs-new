@@ -18,6 +18,7 @@ const productoSchema = z.object({
   stock_actual: z.number().int().min(0).default(0),
   stock_minimo: z.number().int().min(0).default(5),
   activo: z.boolean().default(true),
+  activo_pos: z.boolean().default(true),
   destacado: z.boolean().default(false),
   unidad: z.enum(["un", "kg", "lt", "mt", "par", "docena"]).default("un"),
   mto_disponible: z.boolean().default(false),
@@ -63,6 +64,7 @@ export async function GET(request: NextRequest) {
 
     if (estado === "activo") query = query.eq("activo", true);
     if (estado === "inactivo") query = query.eq("activo", false);
+    if (estado === "inactivo_pos") query = query.eq("activo_pos", false);
     if (estado === "agotado") query = query.eq("stock_actual", 0);
     if (estado === "stock_bajo") query = query.lt("stock_actual", 5);
 

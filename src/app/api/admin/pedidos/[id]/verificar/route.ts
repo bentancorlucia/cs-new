@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole, getCurrentUser } from "@/lib/supabase/roles";
 import { z } from "zod";
+import { resolverEmailPedido } from "@/lib/tienda/email-pedido";
 
 const TIENDA_ROLES = ["super_admin", "tienda"];
 
@@ -43,7 +44,9 @@ export async function POST(
     // 1. Fetch pedido
     const { data: pedido } = await db
       .from("pedidos")
-      .select("id, estado, perfil_id, total, numero_pedido, nombre_cliente, tipo")
+      .select(
+        "id, estado, perfil_id, email_cliente, total, numero_pedido, nombre_cliente, tipo, metodo_pago, monto_transferencia"
+      )
       .eq("id", pedidoId)
       .single();
 
@@ -192,44 +195,41 @@ export async function POST(
         })
         .eq("pedido_id", pedidoId);
 
-      // 7a. Send confirmation email
+      // 7a. Send confirmation email (cuenta o email_cliente del POS)
       try {
-        if (!pedido.perfil_id) throw new Error("No perfil_id");
-
-        const { data: perfil } = await db
-          .from("perfiles")
-          .select("nombre, apellido")
-          .eq("id", pedido.perfil_id!)
-          .single();
-
-        const { data: items } = await db
-          .from("pedido_items")
-          .select("producto_id, cantidad, precio_unitario")
-          .eq("pedido_id", pedidoId);
-
-        // Fetch product names for the email
-        const itemsConNombre = [];
-        if (items) {
-          for (const item of items) {
-            const { data: prod } = await db
-              .from("productos")
-              .select("nombre")
-              .eq("id", item.producto_id)
-              .single();
-            itemsConNombre.push({
-              nombre: prod?.nombre || "",
-              cantidad: item.cantidad,
-              precioUnitario: item.precio_unitario,
-            });
-          }
-        }
-
-        const { data: authUser } = await db.auth.admin.getUserById(
-          pedido.perfil_id!
-        );
-        const email = authUser?.user?.email;
+        const { email, tieneCuenta } = await resolverEmailPedido(db, pedido);
 
         if (email) {
+          const { data: perfil } = pedido.perfil_id
+            ? await db
+                .from("perfiles")
+                .select("nombre, apellido")
+                .eq("id", pedido.perfil_id)
+                .single()
+            : { data: null };
+
+          const { data: items } = await db
+            .from("pedido_items")
+            .select("producto_id, cantidad, precio_unitario")
+            .eq("pedido_id", pedidoId);
+
+          // Fetch product names for the email
+          const itemsConNombre = [];
+          if (items) {
+            for (const item of items) {
+              const { data: prod } = await db
+                .from("productos")
+                .select("nombre")
+                .eq("id", item.producto_id)
+                .single();
+              itemsConNombre.push({
+                nombre: prod?.nombre || "",
+                cantidad: item.cantidad,
+                precioUnitario: item.precio_unitario,
+              });
+            }
+          }
+
           const { sendOrderConfirmation } = await import(
             "@/lib/email/send"
           );
@@ -246,7 +246,9 @@ export async function POST(
             numeroPedido: pedido.numero_pedido,
             items: itemsConNombre,
             total: pedido.total,
-            pedidoUrl: `${APP_URL}/tienda/pedido/${pedidoId}`,
+            pedidoUrl: tieneCuenta
+              ? `${APP_URL}/tienda/pedido/${pedidoId}`
+              : undefined,
           });
         }
       } catch (emailError) {
@@ -283,6 +285,12 @@ export async function POST(
         const { registrarMovimientoVentaPedido } = await import(
           "@/lib/tienda/registrar-movimiento"
         );
+        // Pago mixto: el efectivo ya se registró al vender; acá solo entra
+        // la parte transferida.
+        const esMixto = pedido.metodo_pago === "mixto";
+        const montoTransferido = esMixto
+          ? Number(pedido.monto_transferencia)
+          : Number(pedido.total);
         await registrarMovimientoVentaPedido(db, {
           pedidoId,
           numeroPedido: pedido.numero_pedido,
@@ -292,13 +300,16 @@ export async function POST(
           registradoPor: user?.id ?? null,
           // La donación NO se cuenta como ingreso de tienda
           montoOverride:
-            donacionMonto > 0 ? pedido.total - donacionMonto : undefined,
+            esMixto || donacionMonto > 0
+              ? montoTransferido - donacionMonto
+              : undefined,
+          pagoParcial: esMixto,
         });
       } catch (movError) {
         console.error("Error al registrar movimiento financiero:", movError);
       }
 
-      return NextResponse.json({ success: true, estado: "preparando" });
+      return NextResponse.json({ success: true, estado: nuevoEstado });
     } else {
       // RECHAZAR
 
@@ -320,6 +331,22 @@ export async function POST(
         .eq("pedido_id", pedidoId)
         .in("estado", ["pendiente_pago"]);
 
+      // 3b.2 Pago mixto: el efectivo se registró en caja al vender. Al
+      // cancelar el pedido se devuelve al cliente, así que se quita el
+      // movimiento (solo el de efectivo; la transferencia nunca se registró).
+      if (pedido.metodo_pago === "mixto") {
+        const { error: movError } = await db
+          .from("movimientos_financieros")
+          .delete()
+          .eq("origen_tipo", "pedido")
+          .eq("origen_id", pedidoId)
+          .eq("referencia", `POS-${pedido.numero_pedido}`)
+          .eq("conciliado", false);
+        if (movError) {
+          console.error("Error al revertir efectivo de pago mixto:", movError);
+        }
+      }
+
       // 4b. Update comprobante → rechazado
       await db
         .from("comprobantes")
@@ -333,21 +360,15 @@ export async function POST(
 
       // 5b. Send cancellation email
       try {
-        if (pedido.perfil_id) {
-          const { data: authUser } = await db.auth.admin.getUserById(
-            pedido.perfil_id
-          );
-          const email = authUser?.user?.email;
-
-          if (email) {
-            const { sendOrderCancelled } = await import("@/lib/email/send");
-            await sendOrderCancelled(email, {
-              nombreCliente: pedido.nombre_cliente || "",
-              numeroPedido: pedido.numero_pedido,
-              motivo:
-                motivo || "La transferencia no pudo ser verificada.",
-            });
-          }
+        const { email } = await resolverEmailPedido(db, pedido);
+        if (email) {
+          const { sendOrderCancelled } = await import("@/lib/email/send");
+          await sendOrderCancelled(email, {
+            nombreCliente: pedido.nombre_cliente || "",
+            numeroPedido: pedido.numero_pedido,
+            motivo:
+              motivo || "La transferencia no pudo ser verificada.",
+          });
         }
       } catch (emailError) {
         console.error("Error al enviar email de cancelación:", emailError);

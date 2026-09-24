@@ -29,6 +29,11 @@ interface Props {
   onChange: (valores: MtoValores) => void;
   esSocio: boolean;
   tiempoFabricacionDias?: number | null;
+  /**
+   * "pos": sin links a /socios (sacarían al vendedor del punto de venta);
+   * las opciones exclusivas se habilitan vinculando al socio en el carrito.
+   */
+  contexto?: "tienda" | "pos";
 }
 
 export function MtoForm({
@@ -37,7 +42,9 @@ export function MtoForm({
   onChange,
   esSocio,
   tiempoFabricacionDias,
+  contexto = "tienda",
 }: Props) {
+  const enPos = contexto === "pos";
   const errores = useMemo(() => validarValoresMto(campos, valores).errors, [campos, valores]);
 
   const todosRequeridosBloqueados = useMemo(() => {
@@ -60,14 +67,18 @@ export function MtoForm({
           Personalización exclusiva para socios
         </p>
         <p className="mt-1 text-xs text-bordo-800/60">
-          Hacete socio para acceder a esta opción.
+          {enPos
+            ? "Vinculá al socio en el carrito para habilitarla."
+            : "Hacete socio para acceder a esta opción."}
         </p>
-        <Link
-          href="/socios"
-          className="mt-3 inline-flex items-center gap-1.5 bg-bordo-800 px-4 py-2 font-heading text-[11px] uppercase tracking-editorial text-dorado-300 hover:bg-bordo-950 transition-colors"
-        >
-          Hacete socio
-        </Link>
+        {!enPos && (
+          <Link
+            href="/socios"
+            className="mt-3 inline-flex items-center gap-1.5 bg-bordo-800 px-4 py-2 font-heading text-[11px] uppercase tracking-editorial text-dorado-300 hover:bg-bordo-950 transition-colors"
+          >
+            Hacete socio
+          </Link>
+        )}
       </motion.div>
     );
   }
@@ -105,6 +116,7 @@ export function MtoForm({
           onChange={(v) => setValor(campo.key, v)}
           esSocio={esSocio}
           error={errores[campo.key]}
+          enPos={enPos}
         />
       ))}
     </motion.div>
@@ -117,9 +129,10 @@ interface CampoProps {
   onChange: (v: string | number) => void;
   esSocio: boolean;
   error?: string;
+  enPos: boolean;
 }
 
-function MtoCampoInput({ campo, valor, onChange, esSocio, error }: CampoProps) {
+function MtoCampoInput({ campo, valor, onChange, esSocio, error, enPos }: CampoProps) {
   const blocked = !!campo.solo_socios && !esSocio;
   const isSelectLike = campo.tipo === "select" || campo.tipo === "talle";
 
@@ -151,7 +164,7 @@ function MtoCampoInput({ campo, valor, onChange, esSocio, error }: CampoProps) {
       </div>
 
       {blocked ? (
-        <BlockedField />
+        <BlockedField enPos={enPos} />
       ) : (
         <>
           {campo.tipo === "texto" && (
@@ -184,6 +197,7 @@ function MtoCampoInput({ campo, valor, onChange, esSocio, error }: CampoProps) {
               onChange={onChange}
               esSocio={esSocio}
               placeholder={`Elegí ${campo.label.toLowerCase()}`}
+              enPos={enPos}
             />
           )}
         </>
@@ -206,16 +220,22 @@ function MtoCampoInput({ campo, valor, onChange, esSocio, error }: CampoProps) {
   );
 }
 
-function BlockedField() {
+function BlockedField({ enPos }: { enPos: boolean }) {
   return (
     <div className="flex items-center justify-between gap-2 rounded-md border border-dashed border-dorado-300 bg-dorado-300/5 px-3 py-2 text-xs text-bordo-800/70">
-      <span>Disponible solo para socios del club</span>
-      <Link
-        href="/socios"
-        className="font-heading text-[10px] uppercase tracking-editorial text-bordo-800 hover:text-bordo-950 underline underline-offset-2"
-      >
-        Hacete socio →
-      </Link>
+      <span>
+        {enPos
+          ? "Solo socios — vinculá al socio en el carrito"
+          : "Disponible solo para socios del club"}
+      </span>
+      {!enPos && (
+        <Link
+          href="/socios"
+          className="font-heading text-[10px] uppercase tracking-editorial text-bordo-800 hover:text-bordo-950 underline underline-offset-2"
+        >
+          Hacete socio →
+        </Link>
+      )}
     </div>
   );
 }
@@ -226,12 +246,14 @@ function SelectField({
   onChange,
   esSocio,
   placeholder,
+  enPos,
 }: {
   opciones: NonNullable<MtoCampo["opciones"]>;
   valor: string;
   onChange: (v: string) => void;
   esSocio: boolean;
   placeholder: string;
+  enPos: boolean;
 }) {
   // Reorder: disponibles primero, bloqueadas al final
   const ordered = useMemo(() => {
@@ -281,12 +303,14 @@ function SelectField({
                   <Crown className="size-2.5" />
                   {opcion.label}
                 </span>
-                <Link
-                  href="/socios"
-                  className="text-[10px] uppercase tracking-widest text-bordo-800 hover:underline"
-                >
-                  Hacete socio
-                </Link>
+                {!enPos && (
+                  <Link
+                    href="/socios"
+                    className="text-[10px] uppercase tracking-widest text-bordo-800 hover:underline"
+                  >
+                    Hacete socio
+                  </Link>
+                )}
               </div>
             ))}
           </>

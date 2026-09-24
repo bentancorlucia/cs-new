@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole, getCurrentUser } from "@/lib/supabase/roles";
 import { sendOrderReady, sendOrderCancelled } from "@/lib/email";
+import { resolverEmailPedido } from "@/lib/tienda/email-pedido";
 import { z } from "zod";
 
 const TIENDA_ROLES = ["super_admin", "tienda"];
@@ -17,6 +18,17 @@ const estadoSchema = z.object({
     "cancelado",
   ]),
   motivo_cancelacion: z.string().optional(),
+});
+
+const contactoSchema = z.object({
+  email_cliente: z
+    .string()
+    .trim()
+    .max(255)
+    .refine((v) => v === "" || z.string().email().safeParse(v).success, {
+      message: "Email inválido",
+    })
+    .transform((v) => (v === "" ? null : v.toLowerCase())),
 });
 
 // GET /api/admin/pedidos/[id] — detalle de pedido
@@ -177,11 +189,10 @@ export async function PUT(
 
     if (error) throw error;
 
-    // Send cancellation email
-    if (parsed.estado === "cancelado" && data?.perfil_id) {
+    // Send cancellation email (cuenta o email_cliente del POS)
+    if (parsed.estado === "cancelado") {
       try {
-        const { data: authUser } = await supabase.auth.admin.getUserById(data.perfil_id);
-        const userEmail = authUser?.user?.email;
+        const { email: userEmail } = await resolverEmailPedido(db, data);
         if (userEmail) {
           await sendOrderCancelled(userEmail, {
             nombreCliente: data.nombre_cliente || "Cliente",
@@ -195,16 +206,15 @@ export async function PUT(
     }
 
     // Send "ready for pickup" email when order transitions to listo_retiro
-    if (parsed.estado === "listo_retiro" && data?.perfil_id) {
+    if (parsed.estado === "listo_retiro") {
       try {
-        const { data: authUser } = await supabase.auth.admin.getUserById(data.perfil_id);
-        const userEmail = authUser?.user?.email;
+        const { email: userEmail, tieneCuenta } = await resolverEmailPedido(db, data);
         if (userEmail) {
           const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://clubseminario.com.uy";
           await sendOrderReady(userEmail, {
             nombreCliente: data.nombre_cliente || "Cliente",
             numeroPedido: data.numero_pedido,
-            pedidoUrl: `${APP_URL}/tienda/pedido/${data.id}`,
+            pedidoUrl: tieneCuenta ? `${APP_URL}/tienda/pedido/${data.id}` : undefined,
           });
         }
       } catch (emailError) {
@@ -220,6 +230,45 @@ export async function PUT(
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Datos inválidos", details: error.issues },
+        { status: 400 }
+      );
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+// PATCH /api/admin/pedidos/[id] — actualizar email de contacto para avisos
+// (clientes presenciales sin cuenta).
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await requireRole(TIENDA_ROLES);
+    const { id } = await params;
+    const db = createAdminClient() as any;
+    const parsed = contactoSchema.parse(await request.json());
+
+    const { data, error } = await db
+      .from("pedidos")
+      .update({
+        email_cliente: parsed.email_cliente,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", parseInt(id))
+      .select("id, email_cliente")
+      .single();
+
+    if (error) throw error;
+
+    return NextResponse.json({ data });
+  } catch (error: any) {
+    if (error.message === "No autorizado") {
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    }
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: error.issues[0]?.message ?? "Datos inválidos" },
         { status: 400 }
       );
     }

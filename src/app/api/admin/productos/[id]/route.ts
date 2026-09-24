@@ -18,6 +18,7 @@ const productoUpdateSchema = z.object({
   stock_actual: z.number().int().min(0).optional(),
   stock_minimo: z.number().int().min(0).optional(),
   activo: z.boolean().optional(),
+  activo_pos: z.boolean().optional(),
   destacado: z.boolean().optional(),
   unidad: z.enum(["un", "kg", "lt", "mt", "par", "docena"]).optional(),
   mto_disponible: z.boolean().optional(),
