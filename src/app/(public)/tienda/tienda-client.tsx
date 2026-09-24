@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ProductCard } from "@/components/tienda/product-card";
 import { VariantSelectorDialog } from "@/components/tienda/variant-selector-dialog";
 import { useCart } from "@/hooks/use-cart";
+import { precioListaUnitario, precioSocioUnitario } from "@/lib/tienda/precios";
 import { tieneVariantesActivas, type ProductoVariante } from "@/lib/tienda/variantes";
 import {
   AnimateOnScroll,
@@ -212,8 +213,8 @@ export function TiendaClient({
       addItem({
         productoId: producto.id,
         nombre: producto.nombre,
-        precio: producto.precio,
-        precioSocio: producto.precio_socio ?? undefined,
+        precio: precioListaUnitario(producto),
+        precioSocio: precioSocioUnitario(producto) ?? undefined,
         imagenUrl: imagen?.url ?? "",
         maxStock: getStockDisponibleProducto(producto),
         slug: producto.slug,

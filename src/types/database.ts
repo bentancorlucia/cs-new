@@ -857,6 +857,7 @@ export type Database = {
       extractos_importados: {
         Row: {
           archivo_hash: string
+          ajuste_donaciones: number
           archivo_nombre: string
           created_at: string
           cuenta_id: number
@@ -872,6 +873,7 @@ export type Database = {
           total_movimientos: number
         }
         Insert: {
+          ajuste_donaciones?: number
           archivo_hash: string
           archivo_nombre: string
           created_at?: string
@@ -888,6 +890,7 @@ export type Database = {
           total_movimientos?: number
         }
         Update: {
+          ajuste_donaciones?: number
           archivo_hash?: string
           archivo_nombre?: string
           created_at?: string
@@ -1578,6 +1581,7 @@ export type Database = {
           email_cliente: string | null
           disciplina_id: number | null
           estado: string
+          fecha_venta: string | null
           id: number
           idempotency_key: string | null
           mercadopago_payment_id: string | null
@@ -1611,6 +1615,7 @@ export type Database = {
           email_cliente?: string | null
           disciplina_id?: number | null
           estado?: string
+          fecha_venta?: string | null
           id?: number
           idempotency_key?: string | null
           mercadopago_payment_id?: string | null
@@ -1644,6 +1649,7 @@ export type Database = {
           email_cliente?: string | null
           disciplina_id?: number | null
           estado?: string
+          fecha_venta?: string | null
           id?: number
           idempotency_key?: string | null
           mercadopago_payment_id?: string | null
@@ -2700,7 +2706,15 @@ export type Database = {
         Args: { p_cuenta_id: number; p_delta: number }
         Returns: undefined
       }
+      aplicar_cambios_tesoreria: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
       es_staff: { Args: never; Returns: boolean }
+      estado_conciliacion_cuenta: {
+        Args: { p_cuenta_id: number }
+        Returns: Json
+      }
       incrementar_uso_promocode: { Args: { p_id: number }; Returns: boolean }
       recalcular_stock_producto: {
         Args: { p_producto_id: number }

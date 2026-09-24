@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { ProductCard } from "@/components/tienda/product-card";
 import { MtoForm, calcularExtraSeguro } from "@/components/tienda/mto-form";
 import { useCart } from "@/hooks/use-cart";
+import { precioListaUnitario, precioSocioUnitario } from "@/lib/tienda/precios";
 import { validarValoresMto, validarRestriccionSocios } from "@/lib/mto/schema";
 import { resumirPersonalizacion } from "@/lib/mto/pricing";
 import {
@@ -191,7 +192,7 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado, 
     );
   }
 
-  const precioActual = varianteActual?.precio_override ?? producto.precio;
+  const overrideActual = varianteActual?.precio_override ?? null;
   const stockActual = varianteActual
     ? getStockDisponible(varianteActual)
     : Math.max(0, producto.stock_actual - stockReservado.producto);
@@ -233,9 +234,15 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado, 
   const ctaDisabled = modoEncargue ? !mtoFormValido : stockAgotado;
   const agotado = !modoEncargue && stockAgotado;
 
+  // El encargue no se asocia a una variante del stock: precio del producto.
+  const precioActual = modoEncargue
+    ? precioListaUnitario(producto)
+    : precioListaUnitario(producto, overrideActual);
+  const precioSocioActual = modoEncargue
+    ? precioSocioUnitario(producto)
+    : precioSocioUnitario(producto, overrideActual);
   const precioConExtra = precioActual + precioExtra;
-  const tieneDescuento =
-    producto.precio_socio != null && producto.precio_socio < precioActual;
+  const tieneDescuento = precioSocioActual != null;
 
   function handleAddToCart() {
     const imagen = imagenes.find((i) => i.es_principal) ?? imagenes[0];
@@ -249,8 +256,8 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado, 
           // MTO: no asociar variante del stock — el "talle" o equivalente
           // viene en la personalización si así lo definió el admin.
           nombre: producto.nombre,
-          precio: producto.precio,
-          precioSocio: producto.precio_socio ?? undefined,
+          precio: precioListaUnitario(producto),
+          precioSocio: precioSocioUnitario(producto) ?? undefined,
           imagenUrl: imagen?.url ?? "",
           maxStock: 99,
           slug: producto.slug,
@@ -271,7 +278,7 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado, 
             ? `${producto.nombre} - ${varianteActual.nombre}`
             : producto.nombre,
           precio: precioActual,
-          precioSocio: producto.precio_socio ?? undefined,
+          precioSocio: precioSocioActual ?? undefined,
           imagenUrl: imagen?.url ?? "",
           maxStock: stockActual,
           slug: producto.slug,
@@ -543,7 +550,7 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado, 
                   </span>
                   {tieneDescuento && (
                     <span className="text-4xl font-display text-bordo-800 font-medium tracking-tight">
-                      ${(producto.precio_socio! + precioExtra).toLocaleString("es-UY")}
+                      ${(precioSocioActual! + precioExtra).toLocaleString("es-UY")}
                     </span>
                   )}
                 </div>
@@ -884,7 +891,7 @@ export function ProductoDetalleClient({ producto, relacionados, stockReservado, 
                       ${precioConExtra.toLocaleString("es-UY")}
                     </span>
                     <span className="text-xl font-display font-bold text-bordo-800">
-                      ${(producto.precio_socio! + precioExtra).toLocaleString("es-UY")}
+                      ${(precioSocioActual! + precioExtra).toLocaleString("es-UY")}
                     </span>
                   </>
                 ) : (

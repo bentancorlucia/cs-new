@@ -161,10 +161,15 @@ export const CATALOGO: Record<string, TablaCatalogo> = {
     descripcion: "Transferencias entre cuentas propias (con tipo de cambio si cambian de moneda).",
     columnas: ["created_at", "cuenta_destino_id", "cuenta_origen_id", "descripcion", "fecha", "id", "moneda_destino", "moneda_origen", "monto_destino", "monto_origen", "movimiento_egreso_id", "movimiento_ingreso_id", "registrado_por", "tipo_cambio"],
   },
+  tesoreria_historial: {
+    modulos: ["tesoreria"],
+    descripcion: "Historial de ediciones y borrados de movimientos (y del saldo inicial de cuentas): antes/después, motivo, origen (panel|mcp) y usuario.",
+    columnas: ["accion", "antes", "created_at", "despues", "entidad", "entidad_id", "id", "motivo", "origen", "usuario_id"],
+  },
   extractos_importados: {
     modulos: ["tesoreria"],
-    descripcion: "Extractos bancarios importados.",
-    columnas: ["archivo_hash", "archivo_nombre", "created_at", "cuenta_id", "fecha_desde", "fecha_hasta", "formato", "id", "importado_por", "movimientos_creados", "movimientos_duplicados", "saldo_final_extracto", "saldo_inicial_extracto", "total_movimientos"],
+    descripcion: "Extractos bancarios importados (panel o Claude). ajuste_donaciones = efecto neto de donaciones cobradas/transferidas a la Olla en el período (el banco las ve, el sistema no).",
+    columnas: ["ajuste_donaciones", "archivo_hash", "archivo_nombre", "created_at", "cuenta_id", "fecha_desde", "fecha_hasta", "formato", "id", "importado_por", "movimientos_creados", "movimientos_duplicados", "saldo_final_extracto", "saldo_inicial_extracto", "total_movimientos"],
   },
   cotizaciones_bcu: {
     modulos: ["tesoreria"],

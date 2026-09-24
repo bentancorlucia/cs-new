@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useCart } from "@/hooks/use-cart";
+import { precioListaUnitario, precioSocioUnitario } from "@/lib/tienda/precios";
 import {
   type ProductoVariante,
   getVariantesActivas,
@@ -117,8 +118,9 @@ function SelectorBody({
     ? getStockDisponible(varianteActual, stockReservadoVariantes)
     : 0;
   const sinStock = stockDisponible <= 0;
-  const precioActual = varianteActual?.precio_override ?? producto.precio;
-  const tieneDescuento = producto.precio_socio != null && producto.precio_socio < precioActual;
+  const precioActual = precioListaUnitario(producto, varianteActual?.precio_override);
+  const precioSocioActual = precioSocioUnitario(producto, varianteActual?.precio_override);
+  const tieneDescuento = precioSocioActual != null;
 
   const imagen =
     producto.producto_imagenes?.find((i) => i.es_principal) ??
@@ -132,7 +134,7 @@ function SelectorBody({
         varianteId: varianteActual.id,
         nombre: `${producto.nombre} - ${varianteActual.nombre}`,
         precio: precioActual,
-        precioSocio: producto.precio_socio ?? undefined,
+        precioSocio: precioSocioActual ?? undefined,
         imagenUrl: imagen?.url ?? "",
         maxStock: stockDisponible,
         slug: producto.slug,
@@ -174,7 +176,7 @@ function SelectorBody({
             {tieneDescuento ? (
               <>
                 <span className="font-display text-lg font-bold text-bordo-800">
-                  ${producto.precio_socio!.toLocaleString("es-UY")}
+                  ${precioSocioActual!.toLocaleString("es-UY")}
                 </span>
                 <span className="text-xs text-bordo-950/40 line-through">
                   ${precioActual.toLocaleString("es-UY")}

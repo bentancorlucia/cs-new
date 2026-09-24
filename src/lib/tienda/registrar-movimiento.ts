@@ -1,3 +1,5 @@
+import { uruguayDateKey } from "@/lib/timezone";
+
 type AnyDb = any;
 
 type MetodoPago = "efectivo" | "transferencia" | "mercadopago" | "cheque" | "otro";
@@ -64,7 +66,7 @@ export async function registrarMovimientoVentaPedido(
   const categoria = await getCategoriaPorSlug(db, slug);
   if (!categoria) return;
 
-  const monto = args.montoOverride ?? args.total;
+  const monto = Math.round((args.montoOverride ?? args.total) * 100) / 100;
   if (monto <= 0) return;
 
   const descripcionBase =
@@ -94,7 +96,7 @@ export async function registrarMovimientoVentaPedido(
     categoria_id: categoria.id,
     monto,
     moneda: "UYU",
-    fecha: new Date().toISOString().split("T")[0],
+    fecha: uruguayDateKey(new Date()),
     descripcion,
     origen_tipo: "pedido",
     origen_id: args.pedidoId,
@@ -135,7 +137,7 @@ export async function registrarMovimientoPagoProveedor(
     subcategoria_id: subcategoriaId ?? null,
     monto: args.monto,
     moneda: "UYU",
-    fecha: new Date().toISOString().split("T")[0],
+    fecha: uruguayDateKey(new Date()),
     descripcion,
     origen_tipo: "pago_proveedor",
     origen_id: args.pagoId,

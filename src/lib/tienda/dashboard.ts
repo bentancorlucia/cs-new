@@ -25,25 +25,25 @@ export async function obtenerDashboardTienda(supabase: SupabaseClient<Database>)
     pedidosRecientesRes,
     topProductosRes,
   ] = await Promise.all([
-    // Ventas hoy (pagados/encargado/preparando/listo/retirado) — sin donaciones
+    // Ventas hoy por fecha de cobro (pagados/encargado/preparando/listo/retirado) — sin donaciones
     supabase
       .from("pedidos")
       .select("total, donaciones(monto, estado)")
-      .gte("created_at", todayStart)
+      .gte("fecha_venta", todayStart)
       .in("estado", ["pagado", "encargado", "preparando", "listo_retiro", "retirado"]),
 
     // Ventas últimos 7 días — sin donaciones
     supabase
       .from("pedidos")
       .select("total, donaciones(monto, estado)")
-      .gte("created_at", weekStart)
+      .gte("fecha_venta", weekStart)
       .in("estado", ["pagado", "encargado", "preparando", "listo_retiro", "retirado"]),
 
     // Ventas del mes — sin donaciones
     supabase
       .from("pedidos")
       .select("total, donaciones(monto, estado)")
-      .gte("created_at", monthStart)
+      .gte("fecha_venta", monthStart)
       .in("estado", ["pagado", "encargado", "preparando", "listo_retiro", "retirado"]),
 
     // Pedidos pendientes (pagado + encargado + preparando + listo_retiro + pendiente_verificacion)
@@ -75,15 +75,15 @@ export async function obtenerDashboardTienda(supabase: SupabaseClient<Database>)
       .order("created_at", { ascending: false })
       .limit(10),
 
-    // Top 5 productos más vendidos (últimos 30 días)
+    // Top 5 productos más vendidos (mes en curso)
     supabase
       .from("pedido_items")
       .select(`
         producto_id, cantidad, subtotal,
         productos(nombre, stock_actual),
-        pedidos!inner(estado, created_at)
+        pedidos!inner(estado, fecha_venta)
       `)
-      .gte("pedidos.created_at", monthStart)
+      .gte("pedidos.fecha_venta", monthStart)
       .in("pedidos.estado", ["pagado", "encargado", "preparando", "listo_retiro", "retirado"]),
   ]);
 

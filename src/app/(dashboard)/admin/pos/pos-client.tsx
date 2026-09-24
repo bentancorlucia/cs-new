@@ -42,6 +42,12 @@ import { createBrowserClient } from "@/lib/supabase/client";
 import { MtoForm, calcularExtraSeguro } from "@/components/tienda/mto-form";
 import { validarValoresMto, validarRestriccionSocios } from "@/lib/mto/schema";
 import { resumirPersonalizacion } from "@/lib/mto/pricing";
+import {
+  calcularDescuentoManual,
+  precioListaUnitario,
+  precioSocioUnitario,
+  round2,
+} from "@/lib/tienda/precios";
 import type { MtoCampo, MtoValores } from "@/types/mto";
 import { toast } from "sonner";
 import {
@@ -153,8 +159,9 @@ function POSProductCard({
   onAdd: (p: Producto) => void;
   usarPrecioSocio: boolean;
 }) {
-  const precio = usarPrecioSocio && producto.precio_socio
-    ? producto.precio_socio
+  const precioSocio = precioSocioUnitario(producto);
+  const precio = usarPrecioSocio && precioSocio != null
+    ? precioSocio
     : producto.precio;
   const sinStock = producto.stock_actual <= 0;
   // Sin stock pero con encargue: se puede seguir vendiendo bajo encargue.
@@ -208,7 +215,7 @@ function POSProductCard({
       <p className="font-heading font-bold text-bordo-700 text-base">
         ${precio.toLocaleString("es-UY")}
       </p>
-      {usarPrecioSocio && producto.precio_socio && (
+      {usarPrecioSocio && precioSocio != null && (
         <p className="text-xs text-muted-foreground line-through">
           ${producto.precio.toLocaleString("es-UY")}
         </p>
@@ -265,7 +272,7 @@ function CartItemRow({
   onUpdateQty: (key: string, qty: number) => void;
   onRemove: (key: string) => void;
 }) {
-  const precio = (usarPrecioSocio && item.precio_socio
+  const precio = (usarPrecioSocio && item.precio_socio != null
     ? item.precio_socio
     : item.precio) + item.precio_extra;
 
@@ -403,7 +410,7 @@ export function POSClient() {
   const subtotal = useMemo(
     () =>
       cart.reduce((sum, item) => {
-        const precio = usarPrecioSocio && item.precio_socio
+        const precio = usarPrecioSocio && item.precio_socio != null
           ? item.precio_socio
           : item.precio;
         return sum + (precio + item.precio_extra) * item.cantidad;
@@ -420,21 +427,18 @@ export function POSClient() {
     return totalSinDesc - subtotal;
   }, [cart, subtotal, usarPrecioSocio]);
 
-  const descuentoManualMonto = useMemo(() => {
-    const val = parseFloat(descuentoManualValor) || 0;
-    if (val <= 0) return 0;
-    if (descuentoManualTipo === "porcentaje") {
-      const pct = Math.min(val, 100);
-      return Math.min(Math.round(subtotal * (pct / 100)), subtotal);
-    }
-    return Math.min(val, subtotal);
-  }, [subtotal, descuentoManualTipo, descuentoManualValor]);
+  // Misma regla que el servidor (`calcularDescuentoManual`).
+  const descuentoManualMonto = useMemo(
+    () =>
+      calcularDescuentoManual(
+        subtotal,
+        descuentoManualTipo,
+        parseFloat(descuentoManualValor) || 0
+      ),
+    [subtotal, descuentoManualTipo, descuentoManualValor]
+  );
 
-  const descuentoManualPct = descuentoManualTipo === "porcentaje"
-    ? Math.min(parseFloat(descuentoManualValor) || 0, 100)
-    : 0;
-
-  const total = subtotal - descuentoManualMonto;
+  const total = round2(subtotal - descuentoManualMonto);
 
   // Encargues: email para avisar al cliente presencial (si no hay socio
   // vinculado, que ya recibe los avisos en el email de su cuenta).
@@ -444,16 +448,15 @@ export function POSClient() {
   const emailValido = !pideEmail || emailClienteTrim === "" || EMAIL_RE.test(emailClienteTrim);
   const emailClienteParaVenta = pideEmail && emailClienteTrim ? emailClienteTrim : null;
 
-  // Se envía el precio de lista; el descuento de socio viaja en `descuento`
-  // para no restarlo dos veces en el backend. El recargo del encargue lo
-  // recalcula el backend a partir de la personalización.
+  // Precios, descuento de socio y recargo de encargue los calcula el backend;
+  // acá solo viaja qué se vende. `total_esperado` detecta diferencias (ej.
+  // precio cambiado con la pantalla abierta) antes de registrar la venta.
   const itemsPayload = useMemo(
     () =>
       cart.map((item) => ({
         producto_id: item.producto_id,
         variante_id: item.variante_id,
         cantidad: item.cantidad,
-        precio_unitario: item.precio,
         es_encargue: item.es_encargue,
         personalizacion: item.personalizacion,
       })),
@@ -466,8 +469,9 @@ export function POSClient() {
     const campos = productoEncargue.mto_campos;
     const validacion = validarValoresMto(campos, mtoValores);
     const bloqueos = validarRestriccionSocios(campos, validacion.cleaned, esSocio);
-    const base = usarPrecioSocio && productoEncargue.precio_socio
-      ? productoEncargue.precio_socio
+    const precioSocio = precioSocioUnitario(productoEncargue);
+    const base = usarPrecioSocio && precioSocio != null
+      ? precioSocio
       : productoEncargue.precio;
     return {
       validacion,
@@ -553,7 +557,8 @@ export function POSClient() {
   const addToCartDirect = useCallback((producto: Producto, variante: ProductoVariante | null) => {
     const key = cartKey(producto.id, variante?.id ?? null);
     const stock = variante ? variante.stock_actual : producto.stock_actual;
-    const precio = variante?.precio_override ?? producto.precio;
+    const precio = precioListaUnitario(producto, variante?.precio_override);
+    const precioSocio = precioSocioUnitario(producto, variante?.precio_override);
     const nombre = variante
       ? `${producto.nombre} - ${variante.nombre}`
       : producto.nombre;
@@ -574,7 +579,7 @@ export function POSClient() {
           variante_id: variante?.id ?? null,
           nombre,
           precio,
-          precio_socio: producto.precio_socio,
+          precio_socio: precioSocio,
           cantidad: 1,
           stock_actual: stock,
           imagen_url: producto.imagen_url,
@@ -628,8 +633,8 @@ export function POSClient() {
         producto_id: productoEncargue.id,
         variante_id: null,
         nombre: productoEncargue.nombre,
-        precio: productoEncargue.precio,
-        precio_socio: productoEncargue.precio_socio,
+        precio: precioListaUnitario(productoEncargue),
+        precio_socio: precioSocioUnitario(productoEncargue),
         cantidad: 1,
         stock_actual: MAX_CANTIDAD_ENCARGUE,
         imagen_url: productoEncargue.imagen_url,
@@ -711,10 +716,10 @@ export function POSClient() {
             nombre_cliente: nombreCliente || null,
             perfil_socio_id: socio?.id || null,
             email_cliente: emailClienteParaVenta,
-            descuento: descuentoSocio + descuentoManualMonto,
-            descuento_tipo: descuentoManualMonto > 0 ? descuentoManualTipo : (descuentoSocio > 0 ? "socio" : null),
-            descuento_porcentaje: descuentoManualPct > 0 ? descuentoManualPct : null,
+            descuento_manual_tipo: descuentoManualMonto > 0 ? descuentoManualTipo : null,
+            descuento_manual_valor: descuentoManualMonto > 0 ? parseFloat(descuentoManualValor) || 0 : null,
             descuento_motivo: descuentoManualMotivo || null,
+            total_esperado: total,
             notas: null,
           }),
         });
@@ -745,7 +750,7 @@ export function POSClient() {
         setProcesando(false);
       }
     },
-    [cart, itemsPayload, emailClienteParaVenta, nombreCliente, socio, usarPrecioSocio, descuentoSocio, descuentoManualMonto, descuentoManualTipo, descuentoManualPct, descuentoManualMotivo, clearCart, fetchProductos]
+    [cart, itemsPayload, emailClienteParaVenta, nombreCliente, socio, total, descuentoManualMonto, descuentoManualTipo, descuentoManualValor, descuentoManualMotivo, clearCart, fetchProductos]
   );
 
   // ─── Process transfer sale ───────────────────────────────
@@ -769,10 +774,10 @@ export function POSClient() {
           nombre_cliente: nombreCliente || null,
           perfil_socio_id: socio?.id || null,
           email_cliente: emailClienteParaVenta,
-          descuento: descuentoSocio + descuentoManualMonto,
-          descuento_tipo: descuentoManualMonto > 0 ? descuentoManualTipo : (descuentoSocio > 0 ? "socio" : null),
-          descuento_porcentaje: descuentoManualPct > 0 ? descuentoManualPct : null,
+          descuento_manual_tipo: descuentoManualMonto > 0 ? descuentoManualTipo : null,
+          descuento_manual_valor: descuentoManualMonto > 0 ? parseFloat(descuentoManualValor) || 0 : null,
           descuento_motivo: descuentoManualMotivo || null,
+          total_esperado: total,
           notas: null,
         }),
       });
@@ -825,7 +830,7 @@ export function POSClient() {
     } finally {
       setSubiendoComprobante(false);
     }
-  }, [cart, itemsPayload, emailClienteParaVenta, comprobanteFile, modoMixto, mixtoValido, efectivoMixto, nombreCliente, socio, usarPrecioSocio, descuentoSocio, descuentoManualMonto, descuentoManualTipo, descuentoManualPct, descuentoManualMotivo, clearCart, fetchProductos]);
+  }, [cart, itemsPayload, emailClienteParaVenta, comprobanteFile, modoMixto, mixtoValido, efectivoMixto, nombreCliente, socio, total, descuentoManualMonto, descuentoManualTipo, descuentoManualValor, descuentoManualMotivo, clearCart, fetchProductos]);
 
   // Handle file selection for comprobante
   const handleComprobanteSelect = useCallback((file: File | null) => {
@@ -1575,7 +1580,7 @@ export function POSClient() {
                 <div className="py-4">
                   <div className="bg-superficie rounded-xl p-4 space-y-2">
                     {cart.map((item) => {
-                      const precio = (usarPrecioSocio && item.precio_socio
+                      const precio = (usarPrecioSocio && item.precio_socio != null
                         ? item.precio_socio
                         : item.precio) + item.precio_extra;
                       return (

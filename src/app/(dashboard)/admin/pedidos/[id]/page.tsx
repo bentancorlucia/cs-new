@@ -436,7 +436,8 @@ export default function DetallePedidoPage() {
       toast.success(`Estado actualizado a: ${nuevoEstado.replace("_", " ")}`);
       setCancelDialog(false);
     } else {
-      toast.error("Error al actualizar estado");
+      const json = await res.json().catch(() => null);
+      toast.error(json?.error || "Error al actualizar estado");
     }
     setUpdating(false);
   }

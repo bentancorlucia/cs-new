@@ -64,126 +64,54 @@ export async function POST(
       );
     }
 
-    // 2. Fetch pedido items (excluyendo encargues — esos no descuentan stock)
+    // 2. ¿Tiene encargues? Define el estado al aprobar.
     const { data: pedidoItemsRaw } = await db
       .from("pedido_items")
-      .select("producto_id, variante_id, cantidad, es_encargue")
+      .select("es_encargue")
       .eq("pedido_id", pedidoId);
 
-    const pedidoItems = (pedidoItemsRaw || []).filter(
-      (i: any) => !i.es_encargue
-    );
-
     if (accion === "aprobar") {
-      // 3a. Re-validate stock before approving
-      if (pedidoItems) {
-        for (const item of pedidoItems) {
-          if (item.variante_id) {
-            const { data: variante } = await db
-              .from("producto_variantes")
-              .select("stock_actual, nombre")
-              .eq("id", item.variante_id)
-              .single();
-
-            if (variante && variante.stock_actual < item.cantidad) {
-              return NextResponse.json(
-                {
-                  error: `Stock insuficiente para variante "${variante.nombre}". Disponible: ${variante.stock_actual}, necesario: ${item.cantidad}`,
-                },
-                { status: 400 }
-              );
-            }
-          } else {
-            const { data: producto } = await db
-              .from("productos")
-              .select("stock_actual, nombre")
-              .eq("id", item.producto_id)
-              .single();
-
-            if (producto && producto.stock_actual < item.cantidad) {
-              return NextResponse.json(
-                {
-                  error: `Stock insuficiente para "${producto.nombre}". Disponible: ${producto.stock_actual}, necesario: ${item.cantidad}`,
-                },
-                { status: 400 }
-              );
-            }
-          }
-        }
-
-        // 4a. Deduct stock
-        for (const item of pedidoItems) {
-          if (item.variante_id) {
-            const { data: variante } = await db
-              .from("producto_variantes")
-              .select("stock_actual")
-              .eq("id", item.variante_id)
-              .single();
-
-            if (variante) {
-              const stockAnterior = variante.stock_actual;
-              const stockNuevo = Math.max(0, stockAnterior - item.cantidad);
-
-              await db
-                .from("producto_variantes")
-                .update({ stock_actual: stockNuevo })
-                .eq("id", item.variante_id);
-
-              await db.from("stock_movimientos").insert({
-                producto_id: item.producto_id,
-                variante_id: item.variante_id,
-                tipo: "venta",
-                cantidad: -item.cantidad,
-                stock_anterior: stockAnterior,
-                stock_nuevo: stockNuevo,
-                referencia_tipo: "pedido",
-                referencia_id: pedidoId,
-                registrado_por: user?.id,
-              });
-            }
-          } else {
-            const { data: producto } = await db
-              .from("productos")
-              .select("stock_actual")
-              .eq("id", item.producto_id)
-              .single();
-
-            if (producto) {
-              const stockAnterior = producto.stock_actual;
-              const stockNuevo = Math.max(0, stockAnterior - item.cantidad);
-
-              await db
-                .from("productos")
-                .update({ stock_actual: stockNuevo })
-                .eq("id", item.producto_id);
-
-              await db.from("stock_movimientos").insert({
-                producto_id: item.producto_id,
-                tipo: "venta",
-                cantidad: -item.cantidad,
-                stock_anterior: stockAnterior,
-                stock_nuevo: stockNuevo,
-                referencia_tipo: "pedido",
-                referencia_id: pedidoId,
-                registrado_por: user?.id,
-              });
-            }
-          }
-        }
-      }
-
-      // 5a. Update pedido → encargado (si hay encargues) o preparando
+      // 3a. Descontar stock + cambiar estado de forma atómica. La RPC toma
+      // lock del pedido: una segunda aprobación simultánea recibe error y no
+      // duplica stock ni ingresos.
       const tieneEncargues = (pedidoItemsRaw || []).some(
         (i: any) => i.es_encargue
       );
       const nuevoEstado = tieneEncargues ? "encargado" : "preparando";
-      await db
-        .from("pedidos")
-        .update({
-          estado: nuevoEstado,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", pedidoId);
+      const { data: conf, error: confError } = await db.rpc(
+        "confirmar_reserva_pedido",
+        {
+          p_pedido_id: pedidoId,
+          p_estado_nuevo: nuevoEstado,
+          p_registrado_por: user?.id ?? null,
+        }
+      );
+
+      if (confError) {
+        console.error("Error en confirmar_reserva_pedido:", confError);
+        return NextResponse.json(
+          { error: "Error al aprobar el pedido" },
+          { status: 500 }
+        );
+      }
+
+      if (conf?.ok === false) {
+        if (conf.error === "stock") {
+          const primero = (conf.faltantes ?? [])[0];
+          return NextResponse.json(
+            {
+              error: primero
+                ? `Stock insuficiente para "${primero.nombre}". Disponible: ${primero.disponible}, necesario: ${primero.solicitado}`
+                : "Stock insuficiente",
+            },
+            { status: 400 }
+          );
+        }
+        return NextResponse.json(
+          { error: "Este pedido ya no está pendiente de verificación" },
+          { status: 409 }
+        );
+      }
 
       // 6a. Update comprobante → verificado
       await db
@@ -194,66 +122,6 @@ export async function POST(
           verificado_at: new Date().toISOString(),
         })
         .eq("pedido_id", pedidoId);
-
-      // 7a. Send confirmation email (cuenta o email_cliente del POS)
-      try {
-        const { email, tieneCuenta } = await resolverEmailPedido(db, pedido);
-
-        if (email) {
-          const { data: perfil } = pedido.perfil_id
-            ? await db
-                .from("perfiles")
-                .select("nombre, apellido")
-                .eq("id", pedido.perfil_id)
-                .single()
-            : { data: null };
-
-          const { data: items } = await db
-            .from("pedido_items")
-            .select("producto_id, cantidad, precio_unitario")
-            .eq("pedido_id", pedidoId);
-
-          // Fetch product names for the email
-          const itemsConNombre = [];
-          if (items) {
-            for (const item of items) {
-              const { data: prod } = await db
-                .from("productos")
-                .select("nombre")
-                .eq("id", item.producto_id)
-                .single();
-              itemsConNombre.push({
-                nombre: prod?.nombre || "",
-                cantidad: item.cantidad,
-                precioUnitario: item.precio_unitario,
-              });
-            }
-          }
-
-          const { sendOrderConfirmation } = await import(
-            "@/lib/email/send"
-          );
-          const APP_URL =
-            process.env.NEXT_PUBLIC_APP_URL ||
-            process.env.NEXT_PUBLIC_SITE_URL ||
-            "https://clubseminario.com.uy";
-
-          await sendOrderConfirmation(email, {
-            nombreCliente:
-              perfil
-                ? `${perfil.nombre} ${perfil.apellido}`
-                : pedido.nombre_cliente || "",
-            numeroPedido: pedido.numero_pedido,
-            items: itemsConNombre,
-            total: pedido.total,
-            pedidoUrl: tieneCuenta
-              ? `${APP_URL}/tienda/pedido/${pedidoId}`
-              : undefined,
-          });
-        }
-      } catch (emailError) {
-        console.error("Error al enviar email de confirmación:", emailError);
-      }
 
       // Marcar donación como cobrada y restarla del monto que entra a tesorería.
       let donacionMonto = 0;
@@ -309,42 +177,79 @@ export async function POST(
         console.error("Error al registrar movimiento financiero:", movError);
       }
 
+      // 7a. Send confirmation email (cuenta o email_cliente del POS)
+      try {
+        const { email, tieneCuenta } = await resolverEmailPedido(db, pedido);
+
+        if (email) {
+          const { data: perfil } = pedido.perfil_id
+            ? await db
+                .from("perfiles")
+                .select("nombre, apellido")
+                .eq("id", pedido.perfil_id)
+                .single()
+            : { data: null };
+
+          const { data: items } = await db
+            .from("pedido_items")
+            .select(
+              "cantidad, precio_unitario, precio_extra_personalizacion, productos(nombre), producto_variantes(nombre)"
+            )
+            .eq("pedido_id", pedidoId);
+
+          const itemsConNombre = (items ?? []).map((item: any) => ({
+            nombre: item.producto_variantes?.nombre
+              ? `${item.productos?.nombre ?? ""} - ${item.producto_variantes.nombre}`
+              : item.productos?.nombre ?? "",
+            cantidad: item.cantidad,
+            precioUnitario:
+              Number(item.precio_unitario) +
+              Number(item.precio_extra_personalizacion || 0),
+          }));
+
+          const { sendOrderConfirmation } = await import(
+            "@/lib/email/send"
+          );
+          const APP_URL =
+            process.env.NEXT_PUBLIC_APP_URL ||
+            process.env.NEXT_PUBLIC_SITE_URL ||
+            "https://clubseminario.com.uy";
+
+          await sendOrderConfirmation(email, {
+            nombreCliente:
+              perfil
+                ? `${perfil.nombre} ${perfil.apellido}`
+                : pedido.nombre_cliente || "",
+            numeroPedido: pedido.numero_pedido,
+            items: itemsConNombre,
+            total: pedido.total,
+            pedidoUrl: tieneCuenta
+              ? `${APP_URL}/tienda/pedido/${pedidoId}`
+              : undefined,
+          });
+        }
+      } catch (emailError) {
+        console.error("Error al enviar email de confirmación:", emailError);
+      }
+
       return NextResponse.json({ success: true, estado: nuevoEstado });
     } else {
       // RECHAZAR
 
-      // 3b. Update pedido → cancelado, liberar reserva
-      await db
-        .from("pedidos")
-        .update({
-          estado: "cancelado",
-          stock_reservado: false,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", pedidoId);
+      // 3b. Cancelar: libera la reserva, revierte el efectivo del pago mixto,
+      // cancela la donación y devuelve el uso del promocode (atómico).
+      const { data: canc, error: cancError } = await db.rpc("cancelar_pedido", {
+        p_pedido_id: pedidoId,
+        p_motivo: motivo || "Transferencia rechazada",
+        p_registrado_por: user?.id ?? null,
+      });
 
-      // 3b.1 Cancelar donación si existe (estaba en 'pendiente_pago' porque
-      // el pedido nunca llegó a verificarse).
-      await db
-        .from("donaciones")
-        .update({ estado: "cancelada" })
-        .eq("pedido_id", pedidoId)
-        .in("estado", ["pendiente_pago"]);
-
-      // 3b.2 Pago mixto: el efectivo se registró en caja al vender. Al
-      // cancelar el pedido se devuelve al cliente, así que se quita el
-      // movimiento (solo el de efectivo; la transferencia nunca se registró).
-      if (pedido.metodo_pago === "mixto") {
-        const { error: movError } = await db
-          .from("movimientos_financieros")
-          .delete()
-          .eq("origen_tipo", "pedido")
-          .eq("origen_id", pedidoId)
-          .eq("referencia", `POS-${pedido.numero_pedido}`)
-          .eq("conciliado", false);
-        if (movError) {
-          console.error("Error al revertir efectivo de pago mixto:", movError);
-        }
+      if (cancError || canc?.ok === false) {
+        console.error("Error en cancelar_pedido:", cancError ?? canc);
+        return NextResponse.json(
+          { error: "Error al rechazar el pedido" },
+          { status: 500 }
+        );
       }
 
       // 4b. Update comprobante → rechazado

@@ -3,8 +3,8 @@ import type { Implementation } from "@modelcontextprotocol/server";
 import { verificarTokenMcp } from "@/lib/mcp/auth";
 import { INSTRUCCIONES_MCP, registrarHerramientas } from "@/lib/mcp/herramientas";
 
-// Servidor MCP de solo lectura para consultar tienda, finanzas y socios desde
-// Claude / ChatGPT. Auth: OAuth 2.1 de Supabase Auth (ver /oauth/consent y
+// Servidor MCP para consultar tienda, finanzas y socios, y conciliar estados
+// de cuenta de tesorería, desde Claude / ChatGPT. Auth: OAuth 2.1 de Supabase Auth (ver /oauth/consent y
 // /.well-known/oauth-protected-resource).
 
 export const dynamic = "force-dynamic";

@@ -32,6 +32,7 @@ type PedidoRow = {
   descuento: number | null;
   aplico_precio_socio: boolean | null;
   created_at: string;
+  fecha_venta: string | null;
 };
 
 type ItemRow = {
@@ -42,6 +43,8 @@ type ItemRow = {
   precio_unitario: number;
   subtotal: number;
   costo_unitario_venta: number | null;
+  /** Facturación del ítem neta de descuentos del pedido (promocode, socio POS, manual). */
+  neto: number;
 };
 
 type ProductoLite = {
@@ -140,6 +143,39 @@ export async function generarReporteTienda(
   return reporte;
 }
 
+const PAGE_SIZE = 1000;
+const IN_CHUNK = 300;
+
+/** Trae todas las filas paginando (PostgREST corta en 1000 por defecto). */
+async function fetchTodas<T>(
+  query: (desde: number, hasta: number) => PromiseLike<{ data: unknown; error: unknown }>
+): Promise<T[]> {
+  const filas: T[] = [];
+  for (let desde = 0; ; desde += PAGE_SIZE) {
+    const { data, error } = await query(desde, desde + PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = (data || []) as T[];
+    filas.push(...page);
+    if (page.length < PAGE_SIZE) return filas;
+  }
+}
+
+/** `.in()` en tandas para no pasarse del largo de URL. */
+async function fetchPorIds<T>(
+  ids: number[],
+  query: (chunk: number[], desde: number, hasta: number) => PromiseLike<{ data: unknown; error: unknown }>
+): Promise<T[]> {
+  const filas: T[] = [];
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    const chunk = ids.slice(i, i + IN_CHUNK);
+    filas.push(...(await fetchTodas<T>((d, h) => query(chunk, d, h))));
+  }
+  return filas;
+}
+
+const PEDIDO_COLS =
+  "id, estado, tipo, metodo_pago, total, subtotal, descuento, aplico_precio_socio, created_at, fecha_venta";
+
 async function fetchPeriodo(
   db: AdminDb,
   rango: { desde: string; hasta: string }
@@ -152,62 +188,100 @@ async function fetchPeriodo(
 }> {
   const { desdeIso, hastaIso } = rangoToTimestamps(rango);
 
-  const { data: pedidos, error: errP } = await db
-    .from("pedidos")
-    .select(
-      "id, estado, tipo, metodo_pago, total, subtotal, descuento, aplico_precio_socio, created_at"
-    )
-    .gte("created_at", desdeIso)
-    .lte("created_at", hastaIso);
-  if (errP) throw errP;
+  // Ventas efectivas: por fecha de cobro (igual que tesorería).
+  // Resto de estados (mix por estado): por fecha de creación.
+  const [efectivosRaw, creadosRaw] = await Promise.all([
+    fetchTodas<PedidoRow>((d, h) =>
+      db
+        .from("pedidos")
+        .select(PEDIDO_COLS)
+        .in("estado", [...ESTADOS_VENTA_EFECTIVA])
+        .gte("fecha_venta", desdeIso)
+        .lte("fecha_venta", hastaIso)
+        .order("id")
+        .range(d, h)
+    ),
+    fetchTodas<PedidoRow>((d, h) =>
+      db
+        .from("pedidos")
+        .select(PEDIDO_COLS)
+        .gte("created_at", desdeIso)
+        .lte("created_at", hastaIso)
+        .order("id")
+        .range(d, h)
+    ),
+  ]);
 
-  const pedidosTodos = (pedidos || []) as PedidoRow[];
+  const pedidosEfectivos = efectivosRaw;
+  const pedidosTodos = creadosRaw;
 
   // Descontar donaciones: pedidos.total las incluye (ver checkout), pero la
   // donación se transfiere a la Olla del Hogar — no es venta de la tienda.
-  const pedidoIds = pedidosTodos.map((p) => p.id);
+  const pedidoIds = Array.from(
+    new Set([...pedidosTodos, ...pedidosEfectivos].map((p) => p.id))
+  );
   if (pedidoIds.length > 0) {
-    const { data: donRows, error: errD } = await db
-      .from("donaciones")
-      .select("pedido_id, monto")
-      .in("pedido_id", pedidoIds);
-    if (errD) throw errD;
+    const donRows = await fetchPorIds<{ pedido_id: number; monto: number }>(
+      pedidoIds,
+      (chunk, d, h) =>
+        db
+          .from("donaciones")
+          .select("pedido_id, monto")
+          .in("pedido_id", chunk)
+          .order("pedido_id")
+          .range(d, h)
+    );
     const donacionPorPedido = new Map<number, number>();
-    (donRows || []).forEach((d: { pedido_id: number; monto: number }) => {
+    donRows.forEach((d) => {
       donacionPorPedido.set(d.pedido_id, Number(d.monto || 0));
     });
-    pedidosTodos.forEach((p) => {
+    [...pedidosTodos, ...pedidosEfectivos].forEach((p) => {
       const don = donacionPorPedido.get(p.id);
       if (don) p.total = Number(p.total || 0) - don;
     });
   }
 
-  const pedidosEfectivos = pedidosTodos.filter((p) =>
-    (ESTADOS_VENTA_EFECTIVA as readonly string[]).includes(p.estado)
-  );
-
   const idsEfectivos = pedidosEfectivos.map((p) => p.id);
   let items: ItemRow[] = [];
   if (idsEfectivos.length > 0) {
-    const { data: rows, error: errI } = await db
-      .from("pedido_items")
-      .select(
-        "pedido_id, producto_id, variante_id, cantidad, precio_unitario, subtotal, costo_unitario_venta"
-      )
-      .in("pedido_id", idsEfectivos);
-    if (errI) throw errI;
-    items = (rows || []) as ItemRow[];
+    const rows = await fetchPorIds<Omit<ItemRow, "neto">>(
+      idsEfectivos,
+      (chunk, d, h) =>
+        db
+          .from("pedido_items")
+          .select(
+            "pedido_id, producto_id, variante_id, cantidad, precio_unitario, subtotal, costo_unitario_venta"
+          )
+          .in("pedido_id", chunk)
+          .order("id")
+          .range(d, h)
+    );
+
+    // Prorratear el descuento del pedido entre sus ítems según su subtotal,
+    // así la suma por producto/categoría cierra con el KPI de ventas.
+    const factorPorPedido = new Map<number, number>();
+    pedidosEfectivos.forEach((p) => {
+      const sub = Number(p.subtotal || 0);
+      const desc = Number(p.descuento || 0);
+      factorPorPedido.set(p.id, sub > 0 ? Math.max(0, (sub - desc) / sub) : 1);
+    });
+    items = rows.map((i) => ({
+      ...i,
+      neto: Number(i.subtotal || 0) * (factorPorPedido.get(i.pedido_id) ?? 1),
+    }));
   }
 
   const productoIds = Array.from(new Set(items.map((i) => i.producto_id)));
   let productos: ProductoLite[] = [];
   if (productoIds.length > 0) {
-    const { data: rows, error } = await db
-      .from("productos")
-      .select("id, nombre, sku, categoria_id")
-      .in("id", productoIds);
-    if (error) throw error;
-    productos = (rows || []) as ProductoLite[];
+    productos = await fetchPorIds<ProductoLite>(productoIds, (chunk, d, h) =>
+      db
+        .from("productos")
+        .select("id, nombre, sku, categoria_id")
+        .in("id", chunk)
+        .order("id")
+        .range(d, h)
+    );
   }
 
   const categoriaIds = Array.from(
@@ -262,7 +336,7 @@ function computeSerie(
 
   const acc = new Map<string, { ventas: number; cogs: number; cantidad: number }>();
   pedidos.forEach((p) => {
-    const clave = claveBucket(p.created_at, porSemana);
+    const clave = claveBucket(p.fecha_venta ?? p.created_at, porSemana);
     const v = Number(p.total || 0);
     const c = cogsPorPedido.get(p.id) || 0;
     const prev = acc.get(clave) || { ventas: 0, cogs: 0, cantidad: 0 };
@@ -378,7 +452,7 @@ function computeTopProductos(
     const prev = acc.get(i.producto_id) || { cantidad: 0, facturacion: 0, cogs: 0 };
     acc.set(i.producto_id, {
       cantidad: prev.cantidad + Number(i.cantidad),
-      facturacion: prev.facturacion + Number(i.subtotal || 0),
+      facturacion: prev.facturacion + i.neto,
       cogs: prev.cogs + Number(i.cantidad) * costo,
     });
   });
@@ -427,7 +501,7 @@ function computeMargenPorCategoria(
     acc.set(key, {
       categoria_id: catId,
       nombre,
-      facturacion: prev.facturacion + Number(i.subtotal || 0),
+      facturacion: prev.facturacion + i.neto,
       cogs: prev.cogs + Number(i.cantidad) * costo,
     });
   });

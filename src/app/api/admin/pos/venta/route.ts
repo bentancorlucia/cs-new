@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole, getCurrentUser } from "@/lib/supabase/roles";
 import { z } from "zod";
 import {
@@ -8,14 +8,19 @@ import {
 } from "@/lib/mto/schema";
 import { calcularPrecioExtra } from "@/lib/mto/pricing";
 import type { MtoCampo } from "@/types/mto";
+import {
+  calcularDescuentoManual,
+  precioListaUnitario,
+  precioSocioUnitario,
+  round2,
+} from "@/lib/tienda/precios";
 
 const TIENDA_ROLES = ["super_admin", "tienda"];
 
 const itemSchema = z.object({
-  producto_id: z.number().positive(),
-  variante_id: z.number().positive().optional().nullable(),
+  producto_id: z.number().int().positive(),
+  variante_id: z.number().int().positive().optional().nullable(),
   cantidad: z.number().int().positive(),
-  precio_unitario: z.number().positive(),
   // Encargue (MTO): no descuenta stock; la personalización se valida contra
   // `productos.mto_campos` y el recargo se calcula acá, no en el cliente.
   es_encargue: z.boolean().optional().default(false),
@@ -41,14 +46,14 @@ const ventaSchema = z.object({
     .refine((v) => !v || z.string().email().safeParse(v).success, {
       message: "Email inválido",
     }),
-  perfil_socio_id: z.string().optional().nullable(),
-  descuento: z.number().min(0).default(0),
-  descuento_tipo: z
-    .enum(["porcentaje", "fijo", "socio", "lista_precio"])
-    .optional()
-    .nullable(),
-  descuento_porcentaje: z.number().min(0).max(100).optional().nullable(),
-  descuento_motivo: z.string().optional().nullable(),
+  perfil_socio_id: z.string().uuid().optional().nullable(),
+  // Descuento manual del cajero. Precios de lista y de socio los calcula el
+  // servidor; el cliente nunca manda precios.
+  descuento_manual_tipo: z.enum(["porcentaje", "fijo"]).optional().nullable(),
+  descuento_manual_valor: z.number().min(0).optional().nullable(),
+  descuento_motivo: z.string().max(500).optional().nullable(),
+  // Total que vio el cajero. Si no coincide con el calculado, se rechaza.
+  total_esperado: z.number().nonnegative().optional().nullable(),
   notas: z.string().optional().nullable(),
 });
 
@@ -56,44 +61,64 @@ const ventaSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     await requireRole(TIENDA_ROLES);
-    const supabase = await createServerClient();
     const user = await getCurrentUser();
     const body = await request.json();
     const parsed = ventaSchema.parse(body);
 
-    const db = supabase as any;
+    // Las RPC de stock solo las ejecuta service_role (mig 045).
+    const db = createAdminClient() as any;
 
-    // La validación de stock (descontando reservas online concurrentes) se hace
-    // de forma atómica más abajo vía RPC `reservar_stock_pedido` /
-    // `descontar_stock_pedido`. No validamos aquí para evitar el race condition.
-
-    // 1. Validar encargues + calcular recargos de personalización.
+    // 1. Productos, variantes y condición de socio.
     const productoIds = [...new Set(parsed.items.map((i) => i.producto_id))];
-    const { data: prods } = await db
-      .from("productos")
-      .select("id, nombre, mto_disponible, mto_solo, mto_campos")
-      .in("id", productoIds);
-    const prodById = new Map<number, any>(
-      (prods ?? []).map((p: any) => [p.id, p])
-    );
+    const varianteIds = [
+      ...new Set(
+        parsed.items
+          .filter((i) => !i.es_encargue && i.variante_id != null)
+          .map((i) => i.variante_id as number)
+      ),
+    ];
 
-    const hayEncargues = parsed.items.some((i) => i.es_encargue);
-    let esSocio = false;
-    if (hayEncargues && parsed.perfil_socio_id) {
-      const { data: perfilSocio } = await db
-        .from("perfiles")
-        .select("es_socio")
-        .eq("id", parsed.perfil_socio_id)
-        .single();
-      esSocio = perfilSocio?.es_socio === true;
-    }
+    const [{ data: prods }, { data: varis }, { data: perfilSocio }] =
+      await Promise.all([
+        db
+          .from("productos")
+          .select("id, nombre, precio, precio_socio, activo, mto_disponible, mto_solo, mto_campos")
+          .in("id", productoIds),
+        varianteIds.length > 0
+          ? db
+              .from("producto_variantes")
+              .select("id, producto_id, nombre, precio_override, activo")
+              .in("id", varianteIds)
+          : Promise.resolve({ data: [] }),
+        parsed.perfil_socio_id
+          ? db
+              .from("perfiles")
+              .select("es_socio")
+              .eq("id", parsed.perfil_socio_id)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
 
-    const itemsCalc: Array<
-      (typeof parsed.items)[number] & { precio_extra: number }
-    > = [];
+    const prodById = new Map<number, any>((prods ?? []).map((p: any) => [p.id, p]));
+    const variById = new Map<number, any>((varis ?? []).map((v: any) => [v.id, v]));
+    const esSocio = perfilSocio?.es_socio === true;
+
+    // 2. Precio por ítem (lista + socio + recargo de encargue).
+    const itemsCalc: Array<{
+      producto_id: number;
+      variante_id: number | null;
+      nombre: string;
+      cantidad: number;
+      es_encargue: boolean;
+      personalizacion: Record<string, string | number>;
+      precio_lista: number;
+      precio_socio: number | null;
+      precio_extra: number;
+    }> = [];
+
     for (const item of parsed.items) {
       const prod = prodById.get(item.producto_id);
-      if (!prod) {
+      if (!prod || prod.activo === false) {
         return NextResponse.json(
           { error: `Producto no encontrado (ID: ${item.producto_id})` },
           { status: 400 }
@@ -108,7 +133,31 @@ export async function POST(request: NextRequest) {
       }
 
       if (!item.es_encargue) {
-        itemsCalc.push({ ...item, precio_extra: 0 });
+        let override: number | null = null;
+        let nombre = prod.nombre;
+        if (item.variante_id != null) {
+          const vari = variById.get(item.variante_id);
+          if (!vari || vari.producto_id !== prod.id || vari.activo === false) {
+            return NextResponse.json(
+              { error: `Variante no encontrada para ${prod.nombre}` },
+              { status: 400 }
+            );
+          }
+          override = vari.precio_override;
+          nombre = `${prod.nombre} - ${vari.nombre}`;
+        }
+
+        itemsCalc.push({
+          producto_id: prod.id,
+          variante_id: item.variante_id ?? null,
+          nombre,
+          cantidad: item.cantidad,
+          es_encargue: false,
+          personalizacion: {},
+          precio_lista: precioListaUnitario(prod, override),
+          precio_socio: esSocio ? precioSocioUnitario(prod, override) : null,
+          precio_extra: 0,
+        });
         continue;
       }
 
@@ -140,39 +189,62 @@ export async function POST(request: NextRequest) {
       }
 
       itemsCalc.push({
-        ...item,
+        producto_id: prod.id,
         // El encargue no se asocia a una variante del stock (igual que online).
         variante_id: null,
+        nombre: prod.nombre,
+        cantidad: item.cantidad,
+        es_encargue: true,
         personalizacion: validacion.cleaned,
+        precio_lista: precioListaUnitario(prod),
+        precio_socio: esSocio ? precioSocioUnitario(prod) : null,
         precio_extra: calcularPrecioExtra(campos, validacion.cleaned),
       });
     }
 
-    // 2. Calcular totales
-    // `precio_unitario` es el precio de lista (sin descuento). Todos los
-    // descuentos (socio + manual) llegan agregados en `descuento`, por lo que
-    // el total nunca debe restar el descuento de socio dos veces.
-    // Los encargues suman su recargo de personalización por unidad.
-    const subtotal = itemsCalc.reduce(
-      (sum, item) =>
-        sum + (item.precio_unitario + item.precio_extra) * item.cantidad,
-      0
+    // 3. Totales. `pedido_items.precio_unitario` guarda el precio de lista;
+    // el beneficio de socio y el descuento manual van en `pedidos.descuento`.
+    const subtotal = round2(
+      itemsCalc.reduce(
+        (sum, i) => sum + (i.precio_lista + i.precio_extra) * i.cantidad,
+        0
+      )
     );
+    const descuentoSocio = round2(
+      itemsCalc.reduce(
+        (sum, i) =>
+          i.precio_socio != null
+            ? sum + (i.precio_lista - i.precio_socio) * i.cantidad
+            : sum,
+        0
+      )
+    );
+    const descuentoManual = calcularDescuentoManual(
+      subtotal - descuentoSocio,
+      parsed.descuento_manual_tipo,
+      parsed.descuento_manual_valor
+    );
+    const descuento = round2(descuentoSocio + descuentoManual);
+    const total = round2(subtotal - descuento);
 
-    // El descuento no puede superar el subtotal (evita totales negativos).
-    if (parsed.descuento > subtotal) {
+    if (
+      parsed.total_esperado != null &&
+      Math.abs(parsed.total_esperado - total) > 0.01
+    ) {
       return NextResponse.json(
-        { error: "El descuento no puede ser mayor que el subtotal" },
-        { status: 400 }
+        {
+          error: `El total calculado ($${total.toLocaleString("es-UY")}) no coincide con el de la pantalla ($${parsed.total_esperado.toLocaleString("es-UY")}). Recargá el POS: puede haber cambiado un precio.`,
+          code: "total_cambio",
+          total,
+        },
+        { status: 409 }
       );
     }
-
-    const total = subtotal - parsed.descuento;
 
     // Pago mixto: la parte en efectivo debe dejar un saldo > 0 a transferir.
     const esMixto = parsed.metodo_pago === "mixto";
     const montoEfectivoMixto = esMixto
-      ? Math.round((parsed.monto_efectivo ?? 0) * 100) / 100
+      ? round2(parsed.monto_efectivo ?? 0)
       : 0;
     if (esMixto && (montoEfectivoMixto <= 0 || montoEfectivoMixto >= total)) {
       return NextResponse.json(
@@ -186,8 +258,9 @@ export async function POST(request: NextRequest) {
 
     // Todo lo que no sea 100% efectivo requiere verificar una transferencia.
     const requiereVerificacion = parsed.metodo_pago !== "efectivo";
+    const hayEncargues = itemsCalc.some((i) => i.es_encargue);
 
-    // 3. Crear pedido
+    // 4. Crear pedido
     // Efectivo con encargues: queda 'encargado' hasta que llegue el producto.
     // Con transferencia pasa a 'encargado' al verificar el comprobante.
     const estadoInicial = requiereVerificacion
@@ -196,14 +269,19 @@ export async function POST(request: NextRequest) {
         ? "encargado"
         : "pagado";
 
+    const tipoManual = descuentoManual > 0 ? parsed.descuento_manual_tipo : null;
+
     const pedidoData: Record<string, any> = {
       perfil_id: parsed.perfil_socio_id || null,
       tipo: "pos",
       estado: estadoInicial,
       subtotal,
-      descuento: parsed.descuento,
-      descuento_tipo: parsed.descuento_tipo ?? null,
-      descuento_porcentaje: parsed.descuento_porcentaje ?? null,
+      descuento,
+      descuento_tipo: tipoManual ?? (descuentoSocio > 0 ? "socio" : null),
+      descuento_porcentaje:
+        tipoManual === "porcentaje"
+          ? Math.min(Number(parsed.descuento_manual_valor) || 0, 100)
+          : null,
       descuento_motivo: parsed.descuento_motivo || null,
       total,
       metodo_pago: parsed.metodo_pago,
@@ -211,12 +289,12 @@ export async function POST(request: NextRequest) {
       email_cliente: parsed.email_cliente?.toLowerCase() || null,
       notas: parsed.notas || null,
       vendedor_id: user?.id || null,
+      aplico_precio_socio: descuentoSocio > 0,
     };
 
     if (esMixto) {
       pedidoData.monto_efectivo = montoEfectivoMixto;
-      pedidoData.monto_transferencia =
-        Math.round((total - montoEfectivoMixto) * 100) / 100;
+      pedidoData.monto_transferencia = round2(total - montoEfectivoMixto);
     }
 
     // Transferencia / mixto: reservar stock sin descontar
@@ -233,17 +311,17 @@ export async function POST(request: NextRequest) {
 
     if (pedidoError) throw pedidoError;
 
-    // 4. Reservar / descontar stock atómicamente vía RPC.
+    // 5. Reservar / descontar stock atómicamente vía RPC.
     // - efectivo:      `descontar_stock_pedido` valida + inserta pedido_items
     //                  + descuenta stock_actual + crea stock_movimientos.
     // - transferencia / mixto: `reservar_stock_pedido` valida + inserta
     //                  pedido_items (stock se descuenta al verificar/aprobar).
     const itemsPayload = itemsCalc.map((item) => ({
       producto_id: item.producto_id,
-      variante_id: item.variante_id ?? null,
+      variante_id: item.variante_id,
       cantidad: item.cantidad,
-      precio_unitario: item.precio_unitario,
-      subtotal: (item.precio_unitario + item.precio_extra) * item.cantidad,
+      precio_unitario: item.precio_lista,
+      subtotal: round2((item.precio_lista + item.precio_extra) * item.cantidad),
       es_encargue: item.es_encargue,
       personalizacion: item.personalizacion,
       precio_extra_personalizacion: item.precio_extra,
@@ -287,7 +365,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Registrar movimiento financiero por lo cobrado en efectivo. La parte
+    // 6. Registrar movimiento financiero por lo cobrado en efectivo. La parte
     // por transferencia se registra al verificar el comprobante.
     if (parsed.metodo_pago === "efectivo" || esMixto) {
       try {
@@ -309,22 +387,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 6. Encargue cobrado en efectivo: confirmar por mail al cliente. Con
+    // 7. Encargue cobrado en efectivo: confirmar por mail al cliente. Con
     // transferencia / mixto el mail sale al verificar el comprobante.
     if (!requiereVerificacion && hayEncargues) {
       try {
         const { resolverEmailPedido } = await import("@/lib/tienda/email-pedido");
-        const { createAdminClient } = await import("@/lib/supabase/admin");
-        const { email } = await resolverEmailPedido(createAdminClient(), pedido);
+        const { email } = await resolverEmailPedido(db, pedido);
         if (email) {
           const { sendOrderConfirmation } = await import("@/lib/email/send");
           await sendOrderConfirmation(email, {
             nombreCliente: parsed.nombre_cliente || "",
             numeroPedido: pedido.numero_pedido,
             items: itemsCalc.map((item) => ({
-              nombre: prodById.get(item.producto_id)?.nombre ?? "",
+              nombre: item.nombre,
               cantidad: item.cantidad,
-              precioUnitario: item.precio_unitario + item.precio_extra,
+              precioUnitario: item.precio_lista + item.precio_extra,
             })),
             total,
           });

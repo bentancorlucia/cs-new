@@ -13,12 +13,27 @@ const estadoSchema = z.object({
     "pendiente_verificacion",
     "pagado",
     "preparando",
+    "encargado",
     "listo_retiro",
     "retirado",
     "cancelado",
   ]),
   motivo_cancelacion: z.string().optional(),
 });
+
+// Transiciones manuales permitidas. La aprobación de transferencias va por
+// /verificar y el pago de MercadoPago por el webhook: acá no se puede pasar
+// a "pagado" ni salir de "cancelado" sin tocar stock y tesorería.
+const TRANSICIONES: Record<string, string[]> = {
+  pendiente: ["cancelado"],
+  pendiente_verificacion: ["cancelado"],
+  pagado: ["encargado", "preparando", "listo_retiro", "retirado", "cancelado"],
+  encargado: ["preparando", "listo_retiro", "cancelado"],
+  preparando: ["listo_retiro", "retirado", "cancelado"],
+  listo_retiro: ["preparando", "retirado", "cancelado"],
+  retirado: ["cancelado"],
+  cancelado: [],
+};
 
 const contactoSchema = z.object({
   email_cliente: z
@@ -116,78 +131,79 @@ export async function PUT(
     const body = await request.json();
     const parsed = estadoSchema.parse(body);
 
-    // Use admin client directly (bypasses RLS for admin operations)
     const db = supabase as any;
+    const pedidoId = parseInt(id);
 
-    // Si se cancela, devolver stock + cancelar donación según corresponda
-    if (parsed.estado === "cancelado") {
-      const user = await getCurrentUser();
-      const { data: pedido } = await db
-        .from("pedidos")
-        .select("id, estado")
-        .eq("id", parseInt(id))
-        .single();
-
-      if (pedido && pedido.estado !== "cancelado") {
-        const { data: items } = await db
-          .from("pedido_items")
-          .select("producto_id, variante_id, cantidad, es_encargue")
-          .eq("pedido_id", parseInt(id));
-
-        if (items) {
-          for (const item of (items as any[]).filter((i) => !i.es_encargue)) {
-            const { data: prod } = await db
-              .from("productos")
-              .select("stock_actual")
-              .eq("id", item.producto_id)
-              .single();
-
-            if (prod) {
-              const nuevoStock = prod.stock_actual + item.cantidad;
-              await db
-                .from("productos")
-                .update({ stock_actual: nuevoStock })
-                .eq("id", item.producto_id);
-
-              await db.from("stock_movimientos").insert({
-                producto_id: item.producto_id,
-                variante_id: item.variante_id,
-                tipo: "devolucion",
-                cantidad: item.cantidad,
-                stock_anterior: prod.stock_actual,
-                stock_nuevo: nuevoStock,
-                referencia_tipo: "pedido",
-                referencia_id: parseInt(id),
-                motivo: parsed.motivo_cancelacion || "Pedido cancelado",
-                registrado_por: user?.id,
-              });
-            }
-          }
-        }
-
-        // Donación: cancelar si está en pendiente_pago o cobrada (no transferida).
-        // Si ya estaba 'transferida' a la Olla, NO se cancela: la donación
-        // mantiene su estado y solo se devuelve la parte de productos al cliente.
-        await db
-          .from("donaciones")
-          .update({ estado: "cancelada" })
-          .eq("pedido_id", parseInt(id))
-          .in("estado", ["pendiente_pago", "cobrada"]);
-      }
-    }
-
-    const { data, error } = await db
+    const { data: actual } = await db
       .from("pedidos")
-      .update({
-        estado: parsed.estado,
-        notas: parsed.estado === "cancelado" ? parsed.motivo_cancelacion : undefined,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", parseInt(id))
-      .select()
+      .select("id, estado")
+      .eq("id", pedidoId)
       .single();
 
-    if (error) throw error;
+    if (!actual) {
+      return NextResponse.json({ error: "Pedido no encontrado" }, { status: 404 });
+    }
+
+    if (actual.estado === parsed.estado) {
+      return NextResponse.json(
+        { error: `El pedido ya está en estado "${parsed.estado}"` },
+        { status: 400 }
+      );
+    }
+
+    if (!(TRANSICIONES[actual.estado] ?? []).includes(parsed.estado)) {
+      return NextResponse.json(
+        {
+          error: `No se puede pasar de "${actual.estado}" a "${parsed.estado}"`,
+        },
+        { status: 400 }
+      );
+    }
+
+    let data: any;
+
+    if (parsed.estado === "cancelado") {
+      // Atómico: repone stock (o libera la reserva), revierte ingresos en
+      // tesorería, cancela la donación y devuelve el uso del promocode.
+      const user = await getCurrentUser();
+      const { data: canc, error: cancError } = await db.rpc("cancelar_pedido", {
+        p_pedido_id: pedidoId,
+        p_motivo: parsed.motivo_cancelacion || null,
+        p_registrado_por: user?.id ?? null,
+      });
+      if (cancError) throw cancError;
+      if (canc?.ok === false) {
+        return NextResponse.json({ error: "No se pudo cancelar el pedido" }, { status: 400 });
+      }
+
+      const { data: row, error } = await db
+        .from("pedidos")
+        .select()
+        .eq("id", pedidoId)
+        .single();
+      if (error) throw error;
+      data = row;
+    } else {
+      const { data: row, error } = await db
+        .from("pedidos")
+        .update({
+          estado: parsed.estado,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", pedidoId)
+        .eq("estado", actual.estado)
+        .select()
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!row) {
+        return NextResponse.json(
+          { error: "El pedido cambió mientras lo editabas. Recargá la página." },
+          { status: 409 }
+        );
+      }
+      data = row;
+    }
 
     // Send cancellation email (cuenta o email_cliente del POS)
     if (parsed.estado === "cancelado") {

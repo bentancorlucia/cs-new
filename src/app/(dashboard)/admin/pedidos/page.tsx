@@ -159,7 +159,8 @@ export default function AdminPedidosPage() {
         );
         toast.success(`${pedido.numero_pedido} → ${estadoBadge[next].label}`);
       } else {
-        toast.error("Error al actualizar");
+        const json = await res.json().catch(() => null);
+        toast.error(json?.error || "Error al actualizar");
       }
     } catch {
       toast.error("Error de conexión");

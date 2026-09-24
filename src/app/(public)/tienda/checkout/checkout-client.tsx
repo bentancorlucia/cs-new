@@ -30,6 +30,8 @@ import {
   type DonacionConfig,
 } from "@/components/tienda/donacion-step";
 import { previewPromocode } from "@/lib/promocodes/client";
+import { precioListaUnitario, precioSocioUnitario } from "@/lib/tienda/precios";
+import { toast } from "sonner";
 import {
   fadeInUp,
   staggerContainer,
@@ -68,7 +70,17 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export function CheckoutClient() {
-  const { items, loaded, total, totalSocio, itemCount, clearCart, idempotencyKey, promocode } = useCart();
+  const {
+    items,
+    loaded,
+    total,
+    totalSocio,
+    itemCount,
+    clearCart,
+    actualizarPrecios,
+    idempotencyKey,
+    promocode,
+  } = useCart();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [notas, setNotas] = useState("");
@@ -82,6 +94,46 @@ export function CheckoutClient() {
   const [donacionMonto, setDonacionMonto] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const submittingRef = useRef(false);
+  const preciosSincronizadosRef = useRef(false);
+
+  // El carrito guarda precios en localStorage: al entrar al checkout se
+  // traen los vigentes para que el monto a transferir sea el que se cobra.
+  const sincronizarPrecios = useCallback(async () => {
+    if (items.length === 0) return;
+    const supabase = createBrowserClient();
+    const productoIds = [...new Set(items.map((i) => i.productoId))];
+    const { data } = await (supabase as any)
+      .from("productos")
+      .select("id, precio, precio_socio, producto_variantes(id, precio_override)")
+      .in("id", productoIds);
+    if (!data) return;
+
+    const prodById = new Map<number, any>(data.map((p: any) => [p.id, p]));
+    const precios: Array<{ lineId: string; precio: number; precioSocio?: number }> = [];
+    let cambiaron = false;
+    for (const item of items) {
+      const prod = prodById.get(item.productoId);
+      if (!prod) continue;
+      const override = item.varianteId && !item.esEncargue
+        ? (prod.producto_variantes ?? []).find((v: any) => v.id === item.varianteId)
+            ?.precio_override ?? null
+        : null;
+      const precio = precioListaUnitario(prod, override);
+      const precioSocio = precioSocioUnitario(prod, override) ?? undefined;
+      if (precio !== item.precio || precioSocio !== item.precioSocio) cambiaron = true;
+      precios.push({ lineId: item.lineId, precio, precioSocio });
+    }
+    actualizarPrecios(precios);
+    if (cambiaron) {
+      toast.info("Actualizamos algunos precios de tu carrito");
+    }
+  }, [items, actualizarPrecios]);
+
+  useEffect(() => {
+    if (!loaded || preciosSincronizadosRef.current) return;
+    preciosSincronizadosRef.current = true;
+    sincronizarPrecios();
+  }, [loaded, sincronizarPrecios]);
 
   // Cargar perfil del usuario y config de donaciones
   useEffect(() => {
@@ -200,12 +252,16 @@ export function CheckoutClient() {
           idempotencyKey: idempotencyKey || undefined,
           codigoPromocion: promocode?.codigo || undefined,
           donacionMonto: donacionMonto > 0 ? donacionMonto : undefined,
+          totalEsperado: totalFinal,
         }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
+        if (data.code === "total_cambio") {
+          await sincronizarPrecios();
+        }
         setError(data.error || "Error al procesar el checkout");
         submittingRef.current = false;
         setSubmitting(false);
@@ -390,9 +446,14 @@ export function CheckoutClient() {
 
             <div className="space-y-0 divide-y divide-bordo-800/5">
               {items.map((item) => {
-                const precioBase = esSocio && item.precioSocio
-                  ? item.precioSocio
-                  : item.precio;
+                // Con código no acumulable puede ganar el código: en ese caso
+                // los ítems van a precio normal.
+                const precioBase =
+                  preview.aplicoPrecioSocio &&
+                  item.precioSocio != null &&
+                  item.precioSocio < item.precio
+                    ? item.precioSocio
+                    : item.precio;
                 const precioItem = precioBase + (item.precioExtra ?? 0);
                 return (
                   <div key={item.lineId} className="flex gap-3 py-3 first:pt-0 last:pb-0">

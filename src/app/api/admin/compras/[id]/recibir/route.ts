@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole, getCurrentUser } from "@/lib/supabase/roles";
+import { uruguayDateKey } from "@/lib/timezone";
 
 const TIENDA_ROLES = ["super_admin", "tienda"];
 
@@ -15,6 +17,7 @@ export async function POST(
     const user = await getCurrentUser();
     const supabase = await createServerClient();
     const db = supabase as any;
+    const admin = createAdminClient() as any;
 
     // Obtener compra con items
     const { data: compra, error: compraError } = await db
@@ -86,14 +89,30 @@ export async function POST(
         if (errIns) throw errIns;
       }
 
+      // Stock vendible (productos/variantes.stock_actual): se SUMA lo
+      // recibido. No se recalcula desde stock_deposito porque las ventas no
+      // descuentan de depósitos y recalcular "deshacía" lo vendido.
+      const { data: inc, error: errInc } = await admin.rpc(
+        "incrementar_stock_item",
+        {
+          p_producto_id: item.producto_id,
+          p_variante_id: item.variante_id || null,
+          p_cantidad: item.cantidad,
+        }
+      );
+      if (errInc) throw errInc;
+      if (inc?.ok === false) {
+        throw new Error(`Producto ${item.producto_id} no encontrado al recibir`);
+      }
+
       const { error: errMov } = await db.from("stock_movimientos").insert({
         producto_id: item.producto_id,
         variante_id: item.variante_id || null,
         deposito_id: DEPOSITO_PRINCIPAL_ID,
         tipo: "entrada",
         cantidad: item.cantidad,
-        stock_anterior: cantidadAnterior,
-        stock_nuevo: cantidadNueva,
+        stock_anterior: inc.stock_anterior,
+        stock_nuevo: inc.stock_nuevo,
         referencia_tipo: "compra",
         referencia_id: compra.id,
         motivo: `Recepción compra #${compra.numero_compra}`,
@@ -108,23 +127,12 @@ export async function POST(
       if (errItem) throw errItem;
     }
 
-    // Sincronizar columnas cacheadas productos.stock_actual / producto_variantes.stock_actual
-    const productosUnicos = Array.from(
-      new Set(compra.compra_items.map((i: any) => i.producto_id as number))
-    );
-    for (const pid of productosUnicos) {
-      const { error: errRpc } = await db.rpc("recalcular_stock_producto", {
-        p_producto_id: pid,
-      });
-      if (errRpc) throw errRpc;
-    }
-
     // Marcar compra como recibida
     const { data, error } = await db
       .from("compras_proveedor")
       .update({
         estado: "recibida",
-        fecha_recepcion: new Date().toISOString().split("T")[0],
+        fecha_recepcion: uruguayDateKey(new Date()),
         updated_at: new Date().toISOString(),
       })
       .eq("id", parseInt(id))

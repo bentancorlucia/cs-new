@@ -14,6 +14,11 @@ import {
   validarMontoMinimo,
 } from "@/lib/promocodes/validate";
 import { aplicarPromocode } from "@/lib/promocodes/apply";
+import {
+  precioListaUnitario,
+  precioSocioUnitario,
+  round2,
+} from "@/lib/tienda/precios";
 
 const checkoutItemSchema = z.object({
   productoId: z.number().int().positive(),
@@ -30,6 +35,9 @@ const checkoutSchema = z.object({
   idempotencyKey: z.string().uuid().optional(),
   codigoPromocion: z.string().trim().min(1).max(40).optional(),
   donacionMonto: z.number().positive().max(1_000_000).optional(),
+  // Total que el cliente vio (y va a transferir). Si no coincide con el que
+  // calcula el servidor, se rechaza para que no transfiera un monto viejo.
+  totalEsperado: z.number().nonnegative().optional(),
 });
 
 interface ItemPreCalc {
@@ -84,8 +92,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { items, notas, metodo_pago, idempotencyKey, codigoPromocion, donacionMonto } =
-      parsed.data;
+    const {
+      items,
+      notas,
+      idempotencyKey,
+      codigoPromocion,
+      donacionMonto,
+      totalEsperado,
+    } = parsed.data;
 
     // 2b. Validar donación contra config (server-side, no confiar en el cliente).
     let donacionFinal = 0;
@@ -141,13 +155,7 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
 
       if (existente) {
-        return NextResponse.json({
-          pedido_id: existente.id,
-          numero_pedido: existente.numero_pedido,
-          metodo_pago: "transferencia",
-          tiene_encargues: false,
-          idempotent_replay: true,
-        });
+        return NextResponse.json(await respuestaReplay(db, existente));
       }
     }
 
@@ -172,15 +180,30 @@ export async function POST(request: NextRequest) {
     // final por ítem se decide más abajo en función del promocode (acumulable o no).
     const itemsPre: ItemPreCalc[] = [];
 
-    for (const item of items) {
-      const { data: prod } = await db
+    // Precios y datos de productos/variantes en dos consultas.
+    const productoIds = [...new Set(items.map((i) => i.productoId))];
+    const varianteIds = [
+      ...new Set(items.map((i) => i.varianteId).filter((v): v is number => v != null)),
+    ];
+    const [{ data: prods }, { data: varis }] = await Promise.all([
+      db
         .from("productos")
-        .select(
-          "id, nombre, precio, precio_socio, stock_actual, mto_disponible, mto_solo, mto_campos"
-        )
-        .eq("id", item.productoId)
-        .eq("activo", true)
-        .single();
+        .select("id, nombre, precio, precio_socio, mto_disponible, mto_solo, mto_campos")
+        .in("id", productoIds)
+        .eq("activo", true),
+      varianteIds.length > 0
+        ? db
+            .from("producto_variantes")
+            .select("id, producto_id, nombre, precio_override")
+            .in("id", varianteIds)
+            .eq("activo", true)
+        : Promise.resolve({ data: [] }),
+    ]);
+    const prodById = new Map<number, any>((prods ?? []).map((p: any) => [p.id, p]));
+    const variById = new Map<number, any>((varis ?? []).map((v: any) => [v.id, v]));
+
+    for (const item of items) {
+      const prod = prodById.get(item.productoId);
 
       if (!prod) {
         return NextResponse.json(
@@ -209,20 +232,15 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      let precioBase = prod.precio;
       let nombreItem = prod.nombre;
       let varianteId: number | undefined;
+      let precioOverride: number | null = null;
 
-      if (item.varianteId) {
-        const { data: vari } = await db
-          .from("producto_variantes")
-          .select("id, nombre, precio_override")
-          .eq("id", item.varianteId)
-          .eq("producto_id", item.productoId)
-          .eq("activo", true)
-          .single();
+      // El encargue no se asocia a una variante del stock.
+      if (item.varianteId && !esEncargue) {
+        const vari = variById.get(item.varianteId);
 
-        if (!vari) {
+        if (!vari || vari.producto_id !== item.productoId) {
           return NextResponse.json(
             { error: `Variante no encontrada para ${prod.nombre}` },
             { status: 400 }
@@ -231,11 +249,10 @@ export async function POST(request: NextRequest) {
 
         // La validación real de stock (vs reservas concurrentes) se hace de
         // forma atómica en la RPC `reservar_stock_pedido` más abajo.
-        precioBase = vari.precio_override ?? prod.precio;
+        precioOverride = vari.precio_override;
         nombreItem = `${prod.nombre} - ${vari.nombre}`;
         varianteId = vari.id;
       }
-      // Stock del producto (sin variante) también se valida en la RPC atómica.
 
       // Validar personalización
       let precioExtra = 0;
@@ -279,13 +296,8 @@ export async function POST(request: NextRequest) {
         varianteId,
         nombre: nombreItem,
         cantidad: item.cantidad,
-        precioNormal: precioBase,
-        // precio_socio se toma del producto y NO depende de variant override
-        // (preserva el comportamiento previo a promocodes).
-        precioSocioUnitario:
-          prod.precio_socio != null && prod.precio_socio < precioBase
-            ? Number(prod.precio_socio)
-            : null,
+        precioNormal: precioListaUnitario(prod, precioOverride),
+        precioSocioUnitario: precioSocioUnitario(prod, precioOverride),
         precioExtra,
         esEncargue,
         personalizacion,
@@ -339,14 +351,25 @@ export async function POST(request: NextRequest) {
         precioExtra: i.precioExtra,
         esEncargue: i.esEncargue,
         personalizacion: i.personalizacion,
-        subtotal: (precioUnitario + i.precioExtra) * i.cantidad,
+        subtotal: round2((precioUnitario + i.precioExtra) * i.cantidad),
       };
     });
 
     const subtotal = calc.subtotal;
     const descuento = calc.descuento;
     // El total que paga el cliente incluye la donación (se transfiere todo junto).
-    const total = calc.total + donacionFinal;
+    const total = round2(calc.total + donacionFinal);
+
+    if (totalEsperado != null && Math.abs(totalEsperado - total) > 0.01) {
+      return NextResponse.json(
+        {
+          error: `El total de tu pedido cambió a $${total.toLocaleString("es-UY")} (precios actualizados). Revisalo antes de transferir.`,
+          code: "total_cambio",
+          total,
+        },
+        { status: 409 }
+      );
+    }
 
     // 6. Reservar uso del promocode antes de crear el pedido (atómico).
     // Si no se aplicó (ej: best-price ganó precio_socio) no consumimos uso.
@@ -414,13 +437,11 @@ export async function POST(request: NextRequest) {
           .maybeSingle();
 
         if (ganador) {
-          return NextResponse.json({
-            pedido_id: ganador.id,
-            numero_pedido: ganador.numero_pedido,
-            metodo_pago: "transferencia",
-            tiene_encargues: false,
-            idempotent_replay: true,
-          });
+          // Este request no creó el pedido: devolver el uso del código.
+          if (promoAplicable && calc.aplicoPromocode) {
+            await db.rpc("decrementar_uso_promocode", { p_id: promoAplicable.id });
+          }
+          return NextResponse.json(await respuestaReplay(db, ganador));
         }
       }
 
@@ -525,6 +546,7 @@ export async function POST(request: NextRequest) {
       numero_pedido: pedido.numero_pedido,
       metodo_pago: "transferencia",
       tiene_encargues: tieneEncargues,
+      total,
     });
   } catch (error: any) {
     console.error("Error en checkout:", error?.message || error, error?.stack);
@@ -533,4 +555,23 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// Respuesta para un pedido ya creado con la misma idempotencyKey.
+async function respuestaReplay(
+  db: any,
+  pedido: { id: number; numero_pedido: string }
+) {
+  const [{ data: row }, { data: items }] = await Promise.all([
+    db.from("pedidos").select("total").eq("id", pedido.id).single(),
+    db.from("pedido_items").select("es_encargue").eq("pedido_id", pedido.id),
+  ]);
+  return {
+    pedido_id: pedido.id,
+    numero_pedido: pedido.numero_pedido,
+    metodo_pago: "transferencia",
+    tiene_encargues: (items ?? []).some((i: any) => i.es_encargue),
+    total: Number(row?.total ?? 0),
+    idempotent_replay: true,
+  };
 }

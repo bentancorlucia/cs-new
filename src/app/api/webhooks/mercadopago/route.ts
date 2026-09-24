@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHmac, timingSafeEqual } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import {
   getPayment,
@@ -13,6 +14,33 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// Valida `x-signature` (HMAC-SHA256) con MERCADOPAGO_WEBHOOK_SECRET.
+// Si el secreto no está configurado se acepta con warning (igual se consulta
+// el pago a la API de MP, así que no se puede inventar un pago aprobado).
+function firmaValida(request: NextRequest, dataId: string): boolean {
+  const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
+  if (!secret) {
+    console.warn("MERCADOPAGO_WEBHOOK_SECRET no configurado: webhook sin validar firma");
+    return true;
+  }
+  const header = request.headers.get("x-signature") ?? "";
+  const requestId = request.headers.get("x-request-id") ?? "";
+  const partes = Object.fromEntries(
+    header.split(",").map((p) => {
+      const [k, ...v] = p.trim().split("=");
+      return [k, v.join("=")];
+    })
+  );
+  if (!partes.ts || !partes.v1) return false;
+
+  const id = /^[a-z0-9]+$/i.test(dataId) ? dataId.toLowerCase() : dataId;
+  const manifest = `id:${id};request-id:${requestId};ts:${partes.ts};`;
+  const esperado = createHmac("sha256", secret).update(manifest).digest("hex");
+  const a = Buffer.from(esperado);
+  const b = Buffer.from(partes.v1);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 // POST /api/webhooks/mercadopago — Webhook de notificaciones de MercadoPago
 export async function POST(request: NextRequest) {
   try {
@@ -23,10 +51,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
-    const paymentId = body.data?.id;
+    const paymentId =
+      request.nextUrl.searchParams.get("data.id") ?? body.data?.id;
     if (!paymentId) {
       console.error("Webhook missing payment ID:", body);
       return NextResponse.json({ received: true });
+    }
+
+    if (!firmaValida(request, String(paymentId))) {
+      console.error("Webhook MercadoPago con firma inválida");
+      return NextResponse.json({ error: "Firma inválida" }, { status: 401 });
     }
 
     // Get full payment details from MercadoPago
@@ -194,7 +228,7 @@ async function handlePedidoPayment(
 ) {
   const { data: pedido, error: pedidoError } = await supabaseAdmin
     .from("pedidos")
-    .select("id, estado, perfil_id, numero_pedido, total, tipo")
+    .select("id, estado, perfil_id, email_cliente, numero_pedido, total, tipo")
     .eq("numero_pedido", numeroPedido)
     .single();
 
@@ -212,82 +246,59 @@ async function handlePedidoPayment(
   }
 
   if (isPaymentApproved(payment)) {
-    // 1. Update order to "pagado"
-    await supabaseAdmin
-      .from("pedidos")
-      .update({
-        estado: "pagado",
-        mercadopago_payment_id: String(payment.id),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", pedido.id);
-
-    // 2. Deduct stock for each item
-    const { data: pedidoItems } = await supabaseAdmin
-      .from("pedido_items")
-      .select("producto_id, variante_id, cantidad, precio_unitario")
-      .eq("pedido_id", pedido.id);
-
-    if (pedidoItems) {
-      for (const item of pedidoItems) {
-        if (item.variante_id) {
-          const { data: variante } = await supabaseAdmin
-            .from("producto_variantes")
-            .select("stock_actual")
-            .eq("id", item.variante_id)
-            .single();
-
-          if (variante) {
-            const stockAnterior = variante.stock_actual;
-            const stockNuevo = Math.max(0, stockAnterior - item.cantidad);
-
-            await supabaseAdmin
-              .from("producto_variantes")
-              .update({ stock_actual: stockNuevo })
-              .eq("id", item.variante_id);
-
-            await supabaseAdmin.from("stock_movimientos").insert({
-              producto_id: item.producto_id,
-              variante_id: item.variante_id,
-              tipo: "venta",
-              cantidad: -item.cantidad,
-              stock_anterior: stockAnterior,
-              stock_nuevo: stockNuevo,
-              referencia_tipo: "pedido",
-              referencia_id: pedido.id,
-            });
-          }
-        } else {
-          const { data: producto } = await supabaseAdmin
-            .from("productos")
-            .select("stock_actual")
-            .eq("id", item.producto_id)
-            .single();
-
-          if (producto) {
-            const stockAnterior = producto.stock_actual;
-            const stockNuevo = Math.max(0, stockAnterior - item.cantidad);
-
-            await supabaseAdmin
-              .from("productos")
-              .update({ stock_actual: stockNuevo })
-              .eq("id", item.producto_id);
-
-            await supabaseAdmin.from("stock_movimientos").insert({
-              producto_id: item.producto_id,
-              tipo: "venta",
-              cantidad: -item.cantidad,
-              stock_anterior: stockAnterior,
-              stock_nuevo: stockNuevo,
-              referencia_tipo: "pedido",
-              referencia_id: pedido.id,
-            });
-          }
-        }
-      }
+    // El monto pagado tiene que cubrir el total del pedido.
+    if (Number(payment.transaction_amount) + 0.01 < Number(pedido.total)) {
+      console.error(
+        `Webhook: pago ${payment.id} por ${payment.transaction_amount} no cubre el pedido ${numeroPedido} (${pedido.total})`
+      );
+      return;
     }
 
-    // Register financial movement in tienda bank account
+    const { data: items } = await supabaseAdmin
+      .from("pedido_items")
+      .select(
+        "cantidad, precio_unitario, precio_extra_personalizacion, es_encargue, productos(nombre), producto_variantes(nombre)"
+      )
+      .eq("pedido_id", pedido.id);
+    const tieneEncargues = (items ?? []).some((i: any) => i.es_encargue);
+
+    // 1. Pedido → pagado/encargado + descuento de stock, atómico. Si MP
+    // reenvía la notificación, la segunda llamada ve otro estado y no hace nada.
+    const { data: conf, error: confError } = await supabaseAdmin.rpc(
+      "confirmar_reserva_pedido" as any,
+      {
+        p_pedido_id: pedido.id,
+        p_estado_nuevo: tieneEncargues ? "encargado" : "pagado",
+        p_registrado_por: null,
+        p_estado_esperado: "pendiente",
+      } as any
+    );
+    if (confError || (conf as any)?.ok === false) {
+      console.error("Webhook: no se pudo confirmar el pedido", confError ?? conf);
+      return;
+    }
+
+    await supabaseAdmin
+      .from("pedidos")
+      .update({ mercadopago_payment_id: String(payment.id) })
+      .eq("id", pedido.id);
+
+    // 2. Donación cobrada (no es ingreso de tienda).
+    let donacionMonto = 0;
+    const { data: donacion } = await supabaseAdmin
+      .from("donaciones")
+      .select("id, monto, estado")
+      .eq("pedido_id", pedido.id)
+      .maybeSingle();
+    if (donacion && donacion.estado === "pendiente_pago") {
+      await supabaseAdmin
+        .from("donaciones")
+        .update({ estado: "cobrada", cobrada_at: new Date().toISOString() })
+        .eq("id", donacion.id);
+      donacionMonto = Number(donacion.monto);
+    }
+
+    // 3. Ingreso en tesorería
     try {
       const { registrarMovimientoVentaPedido } = await import(
         "@/lib/tienda/registrar-movimiento"
@@ -296,74 +307,65 @@ async function handlePedidoPayment(
         pedidoId: pedido.id,
         numeroPedido: pedido.numero_pedido || numeroPedido,
         tipoPedido: pedido.tipo === "pos" ? "pos" : "online",
-        total: Number(pedido.total ?? payment.transaction_amount ?? 0),
+        total: Number(pedido.total),
         metodoPago: "mercadopago",
         registradoPor: null,
+        montoOverride:
+          donacionMonto > 0 ? Number(pedido.total) - donacionMonto : undefined,
       });
     } catch (movError) {
       console.error("Error al registrar movimiento financiero:", movError);
     }
 
-    // 3. Register in pagos_mercadopago
-    await supabaseAdmin.from("pagos_mercadopago").insert({
-      tipo_origen: "pedido",
-      origen_id: pedido.id,
-      mercadopago_payment_id: String(payment.id),
-      mercadopago_status: payment.status,
-      mercadopago_status_detail: payment.status_detail,
-      monto: payment.transaction_amount,
-      moneda: payment.currency_id || "UYU",
-      metodo: payment.payment_method_id || null,
-      raw_data: payment,
-    });
+    // 4. Registro del pago (una fila por payment_id)
+    const { data: pagoExistente } = await supabaseAdmin
+      .from("pagos_mercadopago")
+      .select("id")
+      .eq("mercadopago_payment_id", String(payment.id))
+      .maybeSingle();
+    if (!pagoExistente) {
+      await supabaseAdmin.from("pagos_mercadopago").insert({
+        tipo_origen: "pedido",
+        origen_id: pedido.id,
+        mercadopago_payment_id: String(payment.id),
+        mercadopago_status: payment.status,
+        mercadopago_status_detail: payment.status_detail,
+        monto: payment.transaction_amount,
+        moneda: payment.currency_id || "UYU",
+        metodo: payment.payment_method_id || null,
+        raw_data: payment as any,
+      });
+    }
 
-    // Send order confirmation email
+    // 5. Mail de confirmación
     try {
-      // Get user email and order details
-      const { data: perfilData } = await supabaseAdmin
-        .from("perfiles")
-        .select("nombre, apellido")
-        .eq("id", pedido.perfil_id)
-        .single();
+      const { resolverEmailPedido } = await import("@/lib/tienda/email-pedido");
+      const { email, tieneCuenta } = await resolverEmailPedido(supabaseAdmin, pedido);
 
-      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(pedido.perfil_id);
-      const userEmail = authUser?.user?.email;
-
-      if (userEmail && pedidoItems) {
+      if (email) {
+        const { data: perfilData } = pedido.perfil_id
+          ? await supabaseAdmin
+              .from("perfiles")
+              .select("nombre, apellido")
+              .eq("id", pedido.perfil_id)
+              .single()
+          : { data: null };
         const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://clubseminario.com.uy";
 
-        // Get product names for items
-        const itemsForEmail: { nombre: string; cantidad: number; precioUnitario: number }[] = [];
-        for (const item of pedidoItems) {
-          const { data: prod } = await supabaseAdmin
-            .from("productos")
-            .select("nombre")
-            .eq("id", item.producto_id)
-            .single();
-
-          let nombre = prod?.nombre || `Producto #${item.producto_id}`;
-          if (item.variante_id) {
-            const { data: vari } = await supabaseAdmin
-              .from("producto_variantes")
-              .select("nombre")
-              .eq("id", item.variante_id)
-              .single();
-            if (vari) nombre += ` - ${vari.nombre}`;
-          }
-
-          itemsForEmail.push({
-            nombre,
-            cantidad: item.cantidad,
-            precioUnitario: Number((item as any).precio_unitario || 0),
-          });
-        }
-
-        await sendOrderConfirmation(userEmail, {
+        await sendOrderConfirmation(email, {
           nombreCliente: perfilData ? `${perfilData.nombre} ${perfilData.apellido}` : "Cliente",
           numeroPedido,
-          items: itemsForEmail,
-          total: Number(payment.transaction_amount || 0),
-          pedidoUrl: `${APP_URL}/tienda/pedido/${pedido.id}`,
+          items: (items ?? []).map((item: any) => ({
+            nombre: item.producto_variantes?.nombre
+              ? `${item.productos?.nombre ?? ""} - ${item.producto_variantes.nombre}`
+              : item.productos?.nombre ?? "",
+            cantidad: item.cantidad,
+            precioUnitario:
+              Number(item.precio_unitario) +
+              Number(item.precio_extra_personalizacion || 0),
+          })),
+          total: Number(pedido.total),
+          pedidoUrl: tieneCuenta ? `${APP_URL}/tienda/pedido/${pedido.id}` : undefined,
         });
       }
     } catch (emailError) {
@@ -372,14 +374,12 @@ async function handlePedidoPayment(
 
     console.log(`Order ${numeroPedido} paid successfully`);
   } else if (isPaymentRejected(payment)) {
-    await supabaseAdmin
-      .from("pedidos")
-      .update({
-        estado: "cancelado",
-        notas: `Pago ${payment.status}: ${payment.status_detail || "sin detalle"}`,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", pedido.id);
+    const { error } = await supabaseAdmin.rpc("cancelar_pedido" as any, {
+      p_pedido_id: pedido.id,
+      p_motivo: `Pago ${payment.status}: ${payment.status_detail || "sin detalle"}`,
+      p_registrado_por: null,
+    } as any);
+    if (error) console.error("Webhook: error al cancelar pedido", error);
 
     console.log(`Order ${numeroPedido} cancelled/rejected`);
   }

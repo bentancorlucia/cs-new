@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { uruguayDateKey } from "@/lib/timezone";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/supabase/roles";
 
@@ -114,7 +115,7 @@ export async function PUT(
     };
 
     if (estado === "recibida") {
-      updateData.fecha_recepcion = new Date().toISOString().split("T")[0];
+      updateData.fecha_recepcion = uruguayDateKey(new Date());
     }
 
     const { data, error } = await db

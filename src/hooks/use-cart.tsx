@@ -39,6 +39,8 @@ interface CartContextValue {
   updateQuantity: (lineId: string, cantidad: number) => void;
   removeItem: (lineId: string) => void;
   clearCart: () => void;
+  /** Reemplaza precios de las líneas indicadas (precios vigentes del servidor). */
+  actualizarPrecios: (precios: Array<{ lineId: string; precio: number; precioSocio?: number }>) => void;
   itemCount: number;
   total: number;
   totalSocio: number;
@@ -213,6 +215,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const actualizarPrecios = useCallback<CartContextValue["actualizarPrecios"]>((precios) => {
+    const porLinea = new Map(precios.map((p) => [p.lineId, p]));
+    setItems((prev) => {
+      let cambio = false;
+      const next = prev.map((i) => {
+        const p = porLinea.get(i.lineId);
+        if (!p || (p.precio === i.precio && p.precioSocio === i.precioSocio)) return i;
+        cambio = true;
+        return { ...i, precio: p.precio, precioSocio: p.precioSocio };
+      });
+      return cambio ? next : prev;
+    });
+  }, []);
+
   const itemCount = useMemo(() => items.reduce((sum, i) => sum + i.cantidad, 0), [items]);
 
   const total = useMemo(
@@ -223,7 +239,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const totalSocio = useMemo(
     () =>
       items.reduce(
-        (sum, i) => sum + ((i.precioSocio ?? i.precio) + (i.precioExtra ?? 0)) * i.cantidad,
+        (sum, i) => {
+          const base =
+            i.precioSocio != null && i.precioSocio < i.precio ? i.precioSocio : i.precio;
+          return sum + (base + (i.precioExtra ?? 0)) * i.cantidad;
+        },
         0
       ),
     [items]
@@ -238,13 +258,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
       updateQuantity,
       removeItem,
       clearCart,
+      actualizarPrecios,
       itemCount,
       total,
       totalSocio,
       promocode,
       setPromocode,
     }),
-    [items, loaded, idempotencyKey, addItem, updateQuantity, removeItem, clearCart, itemCount, total, totalSocio, promocode, setPromocode]
+    [items, loaded, idempotencyKey, addItem, updateQuantity, removeItem, clearCart, actualizarPrecios, itemCount, total, totalSocio, promocode, setPromocode]
   );
 
   return <CartContext value={value}>{children}</CartContext>;

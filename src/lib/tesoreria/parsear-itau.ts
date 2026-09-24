@@ -206,7 +206,7 @@ function parsearMontoItau(s: string | undefined): number {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-function computarHash(
+export function computarHash(
   cuentaId: number,
   fecha: string,
   concepto: string,
