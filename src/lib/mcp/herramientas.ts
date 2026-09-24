@@ -12,10 +12,22 @@ import { periodoActual } from "@/lib/tesoreria/presupuesto";
 import { obtenerResumenSocios } from "@/lib/socios/resumen";
 import { uruguayNowParts } from "@/lib/timezone";
 import { tieneRol, usuarioDe, type UsuarioMcp } from "./auth";
+import {
+  agregarSchema,
+  agregarTabla,
+  catalogoPara,
+  consultarSchema,
+  consultarTabla,
+  modulosDe,
+} from "./consultas";
 
 const ROLES_TIENDA = ["tienda"];
 const ROLES_TESORERIA = ["tesorero"];
 const ROLES_SECRETARIA = ["secretaria"];
+const ROLES_CUALQUIER_MODULO = ["tienda", "tesorero", "secretaria"];
+
+// Tope de respuesta para no saturar el contexto del modelo.
+const MAX_CARACTERES = 120_000;
 
 export const INSTRUCCIONES_MCP = `Servidor de datos internos de Club Seminario (Montevideo, Uruguay).
 Todas las herramientas son de solo lectura y devuelven los mismos números que los paneles del dashboard.
@@ -24,6 +36,9 @@ Todas las herramientas son de solo lectura y devuelven los mismos números que l
 - Tesorería maneja UYU y USD; los totales consolidados usan la cotización BCU vigente (promedio compra/venta).
 - Cada herramienta requiere un rol (tienda, tesorero, secretaria; super_admin ve todo). Si no hay permiso, decíselo al usuario en vez de inventar datos.
 - Usá "quien_soy" si no sabés qué puede consultar el usuario.
+- Para preguntas generales preferí las herramientas de resumen (estado_tienda_hoy, reporte_tienda, panorama_finanzas, ejecucion_presupuesto, resumen_socios).
+- Para cualquier otro dato: listar_tablas → consultar_tabla (filas) o agregar_tabla (sumas, conteos, promedios agrupados). Son de solo lectura y solo muestran las tablas del área del usuario.
+- Los datos pueden incluir información personal (nombres, cédulas, teléfonos): usala solo para responder lo que te preguntan.
 Respondé en español rioplatense.`;
 
 const fecha = z
@@ -56,7 +71,11 @@ export function registrarHerramientas(server: McpServer) {
           panorama_finanzas: tieneRol(usuario, ROLES_TESORERIA),
           ejecucion_presupuesto: tieneRol(usuario, ROLES_TESORERIA),
           resumen_socios: tieneRol(usuario, ROLES_SECRETARIA),
+          listar_tablas: tieneRol(usuario, ROLES_CUALQUIER_MODULO),
+          consultar_tabla: tieneRol(usuario, ROLES_CUALQUIER_MODULO),
+          agregar_tabla: tieneRol(usuario, ROLES_CUALQUIER_MODULO),
         },
+        modulosConAccesoCompleto: modulosDe(usuario),
       });
     }
   );
@@ -175,13 +194,81 @@ export function registrarHerramientas(server: McpServer) {
         return obtenerResumenSocios(createAdminClient(), rango);
       })
   );
+  server.registerTool(
+    "listar_tablas",
+    {
+      title: "Tablas disponibles",
+      description:
+        "Lista las tablas que el usuario puede consultar según sus roles (tienda, tesorería, secretaría), " +
+        "con descripción y columnas. Usala antes de consultar_tabla / agregar_tabla.",
+      inputSchema: z.object({
+        modulo: z.enum(["tienda", "tesoreria", "secretaria"]).optional().describe("Filtrar por área"),
+      }),
+      annotations: soloLectura,
+    },
+    async ({ modulo }, ctx) =>
+      conRol(ctx as Ctx, ROLES_CUALQUIER_MODULO, "listar_tablas", async (_t, usuario) =>
+        catalogoPara(usuario, modulo)
+      )
+  );
+
+  server.registerTool(
+    "consultar_tabla",
+    {
+      title: "Consultar tabla",
+      description:
+        "Devuelve filas de una tabla (solo lectura) con filtros, orden y paginación. Puede traer columnas de tablas relacionadas " +
+        "vía 'relaciones' (ej. pedido_items con productos(nombre)). Para filtrar por una columna de la relación usá 'relacion.columna' " +
+        "y marcá la relación como obligatoria. Devuelve también el total de coincidencias. Máx. 500 filas por llamada.",
+      inputSchema: consultarSchema,
+      annotations: soloLectura,
+    },
+    async (input, ctx) =>
+      conRol(ctx as Ctx, ROLES_CUALQUIER_MODULO, `consultar_tabla:${input.tabla}`, async (_t, usuario) =>
+        recortar(await consultarTabla(usuario, input))
+      )
+  );
+
+  server.registerTool(
+    "agregar_tabla",
+    {
+      title: "Agregar datos",
+      description:
+        "Calcula count, count_distinct, sum, avg, min y max sobre una tabla (solo lectura), opcionalmente agrupando por columnas " +
+        "o por fecha (':dia', ':semana', ':mes', ':anio' en hora de Uruguay). Acepta filtros y relaciones como consultar_tabla " +
+        "(usá relaciones muchos-a-uno, ej. pedido_items → pedidos). Recorre hasta 50.000 filas. " +
+        "Ej.: ventas por mes = tabla pedidos, filtros estado in [...], agrupar_por ['created_at:mes'], metricas [{funcion:'sum', columna:'total'}].",
+      inputSchema: agregarSchema,
+      annotations: soloLectura,
+    },
+    async (input, ctx) =>
+      conRol(ctx as Ctx, ROLES_CUALQUIER_MODULO, `agregar_tabla:${input.tabla}`, async (_t, usuario) =>
+        agregarTabla(usuario, input)
+      )
+  );
+}
+
+/** Si la respuesta es enorme, recorta filas y avisa cómo paginar. */
+function recortar<T extends { filas: unknown[]; devueltas: number }>(r: T) {
+  let filas = r.filas;
+  while (filas.length > 1 && JSON.stringify(filas).length > MAX_CARACTERES) {
+    filas = filas.slice(0, Math.floor(filas.length / 2));
+  }
+  if (filas.length === r.filas.length) return r;
+  return {
+    ...r,
+    filas,
+    devueltas: filas.length,
+    hay_mas: true,
+    aviso: `Respuesta recortada a ${filas.length} filas por tamaño. Pedí menos columnas o usá desde_fila para paginar.`,
+  };
 }
 
 async function conRol(
   ctx: Ctx,
   roles: string[],
   herramienta: string,
-  fn: (token: string) => Promise<unknown>
+  fn: (token: string, usuario: UsuarioMcp) => Promise<unknown>
 ): Promise<CallToolResult> {
   const authInfo = ctx.http?.authInfo;
   const usuario = usuarioDe(authInfo);
@@ -195,7 +282,7 @@ async function conRol(
   }
   log(usuario, herramienta);
   try {
-    return ok(await fn(authInfo.token));
+    return ok(await fn(authInfo.token, usuario));
   } catch (e) {
     const msg = e instanceof Error ? e.message : (e as { message?: string })?.message ?? "Error";
     console.error(`[mcp] ${herramienta} falló:`, e);

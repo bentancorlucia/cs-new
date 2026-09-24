@@ -26,9 +26,18 @@ import { fadeInUp, staggerContainer, easeSmooth, springBouncy } from "@/lib/moti
 import { aprobarAutorizacion, denegarAutorizacion } from "./actions";
 
 const AREAS: Record<string, { icono: typeof ShoppingBag; texto: string }> = {
-  tienda: { icono: ShoppingBag, texto: "Ventas, pedidos y stock de la tienda" },
-  tesorero: { icono: Landmark, texto: "Saldos, movimientos y presupuesto" },
-  secretaria: { icono: Users, texto: "Cantidad de socios, altas, bajas y disciplinas" },
+  tienda: {
+    icono: ShoppingBag,
+    texto: "Tienda: productos, pedidos y clientes, stock, proveedores, compras y promociones",
+  },
+  tesorero: {
+    icono: Landmark,
+    texto: "Tesorería: cuentas, movimientos, presupuesto, transferencias y proveedores",
+  },
+  secretaria: {
+    icono: Users,
+    texto: "Secretaría: padrón de socios con datos personales, disciplinas, usuarios y staff",
+  },
 };
 
 type Props =
