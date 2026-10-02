@@ -44,6 +44,8 @@ DO $$ BEGIN
 END $$;
 SELECT is((pg_temp.item(9001)).valor, 13000.00::numeric, 'promedio: 10 a 600 + 10 a 700 = 13.000');
 
+DO $$ BEGIN PERFORM comercial.abrir_caja((SELECT id FROM comercial.cajas LIMIT 1), 0); END $$;
+
 -- ---------- Venta POS en efectivo: 2 camisetas a no socio
 INSERT INTO public.pedidos (id, tipo, estado, subtotal, total, metodo_pago) VALUES (8001, 'pos', 'pagado', 3000, 3000, 'efectivo');
 SELECT is((public.descontar_stock_pedido(8001, jsonb_build_array(
