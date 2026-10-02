@@ -1,315 +1,168 @@
 "use client";
 
 import { motion } from "framer-motion";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { springSmooth } from "@/lib/motion";
-import { formatearMoneda, formatearMonedaCompacta } from "@/lib/moneda";
+import { cn } from "@/lib/utils";
+import { fadeInUp, springSmooth, staggerContainer, staggerContainerFast } from "@/lib/motion";
+import { formatFecha, formatImporte } from "@/lib/contabilidad/formato";
+import { uruguayDateKey } from "@/lib/timezone";
+import { formatPct } from "@/lib/reportes/etiquetas";
+import { EnteroAnimado } from "@/components/contabilidad/reportes/importe-animado";
 import { KpiCard } from "./kpi-card";
-import type { ReportePromocodes } from "@/types/reportes";
+import { Barra, Tarjeta } from "./tab-general";
+import type { PromocodeEstado, ReportePromocodes } from "@/types/reportes";
 
-interface Props {
-  data: ReportePromocodes;
+const fmt = (v: number) => formatImporte(v, "UYU");
+
+function estado(e: PromocodeEstado): { label: string; clase: string } {
+  if (e.vigente) return { label: "Vigente", clase: "bg-emerald-50 text-emerald-700" };
+  if (e.agotado) return { label: "Agotado", clase: "bg-orange-50 text-orange-700" };
+  if (e.vencido) return { label: "Vencido", clase: "bg-gray-100 text-gray-600" };
+  if (!e.activo) return { label: "Inactivo", clase: "bg-gray-100 text-gray-500" };
+  return { label: "Programado", clase: "bg-blue-50 text-blue-700" };
 }
 
-export function TabPromocodes({ data }: Props) {
-  const topRanking = data.ranking.slice(0, 10);
-  const ahora = new Date(data.rango.hasta + "T23:59:59").getTime();
+export function TabPromocodes({ data }: { data: ReportePromocodes }) {
+  const maxDesc = Math.max(1, ...data.ranking.map((r) => r.descontado));
+  const totalUsos = data.acumulacionPrecioSocio.conPrecioSocio + data.acumulacionPrecioSocio.soloDescuento;
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <p className="text-xs text-muted-foreground">
+        Pedidos vendidos en el período (fecha contable, sin anulados). Facturación = cobrado sin donación; costo = kardex.
+      </p>
+
+      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <KpiCard label="Total descontado" valor={data.totalDescontado} tono="bordo" hint={`${data.cantidadUsos} pedidos con código`} />
+        <KpiCard label="Descuento sobre ventas" valor={data.descuentoSobreVentasPct} formato="pct" hint="del precio de lista" />
         <KpiCard
-          index={0}
-          label="Total descontado"
-          value={formatearMoneda(data.totalDescontado, "UYU")}
-          hint={`${data.cantidadUsos} usos`}
+          label="Margen con código"
+          valor={data.margenConCodigo}
+          tono={data.margenConCodigo < 0 ? "negativo" : "positivo"}
+          hint={formatPct(data.margenConCodigoPct)}
         />
         <KpiCard
-          index={1}
-          label="Descuento / ventas"
-          value={
-            data.descuentoSobreVentasPct == null
-              ? "—"
-              : `${data.descuentoSobreVentasPct.toFixed(1)}%`
-          }
-        />
-        <KpiCard
-          index={2}
-          label="Margen restante"
-          value={formatearMoneda(data.margenRestante, "UYU")}
-          hint={
-            data.margenRestantePct == null
-              ? undefined
-              : `${data.margenRestantePct.toFixed(1)}% sobre ventas con código`
-          }
-          tone={data.margenRestante < 0 ? "negative" : "positive"}
-        />
-        <KpiCard
-          index={3}
           label="Ticket con / sin código"
-          value={`${formatearMonedaCompacta(data.ticketConCodigo, "UYU")} · ${formatearMonedaCompacta(data.ticketSinCodigo, "UYU")}`}
+          valor={data.ticketConCodigo}
+          hint={`sin código: ${fmt(data.ticketSinCodigo)}`}
         />
-      </div>
+      </motion.div>
 
-      {/* Contadores de estado */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatusCounter index={0} label="Vigentes" value={data.contadoresEstado.vigentes} color="#0d7377" />
-        <StatusCounter index={1} label="Vencidos" value={data.contadoresEstado.vencidos} color="#a64161" />
-        <StatusCounter index={2} label="Agotados" value={data.contadoresEstado.agotados} color="#c97064" />
-        <StatusCounter index={3} label="Sin uso" value={data.contadoresEstado.sinUso} color="#4a5d6c" />
-      </div>
+      <motion.div variants={staggerContainerFast} initial="hidden" animate="visible" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { l: "Vigentes", v: data.contadoresEstado.vigentes, c: "text-emerald-700" },
+          { l: "Vencidos", v: data.contadoresEstado.vencidos, c: "text-muted-foreground" },
+          { l: "Agotados", v: data.contadoresEstado.agotados, c: "text-orange-700" },
+          { l: "Sin uso", v: data.contadoresEstado.sinUso, c: "text-muted-foreground" },
+        ].map((x) => (
+          <motion.div key={x.l} variants={fadeInUp} transition={springSmooth} className="rounded-xl border border-linea bg-white px-3 py-2 shadow-sm">
+            <p className="text-[11px] text-muted-foreground">Códigos {x.l.toLowerCase()} (hoy)</p>
+            <p className={cn("font-display text-lg tracking-tightest", x.c)}>
+              <EnteroAnimado valor={x.v} />
+            </p>
+          </motion.div>
+        ))}
+      </motion.div>
 
-      {/* Ranking */}
-      <ChartCard title="Ranking de códigos">
-        <div className="overflow-x-auto -mx-4 px-4">
-          <table className="w-full text-xs">
-            <thead className="text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border">
-              <tr>
-                <th className="text-left py-2 font-heading">Código</th>
-                <th className="text-right py-2 font-heading">Usos</th>
-                <th className="text-right py-2 font-heading">Descontado</th>
-                <th className="text-right py-2 font-heading">Facturación</th>
-                <th className="text-right py-2 font-heading">COGS</th>
-                <th className="text-right py-2 font-heading">Margen</th>
-                <th className="text-right py-2 font-heading">%</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.ranking.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-6 text-muted-foreground">
-                    No se usaron promocodes en el rango
-                  </td>
-                </tr>
-              ) : (
-                data.ranking.map((r, i) => (
-                  <motion.tr
-                    key={r.promocode_id}
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ ...springSmooth, delay: i * 0.02 }}
-                    className={`border-b border-border/50 ${
-                      r.margen < 0
-                        ? "bg-rose-50/60 dark:bg-rose-950/20 hover:bg-rose-100/60"
-                        : "hover:bg-muted/40"
-                    }`}
-                  >
-                    <td className="py-2 font-mono">
-                      <div className="font-medium text-foreground">{r.codigo}</div>
-                      {r.descripcion && (
-                        <div className="text-[10px] text-muted-foreground font-body">
-                          {r.descripcion}
+      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 lg:grid-cols-3">
+        <Tarjeta titulo="Ranking de códigos" subtitulo="En pedidos del período" className="lg:col-span-2">
+          {data.ranking.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Ningún pedido del período usó un código.</p>
+          ) : (
+            <div className="reporte-scroll -mx-4 overflow-x-auto sm:mx-0">
+              <table className="reporte-tabla w-full min-w-[620px] text-sm">
+                <thead>
+                  <tr className="border-b border-linea text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-2 font-heading sm:px-2">Código</th>
+                    <th className="px-2 py-2 text-right font-heading">Usos</th>
+                    <th className="px-2 py-2 text-right font-heading">Descontado</th>
+                    <th className="px-2 py-2 text-right font-heading">Facturación</th>
+                    <th className="px-2 py-2 text-right font-heading">Margen</th>
+                    <th className="px-4 py-2 text-right font-heading sm:px-2">Margen %</th>
+                  </tr>
+                </thead>
+                <motion.tbody variants={staggerContainerFast} initial="hidden" animate="visible" className="divide-y divide-linea">
+                  {data.ranking.map((r) => (
+                    <motion.tr key={r.promocode_id} variants={fadeInUp} className={cn("hover:bg-superficie/60", r.margen < 0 && "bg-red-50/60")}>
+                      <td className="px-4 py-2 sm:px-2">
+                        <span className="font-mono text-xs font-semibold">{r.codigo}</span>
+                        {r.descripcion && <span className="block text-[10px] text-muted-foreground">{r.descripcion}</span>}
+                        <div className="mt-1 max-w-[180px]">
+                          <Barra pct={(r.descontado / maxDesc) * 100} color="bg-dorado-400" />
                         </div>
-                      )}
-                    </td>
-                    <td className="py-2 text-right font-mono">{r.usos}</td>
-                    <td className="py-2 text-right font-mono text-rose-700 dark:text-rose-400">
-                      −{formatearMoneda(r.descontado, "UYU")}
-                    </td>
-                    <td className="py-2 text-right font-mono">
-                      {formatearMoneda(r.facturacion, "UYU")}
-                    </td>
-                    <td className="py-2 text-right font-mono text-muted-foreground">
-                      {formatearMoneda(r.cogs, "UYU")}
-                    </td>
-                    <td
-                      className={`py-2 text-right font-mono font-medium ${
-                        r.margen < 0 ? "text-rose-600" : "text-emerald-700 dark:text-emerald-400"
-                      }`}
-                    >
-                      {formatearMoneda(r.margen, "UYU")}
-                    </td>
-                    <td className="py-2 text-right font-mono text-muted-foreground">
-                      {r.margenPct == null ? "—" : `${r.margenPct.toFixed(1)}%`}
-                    </td>
-                  </motion.tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </ChartCard>
+                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums">{r.usos}</td>
+                      <td className="px-2 py-2 text-right tabular-nums">{fmt(r.descontado)}</td>
+                      <td className="px-2 py-2 text-right tabular-nums">{fmt(r.facturacion)}</td>
+                      <td className={cn("px-2 py-2 text-right tabular-nums", r.margen < 0 && "text-red-700")}>{fmt(r.margen)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums sm:px-2">{formatPct(r.margenPct)}</td>
+                    </motion.tr>
+                  ))}
+                </motion.tbody>
+              </table>
+            </div>
+          )}
+        </Tarjeta>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard title="Descuento otorgado vs margen restante (top 10)">
-          <ResponsiveContainer width="100%" height={Math.max(220, topRanking.length * 30 + 40)}>
-            <BarChart
-              data={topRanking}
-              layout="vertical"
-              margin={{ top: 5, right: 10, bottom: 0, left: 10 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => formatearMonedaCompacta(Number(v), "UYU")} />
-              <YAxis type="category" dataKey="codigo" tick={{ fontSize: 10 }} width={90} />
-              <Tooltip formatter={((v: number) => formatearMoneda(v, "UYU")) as never} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="descontado" name="Descontado" fill="#c97064" radius={[0, 6, 6, 0]} />
-              <Bar dataKey="margen" name="Margen restante" radius={[0, 6, 6, 0]}>
-                {topRanking.map((r, i) => (
-                  <Cell key={i} fill={r.margen < 0 ? "#9f1239" : "#0d7377"} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
+        <Tarjeta titulo="Acumulación con precio socio" subtitulo="Pedidos con código">
+          <div className="space-y-3 text-sm">
+            <div>
+              <div className="flex justify-between">
+                <span>Código + precio socio</span>
+                <span className="tabular-nums font-heading">{data.acumulacionPrecioSocio.conPrecioSocio}</span>
+              </div>
+              <Barra pct={totalUsos ? (data.acumulacionPrecioSocio.conPrecioSocio / totalUsos) * 100 : 0} />
+            </div>
+            <div>
+              <div className="flex justify-between">
+                <span>Solo el código</span>
+                <span className="tabular-nums font-heading">{data.acumulacionPrecioSocio.soloDescuento}</span>
+              </div>
+              <Barra pct={totalUsos ? (data.acumulacionPrecioSocio.soloDescuento / totalUsos) * 100 : 0} color="bg-dorado-400" />
+            </div>
+          </div>
+        </Tarjeta>
+      </motion.div>
 
-        <ChartCard title="Acumulación con precio socio">
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart
-              data={[
-                {
-                  tipo: "Acumulado con socio",
-                  cantidad: data.acumulacionPrecioSocio.conPrecioSocio,
-                },
-                {
-                  tipo: "Solo descuento",
-                  cantidad: data.acumulacionPrecioSocio.soloDescuento,
-                },
-              ]}
-              margin={{ top: 5, right: 10, bottom: 0, left: 0 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="tipo" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip />
-              <Bar dataKey="cantidad" name="Usos" fill="#730d32" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
-      </div>
-
-      <ChartCard title="Estado de todos los códigos">
-        <div className="overflow-x-auto -mx-4 px-4">
-          <table className="w-full text-xs">
-            <thead className="text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border">
-              <tr>
-                <th className="text-left py-2 font-heading">Código</th>
-                <th className="text-left py-2 font-heading">Vigencia</th>
-                <th className="text-right py-2 font-heading">Usos</th>
-                <th className="text-left py-2 font-heading">Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.detalleEstados.map((e, i) => {
-                const badge = e.vigente
-                  ? { label: "Vigente", color: "#0d7377" }
-                  : e.agotado
-                  ? { label: "Agotado", color: "#c97064" }
-                  : new Date(e.fecha_fin).getTime() < ahora
-                  ? { label: "Vencido", color: "#a64161" }
-                  : !e.activo
-                  ? { label: "Inactivo", color: "#4a5d6c" }
-                  : { label: "Programado", color: "#f7b643" };
-
-                return (
-                  <motion.tr
-                    key={e.promocode_id}
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ ...springSmooth, delay: Math.min(i * 0.015, 0.4) }}
-                    className="border-b border-border/50 hover:bg-muted/40"
-                  >
-                    <td className="py-2 font-mono">
-                      <div className="font-medium text-foreground">{e.codigo}</div>
-                      {e.descripcion && (
-                        <div className="text-[10px] text-muted-foreground font-body">
-                          {e.descripcion}
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-2 text-muted-foreground font-mono">
-                      {formatearFechaCorta(e.fecha_inicio)} → {formatearFechaCorta(e.fecha_fin)}
-                    </td>
-                    <td className="py-2 text-right font-mono">
-                      {e.usos_actuales}
-                      {e.usos_max != null && (
-                        <span className="text-muted-foreground"> / {e.usos_max}</span>
-                      )}
-                    </td>
-                    <td className="py-2">
-                      <span
-                        className="inline-block px-2 py-0.5 rounded-full text-[10px] font-heading uppercase tracking-wider"
-                        style={{
-                          backgroundColor: `${badge.color}1a`,
-                          color: badge.color,
-                        }}
-                      >
-                        {badge.label}
-                      </span>
-                    </td>
-                  </motion.tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </ChartCard>
+      <motion.div variants={staggerContainer} initial="hidden" animate="visible">
+        <Tarjeta titulo="Estado de los códigos" subtitulo="Todos los códigos, hoy (usos acumulados, no del período)">
+          {data.detalleEstados.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No hay códigos cargados.</p>
+          ) : (
+            <div className="reporte-scroll -mx-4 overflow-x-auto sm:mx-0">
+              <table className="reporte-tabla w-full min-w-[520px] text-sm">
+                <thead>
+                  <tr className="border-b border-linea text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-2 font-heading sm:px-2">Código</th>
+                    <th className="px-2 py-2 font-heading">Estado</th>
+                    <th className="px-2 py-2 font-heading">Vigencia</th>
+                    <th className="px-4 py-2 text-right font-heading sm:px-2">Usos</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-linea">
+                  {data.detalleEstados.map((e) => {
+                    const s = estado(e);
+                    return (
+                      <tr key={e.promocode_id} className="hover:bg-superficie/60">
+                        <td className="px-4 py-2 font-mono text-xs font-semibold sm:px-2">{e.codigo}</td>
+                        <td className="px-2 py-2">
+                          <span className={cn("rounded-full px-2 py-0.5 text-[11px]", s.clase)}>{s.label}</span>
+                        </td>
+                        <td className="px-2 py-2 text-xs text-muted-foreground tabular-nums">
+                          {formatFecha(uruguayDateKey(e.fecha_inicio))} → {formatFecha(uruguayDateKey(e.fecha_fin))}
+                        </td>
+                        <td className="px-4 py-2 text-right tabular-nums sm:px-2">
+                          {e.usos_actuales}
+                          {e.usos_max != null ? ` / ${e.usos_max}` : ""}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Tarjeta>
+      </motion.div>
     </div>
   );
-}
-
-function StatusCounter({
-  label,
-  value,
-  color,
-  index,
-}: {
-  label: string;
-  value: number;
-  color: string;
-  index: number;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ ...springSmooth, delay: index * 0.04 }}
-      className="rounded-2xl border border-border bg-card p-4 flex items-center justify-between"
-    >
-      <div>
-        <p className="text-[10px] uppercase tracking-wider font-heading text-muted-foreground">
-          {label}
-        </p>
-        <p className="text-2xl font-display tracking-tight" style={{ color }}>
-          {value}
-        </p>
-      </div>
-      <div
-        className="h-10 w-10 rounded-full opacity-30"
-        style={{ backgroundColor: color }}
-      />
-    </motion.div>
-  );
-}
-
-function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={springSmooth}
-      className="rounded-2xl border border-border bg-card p-4 sm:p-5"
-    >
-      <h3 className="text-xs uppercase tracking-wider font-heading text-muted-foreground mb-3">
-        {title}
-      </h3>
-      {children}
-    </motion.div>
-  );
-}
-
-function formatearFechaCorta(iso: string): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`;
 }

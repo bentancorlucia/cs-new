@@ -17,7 +17,8 @@ import {
   modulosDe,
 } from "./consultas";
 
-const ROLES_TIENDA = ["tienda"];
+// Ventas de la tienda: también tesorería y la comisión fiscal (solo lectura).
+const ROLES_REPORTES_TIENDA = ["tienda", "tesorero", "comision_fiscal"];
 const ROLES_CONTABILIDAD = ["tesorero", "comision_fiscal"];
 const ROLES_SECRETARIA = ["secretaria"];
 const ROLES_CUALQUIER_MODULO = ["tienda", "tesorero", "secretaria"];
@@ -62,8 +63,8 @@ export function registrarHerramientas(server: McpServer) {
       return ok({
         usuario: { nombre: usuario.nombre, email: usuario.email, roles: usuario.roles },
         herramientasDisponibles: {
-          estado_tienda_hoy: tieneRol(usuario, ROLES_TIENDA),
-          reporte_tienda: tieneRol(usuario, ROLES_TIENDA),
+          estado_tienda_hoy: tieneRol(usuario, ROLES_REPORTES_TIENDA),
+          reporte_tienda: tieneRol(usuario, ROLES_REPORTES_TIENDA),
           panorama_finanzas: tieneRol(usuario, ROLES_CONTABILIDAD),
           estados_contables: tieneRol(usuario, ROLES_CONTABILIDAD),
           libro_mayor_cuenta: tieneRol(usuario, ROLES_CONTABILIDAD),
@@ -82,14 +83,18 @@ export function registrarHerramientas(server: McpServer) {
     {
       title: "Estado de la tienda hoy",
       description:
-        "Foto actual de la tienda: ventas de hoy, últimos 7 días y mes en curso; pedidos pendientes de entregar; " +
-        "últimos 10 pedidos; top 5 productos del mes; productos con stock en o bajo el mínimo. Requiere rol tienda.",
+        "Foto actual de la tienda: ventas netas (a fecha contable, sin donaciones, con devoluciones) de hoy, últimos 7 días y mes en curso, " +
+        "con costo y margen; pedidos pendientes por etapa (verificación, preparar, encargados, retirar); encargues cobrados pendientes de entrega (señas); " +
+        "últimos 10 pedidos; top 5 productos del mes; stock bajo y agotados; control del mes contra la contabilidad. " +
+        "Mismos números que el panel /admin y que reporte_tienda. Requiere rol tienda, tesorero o comision_fiscal.",
       annotations: soloLectura,
     },
     async (ctx) =>
-      conRol(ctx as Ctx, ROLES_TIENDA, "estado_tienda_hoy", async () =>
-        obtenerDashboardTienda(createAdminClient())
-      )
+      conRol(ctx as Ctx, ROLES_REPORTES_TIENDA, "estado_tienda_hoy", async () => {
+        // La serie diaria del año es para el gráfico del panel.
+        const foto = await obtenerDashboardTienda();
+        return { ...foto, serie: undefined };
+      })
   );
 
   server.registerTool(
@@ -97,9 +102,11 @@ export function registrarHerramientas(server: McpServer) {
     {
       title: "Reporte de ventas de la tienda",
       description:
-        "Reporte de un período: ventas, costo de mercadería (COGS), margen, cantidad de pedidos, ticket promedio y % de ventas a socios, " +
-        "cada uno comparado con el período anterior de igual largo. Incluye top 10 productos, margen por categoría, online vs. POS, " +
-        "método de pago y pedidos por estado. Por defecto: últimos 30 días. Requiere rol tienda.",
+        "Reporte de un período: ventas netas (pedidos vendidos a su fecha contable + encargues entregados − devoluciones + cambios; sin donaciones), " +
+        "costo real del kardex, margen, pedidos, ticket promedio y % de ventas a socios, cada uno comparado con el período anterior de igual largo. " +
+        "Incluye ventas por canal (online, POS, disciplina), por cuenta contable (socios, no socios, disciplinas, devoluciones) y por método de pago, " +
+        "top 10 productos, margen por categoría, encargues pendientes de entrega, donaciones aparte y el control contra la contabilidad " +
+        "(cuentas 4.4.x y costo de ventas). Por defecto: últimos 30 días. Requiere rol tienda, tesorero o comision_fiscal.",
       inputSchema: z.object({
         desde: fecha.describe("Inicio del período (inclusive)"),
         hasta: fecha.describe("Fin del período (inclusive). Por defecto hoy."),
@@ -111,9 +118,9 @@ export function registrarHerramientas(server: McpServer) {
       annotations: soloLectura,
     },
     async ({ desde, hasta, incluir_serie }, ctx) =>
-      conRol(ctx as Ctx, ROLES_TIENDA, "reporte_tienda", async () => {
+      conRol(ctx as Ctx, ROLES_REPORTES_TIENDA, "reporte_tienda", async () => {
         const rango = parseRango(paramsRango(desde, hasta));
-        const { serie, ...reporte } = await generarReporteTienda(createAdminClient(), rango);
+        const { serie, ...reporte } = await generarReporteTienda(rango);
         return incluir_serie ? { ...reporte, serie } : reporte;
       })
   );

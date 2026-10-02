@@ -1,6 +1,6 @@
 -- Caja del POS, devoluciones y cambios.
 BEGIN;
-SELECT plan(18);
+SELECT plan(19);
 
 DO $$ BEGIN PERFORM contabilidad.crear_ejercicio(extract(year FROM contabilidad._hoy())::int); END $$;
 
@@ -64,6 +64,9 @@ SELECT is((SELECT stock_actual FROM public.producto_variantes WHERE id = 9312), 
 SELECT throws_like($$ SELECT comercial.registrar_devolucion(8101, jsonb_build_array(
   jsonb_build_object('pedido_item_id', (SELECT id FROM public.pedido_items WHERE pedido_id = 8101), 'cantidad', 1)), 'caja', 'Otra vez') $$,
   '%más unidades que las vendidas%', 'no se devuelve más de lo vendido');
+
+SELECT throws_like($$ SELECT public.cancelar_pedido(8101, 'Arrepentido', NULL) $$,
+                   '%devoluciones o cambios%', 'un pedido con devoluciones no se cancela entero');
 
 -- ---------- Cierre con faltante
 SELECT is(comercial.cerrar_caja((SELECT id FROM ses), 0 - 0 + 0), 0.00::numeric, 'cierre sin diferencia');

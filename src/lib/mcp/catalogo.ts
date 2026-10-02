@@ -38,8 +38,8 @@ export const CATALOGO: Record<string, TablaCatalogo> = {
   },
   pedidos: {
     modulos: ["tienda"],
-    descripcion: "Pedidos online (tipo='online') y ventas POS (tipo='pos'). total INCLUYE la donación si hubo (ver tabla donaciones). Estados de venta efectiva: pagado, encargado, preparando, listo_retiro, retirado. Montos en UYU.",
-    columnas: ["aplico_precio_socio", "created_at", "descuento", "descuento_motivo", "descuento_porcentaje", "descuento_tipo", "email_cliente", "disciplina_id", "estado", "id", "idempotency_key", "mercadopago_payment_id", "mercadopago_preference_id", "metodo_pago", "monto_efectivo", "monto_transferencia", "moneda", "nombre_cliente", "notas", "numero_pedido", "perfil_id", "promocode_codigo", "promocode_id", "stock_reservado", "stock_reservado_at", "subtotal", "telefono_cliente", "tipo", "total", "updated_at", "vendedor_id"],
+    descripcion: "Pedidos online (tipo='online'), ventas POS (tipo='pos') y pedidos de disciplinas (tipo='disciplina', cuenta corriente). Sirve para ver pedidos y su estado, NO para sumar ventas: total INCLUYE la donación, los encargues se venden recién al retirarlos y las devoluciones restan aparte. Para ventas, costo y margen usá reporte_tienda o estado_tienda_hoy (mismos números que la contabilidad). fecha_venta = cuándo se cobró. Montos en UYU.",
+    columnas: ["aplico_precio_socio", "created_at", "descuento", "descuento_motivo", "descuento_porcentaje", "descuento_tipo", "email_cliente", "disciplina_id", "estado", "fecha_venta", "id", "idempotency_key", "mercadopago_payment_id", "mercadopago_preference_id", "metodo_pago", "monto_efectivo", "monto_transferencia", "moneda", "nombre_cliente", "notas", "numero_pedido", "perfil_id", "promocode_codigo", "promocode_id", "stock_reservado", "stock_reservado_at", "subtotal", "telefono_cliente", "tipo", "total", "updated_at", "vendedor_id"],
   },
   pedido_items: {
     modulos: ["tienda"],

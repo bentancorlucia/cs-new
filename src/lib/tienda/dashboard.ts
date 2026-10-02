@@ -1,149 +1,205 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/database";
-import { uruguayNowParts, uruguayDayStartUTC } from "@/lib/timezone";
+import { hoyUruguay } from "@/lib/contabilidad/formato";
+import { sumarDias } from "@/lib/reportes/rango";
+import { controlContable, ORIGENES_VENTA } from "@/lib/reportes/control";
+import {
+  canalDe,
+  cargarCuentasTienda,
+  cargarVentas,
+  clientesReportes,
+  leerTodo,
+  productosOrdenados,
+  r2,
+  totales,
+  type ClientesReportes,
+  type DatosVentas,
+} from "@/lib/reportes/ventas";
+import type { DashboardTienda, ResumenVentas } from "@/types/reportes";
 
 /**
- * Foto del día de la tienda: ventas hoy/semana/mes, pedidos pendientes,
- * pedidos recientes, top productos y alertas de stock.
- * Compartido por /api/admin/dashboard y el servidor MCP.
- * El caller debe haber verificado el rol y pasar un cliente admin.
+ * Foto de la tienda para /admin y el MCP (estado_tienda_hoy). Las ventas
+ * salen del mismo motor que los reportes (comercial.ventas a fecha
+ * contable, sin donaciones, con devoluciones), así hoy / 7 días / mes dan
+ * lo mismo que el reporte de esos rangos. Quien llama ya validó el rol.
  */
-export async function obtenerDashboardTienda(supabase: SupabaseClient<Database>) {
-  const { year, month, day } = uruguayNowParts();
-  const todayStart = uruguayDayStartUTC(year, month, day).toISOString();
-  const weekStart = uruguayDayStartUTC(year, month, day - 6).toISOString();
-  const monthStart = uruguayDayStartUTC(year, month, 1).toISOString();
+export async function obtenerDashboardTienda(cl: ClientesReportes = clientesReportes()): Promise<DashboardTienda> {
+  const hoy = hoyUruguay();
+  const inicioSemana = sumarDias(hoy, -6);
+  const inicioMes = `${hoy.slice(0, 8)}01`;
+  const inicioAnio = sumarDias(hoy, -364);
+  const mes = { desde: inicioMes, hasta: hoy };
 
-  // Run all queries in parallel
-  const [
-    ventasHoyRes,
-    ventasSemanaRes,
-    ventasMesRes,
-    pedidosPendientesRes,
-    productosActivosRes,
-    productosStockRes,
-    pedidosRecientesRes,
-    topProductosRes,
-  ] = await Promise.all([
-    // Ventas hoy por fecha de cobro (pagados/encargado/preparando/listo/retirado) — sin donaciones
-    supabase
-      .from("pedidos")
-      .select("total, donaciones(monto, estado)")
-      .gte("fecha_venta", todayStart)
-      .in("estado", ["pagado", "encargado", "preparando", "listo_retiro", "retirado"]),
-
-    // Ventas últimos 7 días — sin donaciones
-    supabase
-      .from("pedidos")
-      .select("total, donaciones(monto, estado)")
-      .gte("fecha_venta", weekStart)
-      .in("estado", ["pagado", "encargado", "preparando", "listo_retiro", "retirado"]),
-
-    // Ventas del mes — sin donaciones
-    supabase
-      .from("pedidos")
-      .select("total, donaciones(monto, estado)")
-      .gte("fecha_venta", monthStart)
-      .in("estado", ["pagado", "encargado", "preparando", "listo_retiro", "retirado"]),
-
-    // Pedidos pendientes (pagado + encargado + preparando + listo_retiro + pendiente_verificacion)
-    supabase
-      .from("pedidos")
-      .select("id", { count: "exact", head: true })
-      .in("estado", ["pagado", "encargado", "preparando", "listo_retiro", "pendiente_verificacion"]),
-
-    // Productos activos
-    supabase
-      .from("productos")
-      .select("id", { count: "exact", head: true })
-      .eq("activo", true),
-
-    // Productos activos con datos de stock (filtramos en JS porque
-    // PostgREST no compara dos columnas de la misma fila).
-    supabase
-      .from("productos")
-      .select("id, nombre, stock_actual, stock_minimo, sku")
-      .eq("activo", true),
-
-    // Pedidos recientes (últimos 10)
-    supabase
-      .from("pedidos")
-      .select(`
-        id, numero_pedido, tipo, estado, total, moneda, nombre_cliente, created_at,
-        perfiles!perfil_id(nombre, apellido)
-      `)
-      .order("created_at", { ascending: false })
-      .limit(10),
-
-    // Top 5 productos más vendidos (mes en curso)
-    supabase
-      .from("pedido_items")
-      .select(`
-        producto_id, cantidad, subtotal,
-        productos(nombre, stock_actual),
-        pedidos!inner(estado, fecha_venta)
-      `)
-      .gte("pedidos.fecha_venta", monthStart)
-      .in("pedidos.estado", ["pagado", "encargado", "preparando", "listo_retiro", "retirado"]),
-  ]);
-
-  // Stock bajo: filtrado en JS
-  const productosBajoStock = (productosStockRes.data || []).filter(
-    (p: any) => p.stock_actual <= p.stock_minimo
+  const cuentas = await cargarCuentasTienda(cl);
+  const delMesP = cargarVentas(cl, mes, { detalle: true, cuentas });
+  const controlP = delMesP.then((d) =>
+    controlContable(cl, cuentas, mes, {
+      concepto: "Ventas netas",
+      reportePorRol: totales(d).porRol,
+      signo: "acreedor",
+      origenes: ORIGENES_VENTA,
+      centros: cuentas.centros,
+    })
   );
-  const stockBajoCount = productosBajoStock.length;
-  const alertasStock = [...productosBajoStock]
-    .sort((a, b) => a.stock_actual - b.stock_actual)
-    .slice(0, 8);
+  const [anual, delMes, control, pendientes, encargues, activos, stock, recientes] = await Promise.all([
+    cargarVentas(cl, { desde: inicioAnio < inicioMes ? inicioAnio : inicioMes, hasta: hoy }, { cuentas }),
+    delMesP,
+    controlP,
+    contarPendientes(cl),
+    leerTodo<{ pedido_id: number; monto_encargues: number }>((a, b) =>
+      cl.comercial
+        .from("ventas")
+        .select("pedido_id, monto_encargues")
+        .eq("anulada", false)
+        .gt("monto_encargues", 0)
+        .is("asiento_entrega_id", null)
+        .order("pedido_id")
+        .range(a, b)
+    ),
+    cl.publico.from("productos").select("id", { count: "exact", head: true }).or("activo.eq.true,activo_pos.eq.true"),
+    estadoStock(cl),
+    pedidosRecientes(cl),
+  ]);
+  if (activos.error) throw new Error(activos.error.message);
 
-  // Aggregate ventas — restar la donación (objeto u array por PostgREST)
-  const sumVentas = (rows: any[] | null) =>
-    rows?.reduce((s, r) => {
-      const d = Array.isArray(r.donaciones)
-        ? r.donaciones[0] ?? null
-        : r.donaciones ?? null;
-      const donacionActiva =
-        d && d.estado !== "cancelada" ? Number(d.monto) || 0 : 0;
-      return s + ((r.total || 0) - donacionActiva);
-    }, 0) || 0;
-
-  const ventasHoy = sumVentas(ventasHoyRes.data);
-  const ventasSemana = sumVentas(ventasSemanaRes.data);
-  const ventasMes = sumVentas(ventasMesRes.data);
-
-  // Aggregate top productos
-  const productoMap = new Map<number, { nombre: string; cantidad: number; total: number; stock: number }>();
-  topProductosRes.data?.forEach((item: any) => {
-    const id = item.producto_id;
-    const existing = productoMap.get(id);
-    if (existing) {
-      existing.cantidad += item.cantidad;
-      existing.total += item.subtotal;
-    } else {
-      productoMap.set(id, {
-        nombre: item.productos?.nombre || "Producto eliminado",
-        cantidad: item.cantidad,
-        total: item.subtotal,
-        stock: item.productos?.stock_actual || 0,
-      });
-    }
-  });
-  const topProductos = Array.from(productoMap.values())
-    .sort((a, b) => b.cantidad - a.cantidad)
-    .slice(0, 5);
+  const resumen = (desde: string): ResumenVentas => {
+    const hs = anual.hechos.filter((h) => h.fecha >= desde && h.fecha <= hoy);
+    const ventas = hs.reduce((s, h) => s + h.importe, 0);
+    const costo = hs.reduce((s, h) => s + h.costo, 0);
+    return { ventas: r2(ventas), costo: r2(costo), margen: r2(ventas - costo), pedidos: hs.filter((h) => h.tipo === "venta").length };
+  };
 
   return {
-    stats: {
-      ventasHoy,
-      ventasSemana,
-      ventasMes,
-      pedidosPendientes: pedidosPendientesRes.count || 0,
-      productosActivos: productosActivosRes.count || 0,
-      stockBajo: stockBajoCount,
-      pedidosHoy: ventasHoyRes.data?.length || 0,
+    hoy,
+    generado: new Date().toISOString(),
+    ventas: { hoy: resumen(hoy), semana: resumen(inicioSemana), mes: resumen(inicioMes) },
+    pendientes,
+    encarguesPendientes: {
+      pedidos: encargues.length,
+      importe: r2(encargues.reduce((s, e) => s + Number(e.monto_encargues), 0)),
     },
-    pedidosRecientes: pedidosRecientesRes.data || [],
-    topProductos,
-    alertasStock,
+    productosActivos: activos.count ?? 0,
+    stock,
+    pedidosRecientes: recientes,
+    topProductosMes: delMes.detalle
+      ? productosOrdenados(delMes.detalle).slice(0, 5)
+      : [],
+    serie: serieDiaria(anual, inicioAnio, hoy),
+    controlMes: {
+      reporte: control.reporte,
+      saldoCuentas: control.saldoCuentas,
+      diferencia: control.diferencia,
+      cuadra: control.cuadra,
+    },
   };
+}
+
+function serieDiaria(d: DatosVentas, desde: string, hasta: string) {
+  const dias = new Map<string, { fecha: string; online: number; pos: number; disciplina: number }>();
+  for (let f = desde; f <= hasta; f = sumarDias(f, 1)) dias.set(f, { fecha: f, online: 0, pos: 0, disciplina: 0 });
+  for (const h of d.hechos) {
+    const b = dias.get(h.fecha);
+    if (b) b[h.canal] += h.importe;
+  }
+  return [...dias.values()].map((b) => ({ ...b, online: r2(b.online), pos: r2(b.pos), disciplina: r2(b.disciplina) }));
+}
+
+async function contarPendientes(cl: ClientesReportes): Promise<DashboardTienda["pendientes"]> {
+  const contar = (estados: string[]) =>
+    cl.publico.from("pedidos").select("id", { count: "exact", head: true }).in("estado", estados);
+  const [v, p, e, r] = await Promise.all([
+    contar(["pendiente_verificacion"]),
+    contar(["pagado", "preparando"]),
+    contar(["encargado"]),
+    contar(["listo_retiro"]),
+  ]);
+  const error = v.error ?? p.error ?? e.error ?? r.error;
+  if (error) throw new Error(error.message);
+  return { verificacion: v.count ?? 0, preparar: p.count ?? 0, encargados: e.count ?? 0, retirar: r.count ?? 0 };
+}
+
+/**
+ * Stock por producto con el mismo criterio que /admin/stock: existencia de
+ * comercial.items (o el espejo si el ítem todavía no pasó por el motor),
+ * sumada por producto; bajo = 0 < stock ≤ mínimo; agotado = 0.
+ */
+async function estadoStock(cl: ClientesReportes): Promise<DashboardTienda["stock"]> {
+  type FilaProd = {
+    id: number;
+    nombre: string;
+    sku: string | null;
+    stock_actual: number;
+    stock_minimo: number | null;
+    activo: boolean | null;
+    activo_pos: boolean;
+    producto_variantes: { id: number; stock_actual: number }[];
+  };
+  const [prods, items] = await Promise.all([
+    leerTodo<FilaProd>((a, b) =>
+      cl.publico
+        .from("productos")
+        .select("id, nombre, sku, stock_actual, stock_minimo, activo, activo_pos, producto_variantes(id, stock_actual)")
+        .order("id")
+        .range(a, b) as unknown as PromiseLike<{ data: FilaProd[] | null; error: { message: string } | null }>
+    ),
+    leerTodo<{ producto_id: number; variante_id: number | null; stock: number }>((a, b) =>
+      cl.comercial.from("items").select("producto_id, variante_id, stock").order("id").range(a, b)
+    ),
+  ]);
+  const stockItem = new Map(items.map((i) => [`${i.producto_id}:${i.variante_id ?? 0}`, i.stock]));
+
+  const vendibles = prods
+    .filter((p) => p.activo !== false || p.activo_pos)
+    .map((p) => {
+      const vars = p.producto_variantes ?? [];
+      const stock =
+        vars.length > 0
+          ? vars.reduce((s, v) => s + (stockItem.get(`${p.id}:${v.id}`) ?? Math.max(0, v.stock_actual ?? 0)), 0) +
+            (stockItem.get(`${p.id}:0`) ?? 0)
+          : (stockItem.get(`${p.id}:0`) ?? Math.max(0, p.stock_actual ?? 0));
+      return { id: p.id, nombre: p.nombre, sku: p.sku, stock, stockMinimo: p.stock_minimo ?? 0 };
+    });
+  const bajo = vendibles.filter((p) => p.stock > 0 && p.stock <= p.stockMinimo);
+  const agotados = vendibles.filter((p) => p.stock === 0);
+  return {
+    bajo: bajo.length,
+    agotados: agotados.length,
+    alertas: [...bajo, ...agotados]
+      .sort((a, b) => a.stock - b.stock || b.stockMinimo - a.stockMinimo || a.nombre.localeCompare(b.nombre))
+      .slice(0, 8),
+  };
+}
+
+async function pedidosRecientes(cl: ClientesReportes): Promise<DashboardTienda["pedidosRecientes"]> {
+  type Fila = {
+    id: number;
+    numero_pedido: string | null;
+    tipo: string;
+    estado: string;
+    total: number;
+    nombre_cliente: string | null;
+    created_at: string | null;
+    perfiles: { nombre: string | null; apellido: string | null } | null;
+    donaciones: { monto: number; estado: string }[] | { monto: number; estado: string } | null;
+  };
+  const { data, error } = await cl.publico
+    .from("pedidos")
+    .select(
+      "id, numero_pedido, tipo, estado, total, nombre_cliente, created_at, perfiles!perfil_id(nombre, apellido), donaciones(monto, estado)"
+    )
+    .order("created_at", { ascending: false })
+    .limit(10);
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as unknown as Fila[]).map((p) => {
+    const dons = Array.isArray(p.donaciones) ? p.donaciones : p.donaciones ? [p.donaciones] : [];
+    const donacion = dons.filter((d) => d.estado !== "cancelada").reduce((s, d) => s + Number(d.monto), 0);
+    const perfil = p.perfiles ? `${p.perfiles.nombre ?? ""} ${p.perfiles.apellido ?? ""}`.trim() : "";
+    return {
+      id: p.id,
+      numero_pedido: p.numero_pedido,
+      tipo: canalDe(p.tipo),
+      estado: p.estado,
+      importe: r2(Number(p.total) - donacion),
+      cliente: perfil || p.nombre_cliente,
+      created_at: p.created_at ?? "",
+    };
+  });
 }

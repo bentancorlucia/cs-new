@@ -15,7 +15,27 @@ export function parseRango(searchParams: URLSearchParams): RangoFechas {
 
   const desde = searchParams.get("desde") || ymdUTC(haceMes);
   const hasta = searchParams.get("hasta") || hoy;
+  if (!fechaValida(desde) || !fechaValida(hasta) || desde > hasta) {
+    throw new RangoInvalidoError("Rango de fechas inválido: usá YYYY-MM-DD y que 'desde' no sea posterior a 'hasta'");
+  }
   return { desde, hasta };
+}
+
+export class RangoInvalidoError extends Error {}
+
+/** "YYYY-MM-DD" que existe en el calendario. */
+export function fechaValida(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
+/** Suma (o resta) días a una fecha calendaria YYYY-MM-DD. */
+export function sumarDias(ymd: string, dias: number): string {
+  const d = new Date(ymd + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + dias);
+  return ymdUTC(d);
 }
 
 export function rangoAnterior(rango: RangoFechas): RangoFechas {

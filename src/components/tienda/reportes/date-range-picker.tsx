@@ -6,6 +6,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { hoyUruguay } from "@/lib/contabilidad/formato";
+import { sumarDias } from "@/lib/reportes/rango";
 import type { RangoFechas } from "@/types/reportes";
 
 interface Props {
@@ -16,7 +18,7 @@ interface Props {
 type Preset = { label: string; build: () => RangoFechas };
 
 const PRESETS: Preset[] = [
-  { label: "Hoy", build: () => sameDay(new Date()) },
+  { label: "Hoy", build: () => sameDay() },
   { label: "Últimos 7 días", build: () => last(7) },
   { label: "Últimos 30 días", build: () => last(30) },
   { label: "Mes actual", build: () => currentMonth() },
@@ -28,6 +30,14 @@ export function DateRangePicker({ value, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const [desde, setDesde] = useState(value.desde);
   const [hasta, setHasta] = useState(value.hasta);
+
+  const abrir = (v: boolean) => {
+    if (v) {
+      setDesde(value.desde);
+      setHasta(value.hasta);
+    }
+    setOpen(v);
+  };
 
   const apply = (rango: RangoFechas) => {
     setDesde(rango.desde);
@@ -44,7 +54,7 @@ export function DateRangePicker({ value, onChange }: Props) {
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={abrir}>
       <PopoverTrigger
         render={
           <Button variant="outline" size="sm" className="gap-2 font-body text-xs h-9">
@@ -119,42 +129,30 @@ export function DateRangePicker({ value, onChange }: Props) {
   );
 }
 
-function toYmd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function sameDay(d: Date): RangoFechas {
-  const s = toYmd(d);
-  return { desde: s, hasta: s };
+// Presets en calendario de Uruguay (no la hora del navegador).
+function sameDay(): RangoFechas {
+  const hoy = hoyUruguay();
+  return { desde: hoy, hasta: hoy };
 }
 
 function last(days: number): RangoFechas {
-  const hasta = new Date();
-  const desde = new Date();
-  desde.setDate(desde.getDate() - (days - 1));
-  return { desde: toYmd(desde), hasta: toYmd(hasta) };
+  const hoy = hoyUruguay();
+  return { desde: sumarDias(hoy, -(days - 1)), hasta: hoy };
 }
 
 function currentMonth(): RangoFechas {
-  const now = new Date();
-  const desde = new Date(now.getFullYear(), now.getMonth(), 1);
-  return { desde: toYmd(desde), hasta: toYmd(now) };
+  const hoy = hoyUruguay();
+  return { desde: `${hoy.slice(0, 8)}01`, hasta: hoy };
 }
 
 function previousMonth(): RangoFechas {
-  const now = new Date();
-  const desde = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const hasta = new Date(now.getFullYear(), now.getMonth(), 0);
-  return { desde: toYmd(desde), hasta: toYmd(hasta) };
+  const finAnterior = sumarDias(`${hoyUruguay().slice(0, 8)}01`, -1);
+  return { desde: `${finAnterior.slice(0, 8)}01`, hasta: finAnterior };
 }
 
 function currentYear(): RangoFechas {
-  const now = new Date();
-  const desde = new Date(now.getFullYear(), 0, 1);
-  return { desde: toYmd(desde), hasta: toYmd(now) };
+  const hoy = hoyUruguay();
+  return { desde: `${hoy.slice(0, 4)}-01-01`, hasta: hoy };
 }
 
 function formatRange(r: RangoFechas): string {

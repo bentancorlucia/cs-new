@@ -113,6 +113,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/contabilidad/plan-de-cuentas", label: "Plan de cuentas", icon: ListTree },
       { href: "/contabilidad/ejercicios", label: "Ejercicios", icon: CalendarRange },
       { href: "/pedidos-disciplinas", label: "Cuenta de disciplinas", icon: Dumbbell, roles: ["super_admin", "tesorero"] },
+      { href: "/admin/reportes", label: "Reportes de tienda", icon: FileSpreadsheet, roles: ["tesorero", "comision_fiscal"] },
       { href: "/contabilidad/cotizaciones", label: "Cotizaciones", icon: DollarSign },
     ],
   },
