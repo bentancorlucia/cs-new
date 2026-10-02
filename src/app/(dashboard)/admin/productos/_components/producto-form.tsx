@@ -163,6 +163,7 @@ interface Props {
   stock?: ProductoVista | null;
   verCostos?: boolean;
   puedeOperar?: boolean;
+  puedeInventario?: boolean;
 }
 
 function slugify(str: string) {
@@ -944,7 +945,7 @@ function ProveedoresSection({
 
 // --- Main form ---
 
-export function ProductoForm({ producto, stock, verCostos = false, puedeOperar = false }: Props) {
+export function ProductoForm({ producto, stock, verCostos = false, puedeOperar = false, puedeInventario = false }: Props) {
   const router = useRouter();
   const isEdit = !!producto;
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -1648,11 +1649,11 @@ export function ProductoForm({ producto, stock, verCostos = false, puedeOperar =
             delay={0.18}
           >
             {isEdit && stock ? (
-              <StockProductoPanel stock={stock} verCostos={verCostos} puedeOperar={puedeOperar} />
+              <StockProductoPanel stock={stock} verCostos={verCostos} puedeOperar={puedeOperar} puedeInventario={puedeInventario} />
             ) : (
               <p className="text-xs text-muted-foreground">
-                El producto se crea sin stock. Después cargalo con el inventario inicial (stock de arranque) o con una
-                recepción de compra; las correcciones se hacen con ajustes de stock.
+                El producto se crea sin stock: entra con una recepción de compra (o, al arrancar, con el inventario
+                inicial). Después solo cambia por ventas, devoluciones, bajas y recuentos.
               </p>
             )}
           </FormSection>

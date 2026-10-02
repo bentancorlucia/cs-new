@@ -362,8 +362,8 @@ export function ImportarExcelDialog({
                   <p className="text-[10px] text-muted-foreground">
                     * Obligatorios. Si la categoría indicada no existe, se crea
                     (sin distinguir mayúsculas). Precios como 1.500 o 1.500,50.
-                    El stock no se importa: se carga en Stock → Inventario inicial,
-                    con su costo.
+                    El stock no se importa: entra con las compras (o, al arrancar,
+                    con el inventario inicial que carga tesorería).
                   </p>
                 </div>
               </motion.div>

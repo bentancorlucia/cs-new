@@ -4,11 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowDownUp, ClipboardList, History, Loader2, Lock } from "lucide-react";
+import { ClipboardCheck, ClipboardList, History, Loader2, Lock, PackageMinus } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatImporte } from "@/lib/contabilidad/formato";
-import { costoPromedio, type MetodoCosteo } from "@/lib/comercial/stock";
+import { AYUDA_STOCK, costoPromedio, type MetodoCosteo } from "@/lib/comercial/stock";
 import { springSmooth } from "@/lib/motion";
 import { EnteroAnimado, ImporteAnimado } from "@/components/contabilidad/reportes/importe-animado";
 import type { ProductoVista } from "./tipos";
@@ -20,16 +20,18 @@ const METODOS: { id: MetodoCosteo; label: string; desc: string }[] = [
 
 /**
  * Stock del producto en la ficha: solo lectura (se mueve con compras,
- * ventas y ajustes), con link al kardex y el método de costeo.
+ * ventas, devoluciones, bajas y recuentos), con link al kardex y el método de costeo.
  */
 export function StockProductoPanel({
   stock,
   verCostos,
   puedeOperar,
+  puedeInventario,
 }: {
   stock: ProductoVista;
   verCostos: boolean;
   puedeOperar: boolean;
+  puedeInventario: boolean;
 }) {
   const router = useRouter();
   const [metodo, setMetodo] = useState<MetodoCosteo | "mixto">(stock.metodo);
@@ -115,7 +117,7 @@ export function StockProductoPanel({
 
       <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
         <Lock className="mt-0.5 size-3 shrink-0" />
-        El stock no se edita en la ficha: entra con el inventario inicial o las compras y se corrige con ajustes.
+        El stock no se edita en la ficha. {AYUDA_STOCK}
       </p>
 
       <div className="flex flex-wrap gap-2">
@@ -126,16 +128,25 @@ export function StockProductoPanel({
           <History className="size-3.5" />
           Ver kardex
         </Link>
-        {puedeOperar && (
+        {puedeOperar && stock.stock > 0 && (
           <Link
-            href={unico ? `/admin/stock?ajustar=${unico.clave}` : "/admin/stock"}
+            href={unico ? `/admin/stock?baja=${unico.clave}` : "/admin/stock"}
             className="inline-flex items-center gap-1.5 rounded-full border border-linea px-3 py-1.5 text-xs font-medium transition-colors hover:border-bordo-300 hover:text-bordo-800"
           >
-            <ArrowDownUp className="size-3.5" />
-            Ajustar
+            <PackageMinus className="size-3.5" />
+            Dar de baja
           </Link>
         )}
-        {puedeOperar && sinMovimientos && stock.items.length > 0 && (
+        {puedeOperar && (
+          <Link
+            href="/admin/stock/recuentos"
+            className="inline-flex items-center gap-1.5 rounded-full border border-linea px-3 py-1.5 text-xs font-medium transition-colors hover:border-bordo-300 hover:text-bordo-800"
+          >
+            <ClipboardCheck className="size-3.5" />
+            Recuento
+          </Link>
+        )}
+        {puedeInventario && sinMovimientos && stock.items.length > 0 && (
           <Link
             href="/admin/stock/inventario-inicial"
             className="inline-flex items-center gap-1.5 rounded-full border border-linea px-3 py-1.5 text-xs font-medium transition-colors hover:border-bordo-300 hover:text-bordo-800"

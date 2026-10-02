@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createComercialClient, exigirOperador } from "@/lib/comercial/server";
+import { createComercialClient } from "@/lib/comercial/server";
+import { permisosStock } from "@/app/(dashboard)/admin/stock/_lib/extra";
 import { respuestaError } from "../_respuesta";
 
 const filaSchema = z.object({
@@ -23,12 +24,15 @@ const schema = z.object({
 
 /**
  * POST /api/admin/stock/inventario-inicial — existencia de arranque con su
- * costo, solo para ítems sin movimientos. No genera asiento: el valor va en
+ * costo, una vez por ítem (sin movimientos); solo tesorero o super_admin.
+ * Después las diferencias se registran con un recuento. No genera asiento: el valor va en
  * la apertura contable. Todo o nada (una sola transacción en la base).
  */
 export async function POST(request: NextRequest) {
   try {
-    await exigirOperador();
+    if (!(await permisosStock()).puedeInventario) {
+      return NextResponse.json({ error: "El inventario inicial lo carga el tesorero" }, { status: 403 });
+    }
     const { items } = schema.parse(await request.json());
     const com = await createComercialClient();
 

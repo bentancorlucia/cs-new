@@ -5,12 +5,13 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
-  ArrowDownUp,
   ChevronRight,
+  ClipboardCheck,
   ClipboardList,
   Clock,
   History,
   Package,
+  PackageMinus,
   PackageOpen,
   PackageX,
   Search,
@@ -28,11 +29,11 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { formatImporte } from "@/lib/contabilidad/formato";
-import { costoPromedio } from "@/lib/comercial/stock";
+import { AYUDA_STOCK, costoPromedio } from "@/lib/comercial/stock";
 import { easeSmooth, fadeInUp, springSmooth, staggerContainer } from "@/lib/motion";
 import { EnteroAnimado, ImporteAnimado } from "@/components/contabilidad/reportes/importe-animado";
 import { TituloReporte } from "@/components/contabilidad/reportes/titulo-reporte";
-import { AjusteStockDialog } from "./ajuste-stock-dialog";
+import { BajaDialog, type CentroCosto } from "./baja-dialog";
 import { ControlMercaderiaAlerta, type ControlMercaderiaVista } from "./control-mercaderia-alerta";
 import type { ItemVista, ProductoVista } from "./tipos";
 
@@ -54,14 +55,20 @@ export function StockCliente({
   control,
   verCostos,
   puedeOperar,
-  ajustarInicial,
+  puedeInventario,
+  bajaInicial,
+  centros,
+  recuentosAbiertos,
   error,
 }: {
   productos: ProductoVista[];
   control: ControlMercaderiaVista | null;
   verCostos: boolean;
   puedeOperar: boolean;
-  ajustarInicial: string | null;
+  puedeInventario: boolean;
+  bajaInicial: string | null;
+  centros: CentroCosto[];
+  recuentosAbiertos: number;
   error: string | null;
 }) {
   const [busqueda, setBusqueda] = useState("");
@@ -69,9 +76,9 @@ export function StockCliente({
   const [categoria, setCategoria] = useState<string>("todas");
   const [inactivos, setInactivos] = useState(false);
   const [abiertos, setAbiertos] = useState<Set<number>>(new Set());
-  const [ajuste, setAjuste] = useState<{ open: boolean; clave: string | null }>({
-    open: !!ajustarInicial && puedeOperar,
-    clave: ajustarInicial,
+  const [baja, setBaja] = useState<{ open: boolean; clave: string | null }>({
+    open: !!bajaInicial && puedeOperar,
+    clave: bajaInicial,
   });
 
   const categorias = useMemo(
@@ -137,20 +144,41 @@ export function StockCliente({
 
   return (
     <div className="space-y-6">
-      <TituloReporte etiqueta="Tienda" titulo="Stock" descripcion="Existencias valorizadas, reservas y kardex por producto.">
+      <TituloReporte etiqueta="Tienda" titulo="Stock" descripcion={`Existencias valorizadas, reservas y kardex. ${AYUDA_STOCK}`}>
         {puedeOperar && (
           <div className="flex flex-wrap gap-2">
-            <Link
-              href="/admin/stock/inventario-inicial"
-              className={cn(buttonVariants({ variant: "outline", size: "lg" }), "rounded-full", sinMovimientos && "border-bordo-200")}
-            >
-              <ClipboardList className="size-4" />
-              Inventario inicial
+            {puedeInventario && sinMovimientos && (
+              <Link
+                href="/admin/stock/inventario-inicial"
+                className={cn(buttonVariants({ variant: "outline", size: "lg" }), "rounded-full")}
+              >
+                <ClipboardList className="size-4" />
+                Inventario inicial
+              </Link>
+            )}
+            <Link href="/admin/stock/bajas" className={cn(buttonVariants({ variant: "outline", size: "lg" }), "rounded-full")}>
+              <PackageMinus className="size-4" />
+              Bajas
+            </Link>
+            <Link href="/admin/stock/recuentos" className={cn(buttonVariants({ variant: "outline", size: "lg" }), "relative rounded-full")}>
+              <ClipboardCheck className="size-4" />
+              Recuentos
+              {recuentosAbiertos > 0 && (
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                  className="ml-1 rounded-full bg-amber-500 px-1.5 text-[10px] font-semibold text-white"
+                  title="Recuentos en borrador"
+                >
+                  {recuentosAbiertos}
+                </motion.span>
+              )}
             </Link>
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-              <Button size="lg" className="rounded-full" onClick={() => setAjuste({ open: true, clave: null })}>
-                <ArrowDownUp className="size-4" />
-                Ajustar stock
+              <Button size="lg" className="rounded-full" onClick={() => setBaja({ open: true, clave: null })}>
+                <PackageMinus className="size-4" />
+                Dar de baja
               </Button>
             </motion.div>
           </div>
@@ -304,7 +332,7 @@ export function StockCliente({
                   onAlternar={() => alternar(p.id)}
                   verCostos={verCostos}
                   puedeOperar={puedeOperar}
-                  onAjustar={(clave) => setAjuste({ open: true, clave })}
+                  onBaja={(clave) => setBaja({ open: true, clave })}
                 />
               ))}
             </AnimatePresence>
@@ -313,12 +341,13 @@ export function StockCliente({
       </motion.div>
 
       {puedeOperar && (
-        <AjusteStockDialog
-          open={ajuste.open}
-          onOpenChange={(open) => setAjuste((a) => ({ ...a, open }))}
+        <BajaDialog
+          open={baja.open}
+          onOpenChange={(open) => setBaja((a) => ({ ...a, open }))}
           productos={productos}
-          inicial={ajuste.clave}
+          inicial={baja.clave}
           verCostos={verCostos}
+          centros={centros}
         />
       )}
     </div>
@@ -358,14 +387,14 @@ function FilaProducto({
   onAlternar,
   verCostos,
   puedeOperar,
-  onAjustar,
+  onBaja,
 }: {
   producto: ProductoVista;
   abierto: boolean;
   onAlternar: () => void;
   verCostos: boolean;
   puedeOperar: boolean;
-  onAjustar: (clave: string | null) => void;
+  onBaja: (clave: string | null) => void;
 }) {
   const bajo = esBajo(p);
   const agotado = p.stock === 0;
@@ -432,15 +461,15 @@ function FilaProducto({
         </div>
 
         <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-          {puedeOperar && (
+          {puedeOperar && p.stock > 0 && (
             <Button
               variant="outline"
               size="icon-sm"
-              title="Ajustar stock"
-              aria-label={`Ajustar stock de ${p.nombre}`}
-              onClick={() => onAjustar(unico ? unico.clave : null)}
+              title="Dar de baja"
+              aria-label={`Dar de baja ${p.nombre}`}
+              onClick={() => onBaja(unico ? unico.clave : null)}
             >
-              <ArrowDownUp className="size-3.5" />
+              <PackageMinus className="size-3.5" />
             </Button>
           )}
           <Link
@@ -484,15 +513,15 @@ function FilaProducto({
                   <Numeros item={it} verCostos={verCostos} />
                 </div>
                 <div className="flex justify-end gap-1">
-                  {puedeOperar && (
+                  {puedeOperar && it.stock > 0 && (
                     <Button
                       variant="ghost"
                       size="icon-xs"
-                      title="Ajustar"
-                      aria-label={`Ajustar ${it.nombre}`}
-                      onClick={() => onAjustar(it.clave)}
+                      title="Dar de baja"
+                      aria-label={`Dar de baja ${p.nombre} ${it.nombre}`}
+                      onClick={() => onBaja(it.clave)}
                     >
-                      <ArrowDownUp className="size-3" />
+                      <PackageMinus className="size-3" />
                     </Button>
                   )}
                   <Link

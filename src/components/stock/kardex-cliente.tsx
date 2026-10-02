@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowDownUp, ArrowLeft, BookOpen, ExternalLink, History, Pencil } from "lucide-react";
+import { ArrowLeft, BookOpen, ExternalLink, History, PackageMinus, Pencil, User } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatFecha, formatImporte } from "@/lib/contabilidad/formato";
@@ -11,7 +11,7 @@ import { costoPromedio, NOMBRE_TIPO_MOVIMIENTO } from "@/lib/comercial/stock";
 import { easeSmooth, fadeInUp, springSmooth, staggerContainer, staggerContainerFast } from "@/lib/motion";
 import { EnteroAnimado, ImporteAnimado } from "@/components/contabilidad/reportes/importe-animado";
 import { TituloReporte } from "@/components/contabilidad/reportes/titulo-reporte";
-import { AjusteStockDialog } from "./ajuste-stock-dialog";
+import { BajaDialog, type CentroCosto } from "./baja-dialog";
 import type { ProductoVista } from "./tipos";
 
 export interface FilaKardex {
@@ -38,6 +38,8 @@ const TONO_TIPO: Record<string, string> = {
   venta: "bg-bordo-50 text-bordo-800 border-bordo-200",
   devolucion_venta: "bg-violet-50 text-violet-700 border-violet-200",
   ajuste: "bg-amber-50 text-amber-800 border-amber-200",
+  baja: "bg-red-50 text-red-700 border-red-200",
+  recuento: "bg-teal-50 text-teal-700 border-teal-200",
   devolucion_compra: "bg-orange-50 text-orange-700 border-orange-200",
 };
 
@@ -47,6 +49,7 @@ export function KardexCliente({
   filas,
   verCostos,
   puedeOperar,
+  centros,
   error,
 }: {
   producto: ProductoVista;
@@ -54,9 +57,10 @@ export function KardexCliente({
   filas: FilaKardex[];
   verCostos: boolean;
   puedeOperar: boolean;
+  centros: CentroCosto[];
   error: string | null;
 }) {
-  const [ajusteAbierto, setAjusteAbierto] = useState(false);
+  const [bajaAbierta, setBajaAbierta] = useState(false);
   const [tipo, setTipo] = useState<string>("todos");
 
   const itemsSel = useMemo(
@@ -90,11 +94,11 @@ export function KardexCliente({
             <Pencil className="size-4" />
             Ficha
           </Link>
-          {puedeOperar && (
+          {puedeOperar && stock > 0 && (
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-              <Button size="lg" className="rounded-full" onClick={() => setAjusteAbierto(true)}>
-                <ArrowDownUp className="size-4" />
-                Ajustar
+              <Button size="lg" className="rounded-full" onClick={() => setBajaAbierta(true)}>
+                <PackageMinus className="size-4" />
+                Dar de baja
               </Button>
             </motion.div>
           )}
@@ -191,11 +195,8 @@ export function KardexCliente({
             <p className="text-sm">Sin movimientos todavía</p>
             {puedeOperar && (
               <p className="mt-1 text-xs">
-                El stock entra con el{" "}
-                <Link href="/admin/stock/inventario-inicial" className="text-bordo-700 underline-offset-2 hover:underline">
-                  inventario inicial
-                </Link>
-                , una compra o un ajuste.
+                El stock entra con el inventario inicial o una compra; después solo cambia por ventas, devoluciones, bajas y
+                recuentos.
               </p>
             )}
           </div>
@@ -288,12 +289,13 @@ export function KardexCliente({
       </motion.div>
 
       {puedeOperar && (
-        <AjusteStockDialog
-          open={ajusteAbierto}
-          onOpenChange={setAjusteAbierto}
+        <BajaDialog
+          open={bajaAbierta}
+          onOpenChange={setBajaAbierta}
           productos={[productoAjuste]}
           inicial={itemsSel.length === 1 ? itemsSel[0].clave : null}
           verCostos={verCostos}
+          centros={centros}
         />
       )}
     </div>
@@ -320,7 +322,12 @@ function Origen({ fila }: { fila: FilaKardex }) {
         <span>{fila.origen}</span>
       )}
       {fila.motivo && fila.motivo !== fila.origen && <span className="block text-[11px]">{fila.motivo}</span>}
-      {fila.usuario && <span className="block text-[11px] text-muted-foreground/70">por {fila.usuario}</span>}
+      {fila.usuario && (
+        <span className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground/80">
+          <User className="size-3" />
+          {fila.usuario}
+        </span>
+      )}
     </div>
   );
 }

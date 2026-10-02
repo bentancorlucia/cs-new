@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { permisosComercial } from "@/lib/comercial/server";
 import { StockCliente } from "@/components/stock/stock-cliente";
 import { cargarStock, controlMercaderia } from "./_lib/datos";
+import { centrosCosto, comercialSinTipos, permisosStock } from "./_lib/extra";
 
 export const metadata: Metadata = { title: "Stock" };
 export const dynamic = "force-dynamic";
@@ -9,14 +9,17 @@ export const dynamic = "force-dynamic";
 export default async function AdminStockPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ajustar?: string }>;
+  searchParams: Promise<{ baja?: string }>;
 }) {
-  const [{ ajustar }, { puedeOperar }] = await Promise.all([searchParams, permisosComercial()]);
+  const [{ baja }, { puedeOperar, puedeInventario }] = await Promise.all([searchParams, permisosStock()]);
   // Costo y valor: solo operadores (tienda, tesorero, super_admin).
   const verCostos = puedeOperar;
-  const [{ productos, error }, control] = await Promise.all([
+  const com = await comercialSinTipos();
+  const [{ productos, error }, control, centros, borradores] = await Promise.all([
     cargarStock({ verCostos }),
     verCostos ? controlMercaderia() : Promise.resolve(null),
+    puedeOperar ? centrosCosto() : Promise.resolve([]),
+    com.from("recuentos").select("id", { count: "exact", head: true }).eq("estado", "borrador"),
   ]);
 
   return (
@@ -25,7 +28,10 @@ export default async function AdminStockPage({
       control={control}
       verCostos={verCostos}
       puedeOperar={puedeOperar}
-      ajustarInicial={ajustar && /^\d+:\d+$/.test(ajustar) ? ajustar : null}
+      puedeInventario={puedeInventario}
+      bajaInicial={baja && /^\d+:\d+$/.test(baja) ? baja : null}
+      centros={centros}
+      recuentosAbiertos={borradores.count ?? 0}
       error={error}
     />
   );

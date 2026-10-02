@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
     const encabezados = Object.keys(rawRows[0] ?? {}).map((k) => clave(k).replace(/\s/g, "_"));
     if (encabezados.some((h) => h === "stock" || h === "stock_actual")) {
       avisos.push(
-        "La columna de stock se ignora: el stock de arranque se carga en Stock → Inventario inicial (con su costo) o entra con las compras."
+        "La columna de stock se ignora: el stock entra con las compras (o, al arrancar, con el inventario inicial que carga tesorería)."
       );
     }
 
@@ -281,7 +281,7 @@ export async function POST(request: NextRequest) {
       skipped,
       errors,
       avisos,
-      message: `Se importaron ${inserted?.length ?? 0} productos (sin stock: cargalo en Stock → Inventario inicial)`,
+      message: `Se importaron ${inserted?.length ?? 0} productos, sin stock (entra con las compras o el inventario inicial)`,
     });
   } catch (error) {
     const e = error as { message?: string; code?: string };

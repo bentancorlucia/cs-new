@@ -48,7 +48,7 @@ export function ControlMercaderiaAlerta({ control }: { control: ControlMercaderi
             <p className="text-xs text-amber-900/80">
               Kardex: $ {formatImporte(control.valor_stock)} · Cuenta Mercadería: $ {formatImporte(control.saldo_contable)}.
               Si cargaste inventario inicial, la diferencia es ese valor todavía no incluido en el asiento de apertura del
-              ejercicio: se resuelve en contabilidad con la apertura (Mercadería contra Patrimonio), no con ajustes de stock.
+              ejercicio: se resuelve en contabilidad con la apertura (Mercadería contra Patrimonio), no con bajas ni recuentos.
             </p>
           )}
           {control.movimientos_sin_asiento > 0 && (

@@ -43,6 +43,8 @@ export interface ItemInventario {
   variante: string | null;
   sku: string | null;
   activo: boolean;
+  /** Stock previo al motor, sin kardex: se sugiere como cantidad. */
+  heredado: number;
 }
 
 type Valores = Record<string, { cantidad: string; costo: string }>;
@@ -78,12 +80,15 @@ export function InventarioInicialCliente({
   items: ItemInventario[];
   conMovimientos: number;
   heredados: number;
+  /** Tesorero o super_admin. */
   puedeOperar: boolean;
   error: string | null;
 }) {
   const router = useRouter();
   const archivo = useRef<HTMLInputElement>(null);
-  const [valores, setValores] = useState<Valores>({});
+  const [valores, setValores] = useState<Valores>(() =>
+    Object.fromEntries(items.filter((i) => i.heredado > 0).map((i) => [i.clave, { cantidad: String(i.heredado), costo: "" }]))
+  );
   const [busqueda, setBusqueda] = useState("");
   const [soloCargados, setSoloCargados] = useState(false);
   const [rechazos, setRechazos] = useState<Rechazo[]>([]);
@@ -307,7 +312,8 @@ export function InventarioInicialCliente({
             control de stock vs. contabilidad va a mostrar esa diferencia.
           </p>
           <p>
-            Se carga una sola vez por ítem: después el stock se mueve con compras, ventas y ajustes. El Excel puede tener las columnas{" "}
+            Se carga una sola vez por ítem y solo lo hace tesorería: después el stock solo cambia por compras, ventas, devoluciones,
+            bajas y recuentos (las diferencias con lo físico se registran con un recuento). El Excel puede tener las columnas{" "}
             <code className="rounded bg-white/70 px-1">sku</code>, <code className="rounded bg-white/70 px-1">producto</code>,{" "}
             <code className="rounded bg-white/70 px-1">variante</code>, <code className="rounded bg-white/70 px-1">cantidad</code> y{" "}
             <code className="rounded bg-white/70 px-1">costo</code> (se busca por SKU y, si no, por producto + variante).
@@ -316,7 +322,7 @@ export function InventarioInicialCliente({
             <p className="text-sky-800/80">
               {conMovimientos > 0 && `${conMovimientos} ítem${conMovimientos === 1 ? " ya tiene" : "s ya tienen"} movimientos y no aparece${conMovimientos === 1 ? "" : "n"} acá. `}
               {heredados > 0 &&
-                `${heredados} ítem${heredados === 1 ? "" : "s"} con stock anterior al motor de costos entra${heredados === 1 ? "" : "n"} solo${heredados === 1 ? "" : "s"} al último costo conocido; para corregirlo usá un ajuste.`}
+                `${heredados} ítem${heredados === 1 ? " tiene" : "s tienen"} stock de antes del kardex: la cantidad viene sugerida, falta el costo.`}
             </p>
           )}
         </div>
@@ -330,7 +336,7 @@ export function InventarioInicialCliente({
 
       {!puedeOperar ? (
         <p className="rounded-xl border border-linea bg-white p-6 text-center text-sm text-muted-foreground">
-          La carga de inventario la hacen tienda o tesorería.
+          El inventario inicial lo carga tesorería (tesorero o super_admin).
         </p>
       ) : items.length === 0 ? (
         <motion.div
@@ -437,6 +443,7 @@ export function InventarioInicialCliente({
                         <p className="text-[11px] text-muted-foreground">
                           {f.it.sku ? <span className="font-mono">{f.it.sku}</span> : "Sin SKU"}
                           {!f.it.activo && " · inactivo"}
+                          {f.it.heredado > 0 && <span className="text-amber-700"> · stock previo {f.it.heredado} u.</span>}
                           {f.problema && <span className="text-red-600"> · {f.problema}</span>}
                         </p>
                       </div>
@@ -527,7 +534,9 @@ export function InventarioInicialCliente({
                 Entran <strong>{unidades}</strong> unidades de <strong>{listas.length}</strong> ítem{listas.length === 1 ? "" : "s"} por un valor de{" "}
                 <strong>$ {formatImporte(valorTotal)}</strong>.
               </p>
-              <p className="text-xs">No se puede deshacer: después se corrige con ajustes. Se carga todo junto o nada.</p>
+              <p className="text-xs">
+                No se puede deshacer ni repetir: después las diferencias se registran con un recuento. Se carga todo junto o nada.
+              </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AnimatePresence>

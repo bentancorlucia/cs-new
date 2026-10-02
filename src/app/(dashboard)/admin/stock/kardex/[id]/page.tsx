@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createServerClient } from "@/lib/supabase/server";
-import { createComercialClient, permisosComercial } from "@/lib/comercial/server";
+import { createComercialClient } from "@/lib/comercial/server";
 import { leerPaginado } from "@/lib/contabilidad/reportes";
-import { origenMovimiento } from "@/lib/comercial/stock";
+import { nombreUsuario, origenMovimiento } from "@/lib/comercial/stock";
 import { KardexCliente, type FilaKardex } from "@/components/stock/kardex-cliente";
 import { cargarStock } from "../../_lib/datos";
+import { centrosCosto, comercialSinTipos, nombresUsuarios, permisosStock } from "../../_lib/extra";
 
 export const metadata: Metadata = { title: "Kardex" };
 export const dynamic = "force-dynamic";
@@ -28,15 +29,6 @@ type Mov = {
   created_at: string;
 };
 
-/** `comercial.devoluciones` todavía no está en los tipos generados. */
-type ClienteDevoluciones = {
-  from(t: "devoluciones"): {
-    select(c: "id, pedido_id"): {
-      in(col: "id", v: number[]): PromiseLike<{ data: { id: number; pedido_id: number }[] | null }>;
-    };
-  };
-};
-
 export default async function KardexPage({
   params,
   searchParams,
@@ -44,7 +36,7 @@ export default async function KardexPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ variante?: string }>;
 }) {
-  const [{ id }, { variante }, { puedeOperar }] = await Promise.all([params, searchParams, permisosComercial()]);
+  const [{ id }, { variante }, { puedeOperar }] = await Promise.all([params, searchParams, permisosStock()]);
   const productoId = Number(id);
   if (!Number.isInteger(productoId) || productoId <= 0) notFound();
 
@@ -78,12 +70,22 @@ export default async function KardexPage({
 
   const movs = movsRes.filas;
 
-  // Datos para mostrar el origen: número de pedido y pedido de cada devolución.
-  const devIds = [...new Set(movs.filter((m) => m.origen_tipo === "devolucion_venta").map((m) => Number(m.origen_id)))];
-  const { data: devs } = devIds.length
-    ? await (com as unknown as ClienteDevoluciones).from("devoluciones").select("id, pedido_id").in("id", devIds)
-    : { data: [] as { id: number; pedido_id: number }[] };
-  const pedidoDeDevolucion = new Map((devs ?? []).map((d) => [String(d.id), d.pedido_id]));
+  // Datos para mostrar el origen: número de pedido, pedido de cada
+  // devolución y número de bajas y recuentos (tablas aún sin tipos generados).
+  const sinTipos = await comercialSinTipos();
+  const idsDe = (tipo: string) => [...new Set(movs.filter((m) => m.origen_tipo === tipo).map((m) => Number(m.origen_id)))];
+  const [devIds, bajaIds, recIds] = [idsDe("devolucion_venta"), idsDe("baja"), idsDe("recuento")];
+  const [devs, bajas, recs, centros] = await Promise.all([
+    devIds.length ? sinTipos.from("devoluciones").select("id, pedido_id").in("id", devIds) : Promise.resolve({ data: [] }),
+    bajaIds.length ? sinTipos.from("bajas").select("id, numero").in("id", bajaIds) : Promise.resolve({ data: [] }),
+    recIds.length ? sinTipos.from("recuentos").select("id, numero").in("id", recIds) : Promise.resolve({ data: [] }),
+    puedeOperar ? centrosCosto() : Promise.resolve([]),
+  ]);
+  const pedidoDeDevolucion = new Map(
+    ((devs.data ?? []) as { id: number; pedido_id: number }[]).map((d) => [String(d.id), d.pedido_id])
+  );
+  const numeroBaja = new Map(((bajas.data ?? []) as { id: number; numero: string }[]).map((b) => [String(b.id), b.numero]));
+  const numeroRecuento = new Map(((recs.data ?? []) as { id: number; numero: string }[]).map((r) => [String(r.id), r.numero]));
 
   const pedidoIds = [
     ...new Set([
@@ -93,22 +95,23 @@ export default async function KardexPage({
       ...[...pedidoDeDevolucion.values()],
     ]),
   ].filter((n) => Number.isInteger(n));
-  const usuarios = [...new Set(movs.map((m) => m.creado_por).filter((u): u is string => !!u))];
 
-  const [{ data: pedidos }, { data: perfiles }] = await Promise.all([
+  const [{ data: pedidos }, nombres] = await Promise.all([
     pedidoIds.length
       ? db.from("pedidos").select("id, numero_pedido").in("id", pedidoIds)
       : Promise.resolve({ data: [] as { id: number; numero_pedido: string | null }[] }),
-    usuarios.length
-      ? db.from("perfiles").select("id, nombre, apellido").in("id", usuarios)
-      : Promise.resolve({ data: [] as { id: string; nombre: string; apellido: string }[] }),
+    nombresUsuarios(movs.map((m) => m.creado_por)),
   ]);
   const numeroPedido = new Map((pedidos ?? []).map((p) => [String(p.id), p.numero_pedido]));
-  const nombreUsuario = new Map((perfiles ?? []).map((p) => [p.id, `${p.nombre} ${p.apellido}`.trim()]));
   const nombreItem = new Map(producto.items.map((i) => [i.itemId, i.nombre]));
 
   const filas: FilaKardex[] = movs.map((m) => {
-    const origen = origenMovimiento(m.origen_tipo, m.origen_id, { numeroPedido, pedidoDeDevolucion });
+    const origen = origenMovimiento(m.origen_tipo, m.origen_id, {
+      numeroPedido,
+      pedidoDeDevolucion,
+      numeroBaja,
+      numeroRecuento,
+    });
     return {
       id: m.id,
       fecha: m.fecha,
@@ -125,7 +128,7 @@ export default async function KardexPage({
       // El motivo genérico de la carga inicial repite el origen
       motivo: m.origen_tipo === "inventario_inicial" ? null : m.motivo,
       asientoId: m.asiento_id,
-      usuario: m.creado_por ? nombreUsuario.get(m.creado_por) ?? null : null,
+      usuario: nombreUsuario(m.creado_por, nombres),
     };
   });
 
@@ -136,6 +139,7 @@ export default async function KardexPage({
       filas={filas}
       verCostos={verCostos}
       puedeOperar={puedeOperar}
+      centros={centros}
       error={error ?? movsRes.error}
     />
   );

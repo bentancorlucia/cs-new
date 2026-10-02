@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createServerClient } from "@/lib/supabase/server";
-import { permisosComercial } from "@/lib/comercial/server";
+import { permisosStock } from "../../stock/_lib/extra";
 import { cargarStock } from "../../stock/_lib/datos";
 import { ProductoForm } from "../_components/producto-form";
 import { EncabezadoProducto } from "../_components/encabezado-producto";
@@ -16,7 +16,7 @@ export default async function EditarProductoPage({ params }: { params: Promise<{
   if (!Number.isInteger(productoId) || productoId <= 0) notFound();
 
   const db = await createServerClient();
-  const [{ data: producto }, { puedeOperar }] = await Promise.all([
+  const [{ data: producto }, { puedeOperar, puedeInventario }] = await Promise.all([
     db
       .from("productos")
       .select(
@@ -24,7 +24,7 @@ export default async function EditarProductoPage({ params }: { params: Promise<{
       )
       .eq("id", productoId)
       .maybeSingle(),
-    permisosComercial(),
+    permisosStock(),
   ]);
   if (!producto) notFound();
 
@@ -33,7 +33,7 @@ export default async function EditarProductoPage({ params }: { params: Promise<{
   return (
     <div className="mx-auto max-w-5xl px-1">
       <EncabezadoProducto titulo={producto.nombre} subtitulo={`Editando producto · ID ${producto.id}`} modo="editar" />
-      <ProductoForm producto={producto} stock={productos[0] ?? null} verCostos={puedeOperar} puedeOperar={puedeOperar} />
+      <ProductoForm producto={producto} stock={productos[0] ?? null} verCostos={puedeOperar} puedeOperar={puedeOperar} puedeInventario={puedeInventario} />
     </div>
   );
 }

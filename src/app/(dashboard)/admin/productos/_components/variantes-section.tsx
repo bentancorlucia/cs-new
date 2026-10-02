@@ -140,11 +140,11 @@ export function VariantesSection({
   const handleSave = async () => {
     if (retiroBloqueado.length > 0) {
       const v = retiroBloqueado[0];
-      toast.error(`"${v.nombre}" tiene ${stockDe(v)} unidades: ajustá su stock a 0 antes de quitar esa combinación`);
+      toast.error(`"${v.nombre}" tiene ${stockDe(v)} unidades: para quitar esa combinación su stock tiene que quedar en 0 (baja o recuento)`);
       return;
     }
     if (primerasConStockSuelto) {
-      toast.error(`El producto tiene ${stockSinVariante} unidades sin variante: dejalas en 0 con un ajuste antes de crear variantes`);
+      toast.error(`El producto tiene ${stockSinVariante} unidades sin variante: dejalas en 0 (baja o recuento) antes de crear variantes`);
       return;
     }
     setSaving(true);
@@ -290,8 +290,8 @@ export function VariantesSection({
             className="flex gap-2 overflow-hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"
           >
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-            El producto tiene {stockSinVariante} unidades sin variante. Para crear variantes, primero dejá ese stock en 0 con un ajuste
-            y después cargalo en cada variante.
+            El producto tiene {stockSinVariante} unidades sin variante. Para crear variantes, primero ese stock tiene que quedar en 0
+            (con una baja o un recuento) y después entrar en cada variante.
           </motion.div>
         )}
         {seRetiran.length > 0 && (
@@ -313,7 +313,7 @@ export function VariantesSection({
                 <li key={v.id}>
                   {v.nombre}
                   {stockDe(v) > 0
-                    ? ` — tiene ${stockDe(v)} u.: ajustá su stock a 0 o volvé a agregar la combinación`
+                    ? ` — tiene ${stockDe(v)} u.: dejala en 0 (baja o recuento) o volvé a agregar la combinación`
                     : v.id && stockPorVariante[v.id]?.conMovimientos
                       ? " — tiene historial: se desactiva"
                       : " — se elimina (o se desactiva si tiene ventas)"}
@@ -387,7 +387,7 @@ export function VariantesSection({
                             className="h-6 text-[11px] font-mono px-1.5"
                           />
                         </td>
-                        <td className="py-1.5 px-2 text-right tabular-nums" title="Se mueve con compras, ventas y ajustes">
+                        <td className="py-1.5 px-2 text-right tabular-nums" title="Cambia por compras, ventas, devoluciones, bajas y recuentos">
                           {v.id ? stock : "—"}
                         </td>
                         <td className="py-1.5 px-2">
@@ -404,7 +404,7 @@ export function VariantesSection({
                           />
                         </td>
                         <td className="py-1.5 px-2 text-center">
-                          <span title={bloqueaToggle ? "Tiene stock: para desactivarla primero ajustá su stock a 0" : undefined}>
+                          <span title={bloqueaToggle ? "Tiene stock: para desactivarla su stock tiene que quedar en 0" : undefined}>
                             <Switch
                               checked={v.activo}
                               disabled={bloqueaToggle}
@@ -423,7 +423,7 @@ export function VariantesSection({
 
           <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <Lock className="size-3" />
-            El stock de cada variante es de solo lectura: se carga con el inventario inicial o compras y se corrige con ajustes.
+            El stock de cada variante es de solo lectura: solo cambia por compras, ventas, devoluciones, bajas y recuentos.
           </p>
         </motion.div>
       )}

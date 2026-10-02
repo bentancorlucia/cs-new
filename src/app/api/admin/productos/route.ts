@@ -9,7 +9,7 @@ import type { Json } from "@/types/database";
 
 const TIENDA_ROLES = ["super_admin", "tienda"];
 
-// Sin stock_actual: el producto nace sin stock (entra por inventario inicial, compras o ajustes).
+// Sin stock_actual: el producto nace sin stock (entra por compras o, al arrancar, inventario inicial).
 const productoSchema = z.object({
   nombre: z.string().trim().min(1, "Nombre requerido").max(200),
   slug: z

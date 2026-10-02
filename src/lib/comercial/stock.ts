@@ -1,9 +1,14 @@
 /**
  * Stock valorizado: utilidades puras (sirven en el servidor y en el
  * navegador). La existencia y el valor viven en `comercial.items`; el
- * kardex en `comercial.movimientos`. Nada de esto escribe stock: eso lo
- * hacen solo las funciones de la base (ajustar_stock, compras, ventas…).
+ * kardex en `comercial.movimientos`. Nada de esto escribe stock: el stock
+ * solo cambia por compras, ventas, devoluciones, bajas y recuentos (y una
+ * vez por ítem, el inventario inicial), siempre con funciones de la base.
  */
+
+/** Texto de ayuda único para las pantallas. */
+export const AYUDA_STOCK =
+  "El stock solo cambia por compras, ventas, devoluciones, bajas y recuentos.";
 
 export type MetodoCosteo = "promedio" | "fifo";
 
@@ -17,8 +22,10 @@ export const TIPOS_MOVIMIENTO = [
   "compra",
   "venta",
   "devolucion_venta",
-  "ajuste",
   "devolucion_compra",
+  "recuento",
+  "baja",
+  "ajuste", // histórico: ya no se genera
 ] as const;
 
 export type TipoMovimiento = (typeof TIPOS_MOVIMIENTO)[number];
@@ -28,9 +35,47 @@ export const NOMBRE_TIPO_MOVIMIENTO: Record<string, string> = {
   compra: "Compra",
   venta: "Venta",
   devolucion_venta: "Devolución de venta",
-  ajuste: "Ajuste",
   devolucion_compra: "Devolución a proveedor",
+  recuento: "Recuento",
+  baja: "Baja",
+  ajuste: "Ajuste (histórico)",
 };
+
+export const TIPOS_BAJA = [
+  "rotura",
+  "vencimiento",
+  "robo_extravio",
+  "uso_interno",
+  "donacion",
+  "muestra",
+  "otro",
+] as const;
+
+export type TipoBaja = (typeof TIPOS_BAJA)[number];
+
+export const NOMBRE_TIPO_BAJA: Record<TipoBaja, string> = {
+  rotura: "Rotura",
+  vencimiento: "Vencimiento",
+  robo_extravio: "Robo o extravío",
+  uso_interno: "Uso interno",
+  donacion: "Donación",
+  muestra: "Muestra",
+  otro: "Otro",
+};
+
+export type EstadoRecuento = "borrador" | "confirmado" | "descartado";
+
+export const NOMBRE_ESTADO_RECUENTO: Record<EstadoRecuento, string> = {
+  borrador: "Borrador",
+  confirmado: "Confirmado",
+  descartado: "Descartado",
+};
+
+/** Nombre a mostrar de un usuario (o un id corto si no se puede leer su nombre). */
+export function nombreUsuario(id: string | null, nombres: Map<string, string>): string | null {
+  if (!id) return null;
+  return nombres.get(id) || `Usuario ${id.slice(0, 8)}`;
+}
 
 /** Costo promedio vigente de un ítem (valor / stock). */
 export function costoPromedio(stock: number, valor: number): number | null {
@@ -90,6 +135,8 @@ export function origenMovimiento(
   extra: {
     numeroPedido?: Map<string, string | null>;
     pedidoDeDevolucion?: Map<string, number>;
+    numeroBaja?: Map<string, string>;
+    numeroRecuento?: Map<string, string>;
   } = {}
 ): OrigenResuelto {
   const nro = (id: string) => extra.numeroPedido?.get(id) ?? `#${id}`;
@@ -110,8 +157,18 @@ export function origenMovimiento(
       return { etiqueta: `Documento de proveedor #${origenId}`, href: `/admin/compras/documentos/${origenId}` };
     case "documento_proveedor_anulacion":
       return { etiqueta: `Anulación del documento #${origenId}`, href: `/admin/compras/documentos/${origenId}` };
+    case "baja":
+      return {
+        etiqueta: `Baja ${extra.numeroBaja?.get(origenId) ?? `#${origenId}`}`,
+        href: `/admin/stock/bajas/${origenId}`,
+      };
+    case "recuento":
+      return {
+        etiqueta: `Recuento ${extra.numeroRecuento?.get(origenId) ?? `#${origenId}`}`,
+        href: `/admin/stock/recuentos/${origenId}`,
+      };
     case "ajuste_stock":
-      return { etiqueta: "Ajuste manual", href: null };
+      return { etiqueta: "Ajuste manual (histórico)", href: null };
     case "inventario_inicial":
       return { etiqueta: "Carga de inventario inicial", href: null };
     case "migracion":

@@ -30,7 +30,7 @@ function conflicto(error: string, status = 409) {
  * Conserva las existentes por id (su stock y su kardex no se tocan), crea
  * las nuevas y, de las que dejan de existir, borra las que nunca se usaron
  * y desactiva las que tienen historial. Una variante con stock no puede
- * dejar de existir: primero se ajusta a 0.
+ * dejar de existir: primero queda en 0 con una baja o un recuento.
  */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -101,7 +101,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
       if (suelto > 0) {
         return conflicto(
-          `El producto tiene ${suelto} unidades sin variante. Antes de crear variantes dejá ese stock en 0 con un ajuste (y después cargalo en cada variante).`
+          `El producto tiene ${suelto} unidades sin variante. Antes de crear variantes ese stock tiene que quedar en 0 (con una baja o un recuento).`
         );
       }
     }
@@ -112,7 +112,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const conStock = retiradas.find((v) => v.stock_actual > 0);
     if (conStock) {
       return conflicto(
-        `La variante "${conStock.nombre}" tiene ${conStock.stock_actual} unidades: no puede dejar de existir. Ajustá su stock a 0 o mantené esa combinación.`
+        `La variante "${conStock.nombre}" tiene ${conStock.stock_actual} unidades: no puede dejar de existir. Su stock tiene que quedar en 0 (baja o recuento) o mantené esa combinación.`
       );
     }
     // Activar/desactivar cambia el stock del producto (suma de variantes activas): con stock no se permite.
@@ -122,7 +122,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     });
     if (toggleConStock) {
       return conflicto(
-        `La variante "${toggleConStock.nombre}" tiene stock: para ${toggleConStock.activo ? "activarla" : "desactivarla"} primero ajustá su stock a 0.`
+        `La variante "${toggleConStock.nombre}" tiene stock: para ${toggleConStock.activo ? "activarla" : "desactivarla"} su stock tiene que quedar en 0 (baja o recuento).`
       );
     }
 
