@@ -122,7 +122,8 @@ SELECT is(pg_temp.saldo('2.1.05.01'), 0.00::numeric, 'se revierte la donación')
 SELECT is(pg_temp.saldo('4.4.01'), 0.00::numeric, 'y la venta');
 
 -- ---------- Ajuste de stock (merma)
-DO $$ BEGIN PERFORM comercial.ajustar_stock(9001, NULL, -1, 'Prenda dañada'); END $$;
+DO $$ BEGIN PERFORM comercial.registrar_baja('rotura', 'Prenda dañada en el probador',
+  '[{"producto_id": 9001, "cantidad": 1}]'); END $$;
 SELECT cmp_ok(pg_temp.saldo('5.1.02'), '>', 0::numeric, 'la merma va a Ajustes y mermas');
 
 -- ---------- Control: kardex = Mercadería (salvo el inventario inicial, que va en la apertura)
@@ -132,7 +133,7 @@ SELECT is((SELECT diferencia FROM comercial.control_mercaderia()),
           'la diferencia con Mercadería es solo lo que entró sin asiento (inventario inicial)');
 SELECT is((SELECT count(*) FROM comercial.movimientos WHERE asiento_id IS NULL
            AND origen_tipo NOT IN ('inventario_inicial', 'test')), 0::bigint,
-          'todo movimiento de ventas y ajustes tiene asiento');
+          'todo movimiento de ventas y bajas tiene asiento');
 
 SELECT * FROM finish();
 ROLLBACK;

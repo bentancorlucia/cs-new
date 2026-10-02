@@ -309,8 +309,14 @@ isOneToOne: false
 "_revaluar":
 { Args: { "p_fecha": string,"p_origen_id": string,"p_origen_tipo": string }; Returns: string
                            },
+"_revertir":
+{ Args: { "p_fecha": string,"p_id": string,"p_motivo": string }; Returns: string
+                           },
 "_tiene_rol":
 { Args: { "p_roles": (string)[] }; Returns: boolean
+                           },
+"_usuario":
+{ Args: Record<PropertyKey, never>; Returns: string
                            },
 "cerrar_ejercicio":
 { Args: { "p_ejercicio": string }; Returns: string
