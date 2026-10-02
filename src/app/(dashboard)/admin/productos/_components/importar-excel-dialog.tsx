@@ -37,7 +37,7 @@ interface PreviewProduct {
   precio: number;
   precio_socio?: number | null;
   sku?: string | null;
-  stock_actual?: number;
+  stock_minimo?: number;
   unidad?: string;
   activo?: boolean;
 }
@@ -69,6 +69,7 @@ export function ImportarExcelDialog({
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<PreviewProduct[]>([]);
   const [errors, setErrors] = useState<PreviewError[]>([]);
+  const [avisos, setAvisos] = useState<string[]>([]);
   const [totalRows, setTotalRows] = useState(0);
   const [validRows, setValidRows] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -81,6 +82,7 @@ export function ImportarExcelDialog({
     setFile(null);
     setPreview([]);
     setErrors([]);
+    setAvisos([]);
     setTotalRows(0);
     setValidRows(0);
     setLoading(false);
@@ -138,6 +140,7 @@ export function ImportarExcelDialog({
 
       setPreview(json.preview || []);
       setErrors(json.errors || []);
+      setAvisos(json.avisos || []);
       setTotalRows(json.total || 0);
       setValidRows(json.validos || 0);
       setStep("preview");
@@ -204,10 +207,10 @@ export function ImportarExcelDialog({
       "precio",
       "precio_socio",
       "sku",
-      "stock_actual",
       "stock_minimo",
       "unidad",
       "activo",
+      "activo_pos",
       "destacado",
     ];
     const exampleRow = [
@@ -218,11 +221,11 @@ export function ImportarExcelDialog({
       "1500",
       "1200",
       "CAM-001",
-      "50",
       "5",
       "un",
       "si",
       "si",
+      "no",
     ];
 
     const csv = [headers.join(","), exampleRow.join(",")].join("\n");
@@ -339,10 +342,11 @@ export function ImportarExcelDialog({
                       { name: "categoria", required: false },
                       { name: "precio_socio", required: false },
                       { name: "sku", required: false },
-                      { name: "stock_actual", required: false },
+
                       { name: "stock_minimo", required: false },
                       { name: "unidad", required: false },
                       { name: "activo", required: false },
+                      { name: "activo_pos", required: false },
                       { name: "destacado", required: false },
                     ].map((col) => (
                       <Badge
@@ -356,8 +360,10 @@ export function ImportarExcelDialog({
                     ))}
                   </div>
                   <p className="text-[10px] text-muted-foreground">
-                    * Obligatorios. Si no se indica categoría, se crea
-                    automáticamente si no existe.
+                    * Obligatorios. Si la categoría indicada no existe, se crea
+                    (sin distinguir mayúsculas). Precios como 1.500 o 1.500,50.
+                    El stock no se importa: se carga en Stock → Inventario inicial,
+                    con su costo.
                   </p>
                 </div>
               </motion.div>
@@ -393,6 +399,16 @@ export function ImportarExcelDialog({
                     </Badge>
                   )}
                 </div>
+
+                {avisos.length > 0 && (
+                  <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 space-y-1">
+                    {avisos.map((a, i) => (
+                      <p key={i} className="text-[11px] text-sky-900">
+                        {a}
+                      </p>
+                    ))}
+                  </div>
+                )}
 
                 {/* Errors */}
                 {errors.length > 0 && (
@@ -434,7 +450,7 @@ export function ImportarExcelDialog({
                             Precio
                           </TableHead>
                           <TableHead className="text-[10px] font-heading uppercase tracking-editorial sticky top-0 bg-white text-center hidden sm:table-cell">
-                            Stock
+                            Stock mín.
                           </TableHead>
                           <TableHead className="text-[10px] font-heading uppercase tracking-editorial sticky top-0 bg-white hidden md:table-cell">
                             SKU
@@ -467,7 +483,7 @@ export function ImportarExcelDialog({
                             </TableCell>
                             <TableCell className="py-2 text-center hidden sm:table-cell">
                               <span className="text-xs">
-                                {prod.stock_actual ?? 0}
+                                {prod.stock_minimo ?? 5}
                               </span>
                             </TableCell>
                             <TableCell className="py-2 hidden md:table-cell">

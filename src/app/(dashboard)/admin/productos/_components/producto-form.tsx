@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
 import {
   Save,
@@ -14,7 +13,6 @@ import {
   Package,
   DollarSign,
   Eye,
-  Tag,
   Loader2,
   GripVertical,
   Trash2,
@@ -27,8 +25,9 @@ import {
   Crosshair,
   Sparkles,
   Store,
+  Boxes,
 } from "lucide-react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -53,14 +52,13 @@ import {
 } from "@/components/ui/tooltip";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { VariantesSection } from "./variantes-section";
+import type { VarianteCruda } from "./variantes-logica";
 import { MtoCamposSection } from "./mto-campos-section";
 import type { MtoCampo } from "@/types/mto";
+import type { ProductoVista } from "@/components/stock/tipos";
+import { StockProductoPanel } from "@/components/stock/stock-producto-panel";
 import {
   fadeInUp,
-  fadeInLeft,
-  fadeInRight,
-  scaleIn,
-  staggerContainer,
   springSmooth,
   springBouncy,
 } from "@/lib/motion";
@@ -88,8 +86,7 @@ const schema = z.object({
   precio: z.string().min(1, "Precio requerido"),
   precio_socio: z.string().optional(),
   sku: z.string().max(50).optional(),
-  stock_actual: z.string(),
-  stock_minimo: z.string(),
+  stock_minimo: z.string().regex(/^\d+$/, "Entero mayor o igual a 0"),
   unidad: z.string().default("un"),
   activo: z.boolean(),
   activo_pos: z.boolean(),
@@ -131,8 +128,41 @@ interface ProductoProveedor {
   proveedores?: { id: number; nombre: string };
 }
 
+/** Producto tal como lo carga la página de edición. */
+export interface ProductoFicha {
+  id: number;
+  nombre: string;
+  slug: string;
+  sku: string | null;
+  descripcion: string | null;
+  descripcion_corta: string | null;
+  categoria_id: number | null;
+  precio: number;
+  precio_socio: number | null;
+  stock_minimo: number | null;
+  unidad: string;
+  activo: boolean | null;
+  activo_pos: boolean;
+  destacado: boolean | null;
+  mto_disponible: boolean;
+  mto_solo: boolean;
+  mto_tiempo_fabricacion_dias: number | null;
+  mto_campos: unknown;
+  producto_imagenes:
+    | { id: number; url: string; alt_text: string | null; orden: number | null; es_principal: boolean | null; focal_point: string | null }[]
+    | null;
+  producto_variantes: VarianteCruda[] | null;
+  producto_proveedores:
+    | { id: number; proveedor_id: number; costo: number | null; codigo_proveedor: string | null; es_principal: boolean | null }[]
+    | null;
+}
+
 interface Props {
-  producto?: any;
+  producto?: ProductoFicha;
+  /** Stock del producto según el motor (solo en edición). */
+  stock?: ProductoVista | null;
+  verCostos?: boolean;
+  puedeOperar?: boolean;
 }
 
 function slugify(str: string) {
@@ -238,8 +268,8 @@ function ImageUploader({
           const { data } = await res.json();
           setImagenes((prev) => [...prev, data]);
           toast.success(`"${file.name}" subida`);
-        } catch (error: any) {
-          toast.error(error.message || "Error al subir imagen");
+        } catch (error) {
+          toast.error(error instanceof Error && error.message ? error.message : "Error al subir imagen");
         }
       }
 
@@ -780,7 +810,7 @@ function ProveedoresSection({
     });
   };
 
-  const updateRow = (index: number, field: keyof ProductoProveedor, value: any) => {
+  const updateRow = <K extends keyof ProductoProveedor>(index: number, field: K, value: ProductoProveedor[K]) => {
     setAndNotify((prev) =>
       prev.map((row, i) => {
         if (i !== index) {
@@ -914,28 +944,29 @@ function ProveedoresSection({
 
 // --- Main form ---
 
-export function ProductoForm({ producto }: Props) {
+export function ProductoForm({ producto, stock, verCostos = false, puedeOperar = false }: Props) {
   const router = useRouter();
   const isEdit = !!producto;
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [proveedoresState, setProveedoresState] = useState<ProductoProveedor[]>(
-    producto?.producto_proveedores || []
+    (producto?.producto_proveedores ?? []).map((p) => ({ ...p, es_principal: !!p.es_principal }))
   );
   const [mtoCampos, setMtoCampos] = useState<MtoCampo[]>(
-    Array.isArray(producto?.mto_campos) ? producto.mto_campos : []
+    Array.isArray(producto?.mto_campos) ? (producto.mto_campos as MtoCampo[]) : []
   );
-  const hasVariantes = isEdit && (producto.producto_variantes?.length ?? 0) > 0;
 
   const {
     register,
     handleSubmit,
     setValue,
+    reset,
     watch,
     formState: { errors, isDirty },
   } = useForm<FormData>({
-    resolver: zodResolver(schema) as any,
+    // `unidad` tiene default en el schema: el tipo de entrada difiere del de salida.
+    resolver: zodResolver(schema) as unknown as Resolver<FormData>,
     defaultValues: {
       nombre: producto?.nombre || "",
       slug: producto?.slug || "",
@@ -945,8 +976,7 @@ export function ProductoForm({ producto }: Props) {
       precio: producto?.precio?.toString() || "",
       precio_socio: producto?.precio_socio?.toString() || "",
       sku: producto?.sku || "",
-      stock_actual: producto?.stock_actual?.toString() || "0",
-      stock_minimo: producto?.stock_minimo?.toString() || "5",
+      stock_minimo: producto?.stock_minimo?.toString() ?? "5",
       unidad: producto?.unidad || "un",
       activo: producto?.activo ?? true,
       activo_pos: producto?.activo_pos ?? true,
@@ -1002,9 +1032,9 @@ export function ProductoForm({ producto }: Props) {
         categoria_id: data.categoria_id ? parseInt(data.categoria_id) : null,
         precio: parseFloat(data.precio),
         precio_socio: data.precio_socio ? parseFloat(data.precio_socio) : null,
-        sku: data.sku || null,
-        stock_actual: parseInt(data.stock_actual),
-        stock_minimo: parseInt(data.stock_minimo),
+        sku: data.sku?.trim() || null,
+        // stock_actual nunca se envía: lo mantiene el motor de stock.
+        stock_minimo: parseInt(data.stock_minimo, 10),
         unidad: data.unidad,
         activo: data.activo,
         activo_pos: data.activo_pos,
@@ -1063,13 +1093,14 @@ export function ProductoForm({ producto }: Props) {
       setTimeout(() => setSaved(false), 2000);
 
       if (isEdit) {
+        reset(data);
         toast.success("Producto actualizado");
       } else {
         toast.success("Producto creado — ahora podés agregar fotos");
         router.push(`/admin/productos/${result.data.id}`);
       }
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error al guardar");
     } finally {
       setSaving(false);
     }
@@ -1085,7 +1116,7 @@ export function ProductoForm({ producto }: Props) {
       : null;
 
   return (
-    <form onSubmit={handleSubmit(onSubmit as any)} className="pb-8">
+    <form onSubmit={handleSubmit(onSubmit)} className="pb-8">
       {/* Top bar */}
       <motion.div
         variants={fadeInUp}
@@ -1173,7 +1204,7 @@ export function ProductoForm({ producto }: Props) {
       </motion.div>
 
       {/* Two column layout */}
-      <div className="grid gap-6 lg:grid-cols-[1fr,340px]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         {/* LEFT — Main content */}
         <div className="space-y-6">
           {/* Basic info */}
@@ -1297,8 +1328,8 @@ export function ProductoForm({ producto }: Props) {
           {/* Pricing & Stock */}
           <FormSection
             icon={DollarSign}
-            title="Precio y stock"
-            description="Precios en UYU y control de inventario"
+            title="Precio y stock mínimo"
+            description="Precios en UYU y alerta de reposición"
             delay={0.1}
           >
             <div className="space-y-5">
@@ -1376,24 +1407,7 @@ export function ProductoForm({ producto }: Props) {
 
               <Separator className="opacity-50" />
 
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div>
-                  <Label htmlFor="stock_actual">Stock actual</Label>
-                  <Input
-                    id="stock_actual"
-                    type="number"
-                    min="0"
-                    {...register("stock_actual")}
-                    readOnly={hasVariantes}
-                    className={cn("mt-1.5", hasVariantes && "bg-muted cursor-not-allowed")}
-                  />
-                  {hasVariantes && (
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      Calculado desde variantes
-                    </p>
-                  )}
-                </div>
-
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <div className="flex items-center gap-1.5">
                     <Label htmlFor="stock_minimo">Stock mínimo</Label>
@@ -1419,6 +1433,12 @@ export function ProductoForm({ producto }: Props) {
                     {...register("stock_minimo")}
                     className="mt-1.5"
                   />
+                  {errors.stock_minimo && (
+                    <p className="mt-1.5 flex items-center gap-1 text-xs text-destructive">
+                      <AlertCircle className="size-3" />
+                      {errors.stock_minimo.message}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -1470,7 +1490,15 @@ export function ProductoForm({ producto }: Props) {
                 productoId={producto.id}
                 productoSku={producto.sku}
                 initialVariantes={producto.producto_variantes || []}
-                onStockChange={(total) => setValue("stock_actual", total.toString(), { shouldDirty: false })}
+                stockPorVariante={Object.fromEntries(
+                  (stock?.items ?? [])
+                    .filter((i) => i.varianteId !== null)
+                    .map((i) => [i.varianteId as number, { stock: i.stock, conMovimientos: i.conMovimientos || i.heredado }])
+                )}
+                stockSinVariante={
+                  stock && !stock.tieneVariantes ? stock.items[0]?.stock ?? 0 : stock?.items.find((i) => i.varianteId === null)?.stock ?? 0
+                }
+                onGuardado={() => router.refresh()}
               />
             </FormSection>
           )}
@@ -1588,7 +1616,7 @@ export function ProductoForm({ producto }: Props) {
             {isEdit ? (
               <ImageUploader
                 productoId={producto.id}
-                imagenes={producto.producto_imagenes || []}
+                imagenes={(producto.producto_imagenes ?? []) as ProductoImagen[]}
               />
             ) : (
               <motion.div
@@ -1609,6 +1637,23 @@ export function ProductoForm({ producto }: Props) {
                   </p>
                 </div>
               </motion.div>
+            )}
+          </FormSection>
+
+          {/* Stock (solo lectura) */}
+          <FormSection
+            icon={Boxes}
+            title="Stock"
+            description={isEdit ? "Según el kardex valorizado" : "Se carga después de crear el producto"}
+            delay={0.18}
+          >
+            {isEdit && stock ? (
+              <StockProductoPanel stock={stock} verCostos={verCostos} puedeOperar={puedeOperar} />
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                El producto se crea sin stock. Después cargalo con el inventario inicial (stock de arranque) o con una
+                recepción de compra; las correcciones se hacen con ajustes de stock.
+              </p>
             )}
           </FormSection>
 

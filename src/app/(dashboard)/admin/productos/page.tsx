@@ -49,7 +49,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { staggerContainerFast, fadeInUp } from "@/lib/motion";
+import { fadeInUp } from "@/lib/motion";
 import { toast } from "sonner";
 import { ImportarExcelDialog } from "./_components/importar-excel-dialog";
 import { useDocumentTitle } from "@/hooks/use-document-title";
@@ -135,7 +135,9 @@ export default function AdminProductosPage() {
       setDeleteId(null);
       fetchProductos();
     } else {
-      toast.error("Error al eliminar");
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error || "Error al eliminar");
+      setDeleteId(null);
     }
   }
 
@@ -449,8 +451,8 @@ export default function AdminProductosPage() {
             <DialogTitle>Eliminar producto</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            ¿Estás seguro de que querés eliminar este producto? Esta acción no se
-            puede deshacer.
+            ¿Seguro que querés eliminar este producto? No se puede deshacer. Si ya
+            tuvo ventas, stock o compras no se puede borrar: desactivalo en web y POS.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteId(null)}>
