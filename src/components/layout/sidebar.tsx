@@ -48,6 +48,12 @@ import {
   AlertTriangle,
   Layers,
   Tags,
+  Mail,
+  Send,
+  History,
+  MailX,
+  Workflow,
+  Settings,
 } from "lucide-react";
 import { useRoles } from "@/hooks/use-roles";
 import { RoleSwitcher } from "@/components/layout/role-switcher";
@@ -149,6 +155,19 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/cuotas/notas-credito", label: "Notas de crédito", icon: FileMinus, roles: ["super_admin", "tesorero", "comision_fiscal"] },
       { href: "/cuotas/disciplinas", label: "Liquidación a disciplinas", icon: Receipt, roles: ["super_admin", "tesorero", "comision_fiscal"] },
       { href: "/cuotas/morosidad", label: "Morosidad", icon: AlertTriangle },
+    ],
+  },
+  {
+    title: "Comunicaciones",
+    requiredRoles: ["super_admin", "secretaria", "tesorero", "tienda"],
+    items: [
+      { href: "/comunicaciones", label: "Resumen", icon: Mail, exact: true },
+      { href: "/comunicaciones/envios", label: "Envíos", icon: Send },
+      { href: "/comunicaciones/historial", label: "Historial", icon: History },
+      { href: "/comunicaciones/plantillas", label: "Plantillas", icon: FileSpreadsheet, roles: ["super_admin", "secretaria"] },
+      { href: "/comunicaciones/bajas", label: "Bajas", icon: MailX, roles: ["super_admin", "secretaria"] },
+      { href: "/comunicaciones/automatizaciones", label: "Automatizaciones", icon: Workflow, roles: ["super_admin", "secretaria"] },
+      { href: "/comunicaciones/configuracion", label: "Configuración", icon: Settings, roles: ["super_admin", "secretaria", "tienda"] },
     ],
   },
   {
