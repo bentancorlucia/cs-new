@@ -68,6 +68,75 @@ isOneToOne: true
                   Relationships: [
                     
                   ]
+                },"conciliacion_lineas": {
+                  Row: {
+                    "conciliacion_id": number,"linea_id": number
+                  }
+                  Insert: {
+                    "conciliacion_id": number,"linea_id": number
+                  }
+                  Update: {
+                    "conciliacion_id"?: number,"linea_id"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "conciliacion_lineas_conciliacion_id_fkey"
+      columns: ["conciliacion_id"]
+isOneToOne: false
+      referencedRelation: "conciliaciones"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "conciliacion_lineas_linea_id_fkey"
+      columns: ["linea_id"]
+isOneToOne: true
+      referencedRelation: "lineas"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"conciliacion_movimientos": {
+                  Row: {
+                    "conciliacion_id": number,"movimiento_id": number
+                  }
+                  Insert: {
+                    "conciliacion_id": number,"movimiento_id": number
+                  }
+                  Update: {
+                    "conciliacion_id"?: number,"movimiento_id"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "conciliacion_movimientos_conciliacion_id_fkey"
+      columns: ["conciliacion_id"]
+isOneToOne: false
+      referencedRelation: "conciliaciones"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "conciliacion_movimientos_movimiento_id_fkey"
+      columns: ["movimiento_id"]
+isOneToOne: true
+      referencedRelation: "extracto_movimientos"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"conciliaciones": {
+                  Row: {
+                    "creado_por": string | null,"created_at": string,"extracto_id": string,"id": number
+                  }
+                  Insert: {
+                    "creado_por"?: string | null,"created_at"?: string,"extracto_id": string,"id"?: never
+                  }
+                  Update: {
+                    "creado_por"?: string | null,"created_at"?: string,"extracto_id"?: string,"id"?: never
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "conciliaciones_extracto_id_fkey"
+      columns: ["extracto_id"]
+isOneToOne: false
+      referencedRelation: "extractos"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"config": {
                   Row: {
                     "id": boolean,"moneda_funcional": string,"regimen_iva": string,"updated_at": string
@@ -108,13 +177,13 @@ isOneToOne: false
                   ]
                 },"cuentas": {
                   Row: {
-                    "activa": boolean,"clase": Database["contabilidad"]['Enums']["clase_cuenta"],"codigo": string,"corriente": boolean | null,"created_at": string,"descripcion": string | null,"es_disponibilidad": boolean,"id": string,"imputable": boolean,"moneda": string | null,"naturaleza": Database["contabilidad"]['Enums']["naturaleza"],"nivel": number,"nombre": string,"padre_id": string | null,"requiere_auxiliar": Database["contabilidad"]['Enums']["tipo_auxiliar"] | null,"requiere_centro_costo": boolean,"revalua": boolean,"updated_at": string
+                    "activa": boolean,"afecta_caja": boolean,"clase": Database["contabilidad"]['Enums']["clase_cuenta"],"codigo": string,"corriente": boolean | null,"created_at": string,"descripcion": string | null,"es_disponibilidad": boolean,"id": string,"imputable": boolean,"moneda": string | null,"naturaleza": Database["contabilidad"]['Enums']["naturaleza"],"nivel": number,"nombre": string,"padre_id": string | null,"requiere_auxiliar": Database["contabilidad"]['Enums']["tipo_auxiliar"] | null,"requiere_centro_costo": boolean,"revalua": boolean,"updated_at": string
                   }
                   Insert: {
-                    "activa"?: boolean,"clase": Database["contabilidad"]['Enums']["clase_cuenta"],"codigo": string,"corriente"?: boolean | null,"created_at"?: string,"descripcion"?: string | null,"es_disponibilidad"?: boolean,"id"?: string,"imputable"?: boolean,"moneda"?: string | null,"naturaleza": Database["contabilidad"]['Enums']["naturaleza"],"nivel": number,"nombre": string,"padre_id"?: string | null,"requiere_auxiliar"?: Database["contabilidad"]['Enums']["tipo_auxiliar"] | null,"requiere_centro_costo"?: boolean,"revalua"?: boolean,"updated_at"?: string
+                    "activa"?: boolean,"afecta_caja"?: boolean,"clase": Database["contabilidad"]['Enums']["clase_cuenta"],"codigo": string,"corriente"?: boolean | null,"created_at"?: string,"descripcion"?: string | null,"es_disponibilidad"?: boolean,"id"?: string,"imputable"?: boolean,"moneda"?: string | null,"naturaleza": Database["contabilidad"]['Enums']["naturaleza"],"nivel": number,"nombre": string,"padre_id"?: string | null,"requiere_auxiliar"?: Database["contabilidad"]['Enums']["tipo_auxiliar"] | null,"requiere_centro_costo"?: boolean,"revalua"?: boolean,"updated_at"?: string
                   }
                   Update: {
-                    "activa"?: boolean,"clase"?: Database["contabilidad"]['Enums']["clase_cuenta"],"codigo"?: string,"corriente"?: boolean | null,"created_at"?: string,"descripcion"?: string | null,"es_disponibilidad"?: boolean,"id"?: string,"imputable"?: boolean,"moneda"?: string | null,"naturaleza"?: Database["contabilidad"]['Enums']["naturaleza"],"nivel"?: number,"nombre"?: string,"padre_id"?: string | null,"requiere_auxiliar"?: Database["contabilidad"]['Enums']["tipo_auxiliar"] | null,"requiere_centro_costo"?: boolean,"revalua"?: boolean,"updated_at"?: string
+                    "activa"?: boolean,"afecta_caja"?: boolean,"clase"?: Database["contabilidad"]['Enums']["clase_cuenta"],"codigo"?: string,"corriente"?: boolean | null,"created_at"?: string,"descripcion"?: string | null,"es_disponibilidad"?: boolean,"id"?: string,"imputable"?: boolean,"moneda"?: string | null,"naturaleza"?: Database["contabilidad"]['Enums']["naturaleza"],"nivel"?: number,"nombre"?: string,"padre_id"?: string | null,"requiere_auxiliar"?: Database["contabilidad"]['Enums']["tipo_auxiliar"] | null,"requiere_centro_costo"?: boolean,"revalua"?: boolean,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -163,9 +232,47 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"extracto_movimientos": {
+                  Row: {
+                    "concepto": string,"extracto_id": string,"fecha": string,"id": number,"importe": number,"orden": number,"referencia": string | null,"saldo": number | null
+                  }
+                  Insert: {
+                    "concepto": string,"extracto_id": string,"fecha": string,"id"?: never,"importe": number,"orden": number,"referencia"?: string | null,"saldo"?: number | null
+                  }
+                  Update: {
+                    "concepto"?: string,"extracto_id"?: string,"fecha"?: string,"id"?: never,"importe"?: number,"orden"?: number,"referencia"?: string | null,"saldo"?: number | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "extracto_movimientos_extracto_id_fkey"
+      columns: ["extracto_id"]
+isOneToOne: false
+      referencedRelation: "extractos"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"extractos": {
+                  Row: {
+                    "archivo": string | null,"cerrado_at": string | null,"cerrado_por": string | null,"creado_por": string | null,"created_at": string,"cuenta_id": string,"estado": string,"fecha_desde": string,"fecha_hasta": string,"id": string,"notas": string | null,"saldo_final": number,"saldo_inicial": number
+                  }
+                  Insert: {
+                    "archivo"?: string | null,"cerrado_at"?: string | null,"cerrado_por"?: string | null,"creado_por"?: string | null,"created_at"?: string,"cuenta_id": string,"estado"?: string,"fecha_desde": string,"fecha_hasta": string,"id"?: string,"notas"?: string | null,"saldo_final": number,"saldo_inicial": number
+                  }
+                  Update: {
+                    "archivo"?: string | null,"cerrado_at"?: string | null,"cerrado_por"?: string | null,"creado_por"?: string | null,"created_at"?: string,"cuenta_id"?: string,"estado"?: string,"fecha_desde"?: string,"fecha_hasta"?: string,"id"?: string,"notas"?: string | null,"saldo_final"?: number,"saldo_inicial"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "extractos_cuenta_id_fkey"
+      columns: ["cuenta_id"]
+isOneToOne: false
+      referencedRelation: "cuentas"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"lineas": {
                   Row: {
-                    "asiento_id": string,"centro_costo_id": string | null,"cuenta_id": string,"debe": number,"descripcion": string | null,"disciplina_id": number | null,"haber": number,"id": number,"importe_origen": number | null,"moneda": string | null,"orden": number,"proveedor_id": number | null,"tc": number | null
+                    "asiento_id": string,"centro_costo_id": string | null,"cuenta_id": string,"debe": number,"descripcion": string | null,"disciplina_id": number | null,"haber": number,"id": number,"importe_origen": number | null,"moneda": string | null,"orden": number,"proveedor_id": number | null,"tc": number | null,"_importe_en_moneda": number | null
                   }
                   Insert: {
                     "asiento_id": string,"centro_costo_id"?: string | null,"cuenta_id": string,"debe"?: number,"descripcion"?: string | null,"disciplina_id"?: number | null,"haber"?: number,"id"?: never,"importe_origen"?: number | null,"moneda"?: string | null,"orden": number,"proveedor_id"?: number | null,"tc"?: number | null
@@ -276,6 +383,56 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"presupuesto_lineas": {
+                  Row: {
+                    "centro_costo_id": string | null,"cuenta_id": string,"id": number,"importe": number,"mes": number,"presupuesto_id": string
+                  }
+                  Insert: {
+                    "centro_costo_id"?: string | null,"cuenta_id": string,"id"?: never,"importe": number,"mes": number,"presupuesto_id": string
+                  }
+                  Update: {
+                    "centro_costo_id"?: string | null,"cuenta_id"?: string,"id"?: never,"importe"?: number,"mes"?: number,"presupuesto_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "presupuesto_lineas_centro_costo_id_fkey"
+      columns: ["centro_costo_id"]
+isOneToOne: false
+      referencedRelation: "centros_costo"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "presupuesto_lineas_cuenta_id_fkey"
+      columns: ["cuenta_id"]
+isOneToOne: false
+      referencedRelation: "cuentas"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "presupuesto_lineas_presupuesto_id_fkey"
+      columns: ["presupuesto_id"]
+isOneToOne: false
+      referencedRelation: "presupuestos"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"presupuestos": {
+                  Row: {
+                    "aprobado_at": string | null,"aprobado_por": string | null,"creado_por": string | null,"created_at": string,"ejercicio_id": string,"estado": string,"id": string,"nombre": string,"notas": string | null,"version": number
+                  }
+                  Insert: {
+                    "aprobado_at"?: string | null,"aprobado_por"?: string | null,"creado_por"?: string | null,"created_at"?: string,"ejercicio_id": string,"estado"?: string,"id"?: string,"nombre": string,"notas"?: string | null,"version": number
+                  }
+                  Update: {
+                    "aprobado_at"?: string | null,"aprobado_por"?: string | null,"creado_por"?: string | null,"created_at"?: string,"ejercicio_id"?: string,"estado"?: string,"id"?: string,"nombre"?: string,"notas"?: string | null,"version"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "presupuestos_ejercicio_id_fkey"
+      columns: ["ejercicio_id"]
+isOneToOne: false
+      referencedRelation: "ejercicios"
+      referencedColumns: ["id"]
+    }
+                  ]
                 }
           }
           Views: {
@@ -291,8 +448,16 @@ isOneToOne: false
 "_exigir_lectura":
 { Args: Record<PropertyKey, never>; Returns: undefined
                            },
+"_flujo_asiento":
+{ Args: { "p_asiento": string,"p_disponibilidad"?: string }; Returns: {
+              "centro_costo_id": string,"cuenta_id": string,"importe": number
+            }[]
+                           },
 "_hoy":
 { Args: Record<PropertyKey, never>; Returns: string
+                           },
+"_importe_en_moneda":
+{ Args: { "p_linea": Database["contabilidad"]['Tables']["lineas"]['Row'] }; Returns: number
                            },
 "_insertar_lineas":
 { Args: { "p_asiento": string,"p_fecha": string,"p_lineas": Json }; Returns: undefined
@@ -312,23 +477,41 @@ isOneToOne: false
 "_revertir":
 { Args: { "p_fecha": string,"p_id": string,"p_motivo": string }; Returns: string
                            },
+"_saldo_cuentas":
+{ Args: { "p_cuentas": (string)[],"p_fecha": string,"p_inicio": boolean,"p_origen": boolean }; Returns: number
+                           },
 "_tiene_rol":
 { Args: { "p_roles": (string)[] }; Returns: boolean
                            },
 "_usuario":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
+"aprobar_presupuesto":
+{ Args: { "p_presupuesto": string }; Returns: undefined
+                           },
 "cerrar_ejercicio":
 { Args: { "p_ejercicio": string }; Returns: string
+                           },
+"cerrar_extracto":
+{ Args: { "p_extracto": string }; Returns: undefined
                            },
 "cerrar_periodo":
 { Args: { "p_periodo": string }; Returns: undefined
                            },
+"conciliar":
+{ Args: { "p_extracto": string,"p_lineas": (number)[],"p_movimientos": (number)[] }; Returns: number
+                           },
 "confirmar_asiento":
 { Args: { "p_id": string }; Returns: number
                            },
+"contabilizar_movimiento_extracto":
+{ Args: { "p_contrapartida": string,"p_descripcion"?: string,"p_extra"?: Json,"p_movimiento": number }; Returns: string
+                           },
 "crear_ejercicio":
 { Args: { "p_anio": number }; Returns: string
+                           },
+"crear_presupuesto":
+{ Args: { "p_base"?: string,"p_ejercicio": string,"p_meses"?: number,"p_nombre"?: string }; Returns: string
                            },
 "cuenta_para":
 { Args: { "p_moneda"?: string,"p_proceso": string,"p_rol": string }; Returns: string
@@ -339,11 +522,36 @@ isOneToOne: false
 "declarar_sin_saldos_iniciales":
 { Args: { "p_ejercicio": string,"p_valor": boolean }; Returns: undefined
                            },
+"desconciliar":
+{ Args: { "p_conciliacion": number }; Returns: undefined
+                           },
+"ejecucion_presupuesto":
+{ Args: { "p_mes_desde"?: number,"p_mes_hasta"?: number,"p_por_centro"?: boolean,"p_presupuesto": string }; Returns: {
+              "centro_costo_id": string,"cuenta_id": string,"desvio": number,"ejecutado": number,"presupuestado": number
+            }[]
+                           },
 "eliminar_borrador":
 { Args: { "p_id": string }; Returns: undefined
                            },
+"eliminar_extracto":
+{ Args: { "p_extracto": string }; Returns: undefined
+                           },
+"eliminar_presupuesto":
+{ Args: { "p_presupuesto": string }; Returns: undefined
+                           },
+"flujo_caja":
+{ Args: { "p_desde": string,"p_disponibilidad"?: string,"p_hasta": string }; Returns: {
+              "anio": number,"centro_costo_id": string,"cuenta_id": string,"importe": number,"mes": number,"revaluacion": boolean
+            }[]
+                           },
 "guardar_asiento":
 { Args: { "p_confirmar"?: boolean,"p_descripcion": string,"p_fecha": string,"p_id": string,"p_lineas": Json,"p_tipo"?: Database["contabilidad"]['Enums']["tipo_asiento"] }; Returns: string
+                           },
+"guardar_presupuesto_lineas":
+{ Args: { "p_lineas": Json,"p_presupuesto": string }; Returns: number
+                           },
+"importar_extracto":
+{ Args: { "p_archivo"?: string,"p_cuenta": string,"p_desde": string,"p_hasta": string,"p_movimientos": Json,"p_saldo_final": number,"p_saldo_inicial": number }; Returns: string
                            },
 "libro_mayor":
 { Args: { "p_cuenta": string,"p_desde": string,"p_hasta": string }; Returns: {
@@ -367,17 +575,33 @@ isOneToOne: false
 "reabrir_ejercicio":
 { Args: { "p_ejercicio": string }; Returns: undefined
                            },
+"reabrir_extracto":
+{ Args: { "p_extracto": string }; Returns: undefined
+                           },
 "reabrir_periodo":
 { Args: { "p_periodo": string }; Returns: undefined
                            },
 "registrar_cotizacion":
 { Args: { "p_fecha": string,"p_fuente"?: string,"p_moneda": string,"p_tasa": number }; Returns: undefined
                            },
+"resultado_real":
+{ Args: { "p_desde": string,"p_hasta": string }; Returns: {
+              "anio": number,"centro_costo_id": string,"cuenta_id": string,"importe": number,"mes": number
+            }[]
+                           },
+"resumen_conciliacion":
+{ Args: { "p_extracto": string }; Returns: {
+              "cantidad_pendientes": number,"diferencia": number,"diferencia_inicial": number,"movimientos_sin_conciliar": number,"pendientes": number,"saldo_banco": number,"saldo_libros": number
+            }[]
+                           },
 "revaluar_moneda_extranjera":
 { Args: { "p_fecha": string }; Returns: string
                            },
 "revertir_asiento":
 { Args: { "p_fecha"?: string,"p_id": string,"p_motivo": string }; Returns: string
+                           },
+"saldo_disponibilidades":
+{ Args: { "p_disponibilidad"?: string,"p_fecha": string }; Returns: number
                            },
 "saldos":
 { Args: { "p_desde": string,"p_excluir_cierre"?: boolean,"p_hasta": string }; Returns: {
@@ -386,6 +610,11 @@ isOneToOne: false
                            },
 "sincronizar_centros_disciplinas":
 { Args: Record<PropertyKey, never>; Returns: number
+                           },
+"sugerir_conciliacion":
+{ Args: { "p_dias"?: number,"p_extracto": string }; Returns: {
+              "dias": number,"linea_id": number,"movimiento_id": number
+            }[]
                            },
 "tc_cierre":
 { Args: { "p_fecha": string,"p_moneda": string }; Returns: number
