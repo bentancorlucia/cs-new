@@ -39,8 +39,10 @@ export type CentroCostoPlan = Pick<
 export const NOMBRE_ROL_SISTEMA: Record<string, string> = {
   resultado_ejercicio: "Resultado del ejercicio",
   resultados_acumulados: "Resultados acumulados",
-  diferencia_cambio_ganada: "Dif. de cambio ganada",
-  diferencia_cambio_perdida: "Dif. de cambio perdida",
+  diferencia_cambio_ganada: "Dif. de cambio ganada (revaluación)",
+  diferencia_cambio_perdida: "Dif. de cambio perdida (revaluación)",
+  diferencia_cambio_ganada_realizada: "Dif. de cambio ganada (realizada)",
+  diferencia_cambio_perdida_realizada: "Dif. de cambio perdida (realizada)",
 };
 
 /** Activo y egreso son deudoras; pasivo, patrimonio e ingreso, acreedoras. */

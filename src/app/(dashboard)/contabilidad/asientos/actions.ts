@@ -186,7 +186,7 @@ export type FilaExportacion = {
   tc: number | null;
 };
 
-/** Solo lectura: todas las líneas del rango filtrado del libro diario. */
+/** Solo lectura: las líneas de los asientos confirmados del rango filtrado (sin borradores). */
 export async function exportarLibroDiario(
   f: FiltrosLibro
 ): Promise<{ ok: boolean; filas?: FilaExportacion[]; error?: string }> {
@@ -202,7 +202,9 @@ export async function exportarLibroDiario(
       tipo: f.tipo ?? undefined,
       q: typeof f.q === "string" ? f.q : "",
     });
-    const asientos = await todosLosAsientos(filtros);
+    // Los borradores no son registros contables: no se exportan.
+    const asientos =
+      filtros.estado === "borrador" ? [] : await todosLosAsientos({ ...filtros, estado: "confirmado" });
     const filas: FilaExportacion[] = [];
     for (const a of asientos) {
       for (const l of a.lineas) {

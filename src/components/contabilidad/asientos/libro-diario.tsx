@@ -128,7 +128,7 @@ export function LibroDiario({
         return;
       }
       if (r.filas.length === 0) {
-        toast.info("No hay movimientos para exportar en ese rango");
+        toast.info("No hay asientos confirmados para exportar en ese rango");
         return;
       }
       const XLSX = await import("xlsx");
@@ -171,7 +171,7 @@ export function LibroDiario({
         ];
       });
       const ws = XLSX.utils.aoa_to_sheet([
-        [`Libro diario del ${formatFecha(filtros.desde)} al ${formatFecha(filtros.hasta)}`],
+        [`Libro diario del ${formatFecha(filtros.desde)} al ${formatFecha(filtros.hasta)} (solo asientos confirmados)`],
         [],
         encabezado,
         ...filas,
@@ -458,11 +458,12 @@ export function LibroDiario({
         >
           <div>
             <div className="font-heading text-[11px] uppercase tracking-editorial text-muted-foreground">
-              Totales del período
+              Totales del período · confirmados
             </div>
             <div className="text-xs text-muted-foreground">
               {total} asiento{total === 1 ? "" : "s"}
-              {totales.borradores > 0 && ` · ${totales.borradores} en borrador`}
+              {totales.borradores > 0 &&
+                ` · ${totales.borradores} en borrador, fuera de los totales`}
             </div>
           </div>
           <div className="flex items-center gap-6">

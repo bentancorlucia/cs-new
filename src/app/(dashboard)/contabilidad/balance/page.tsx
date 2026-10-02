@@ -71,9 +71,17 @@ export default async function BalancesPage({ searchParams }: { searchParams: Sea
   // "anterior" acumula desde el inicio del ejercicio, así que el estado de
   // situación a `hasta` usa anterior + período.
   const [rango, conCierre, centros, lineasCentro] = await Promise.all([
-    db.rpc("saldos", { p_desde: desde, p_hasta: hasta, p_excluir_cierre: true }),
+    // Una fila por cuenta: hoy entra en una página, pero se pagina igual.
+    leerPaginado((a, b) =>
+      db.rpc("saldos", { p_desde: desde, p_hasta: hasta, p_excluir_cierre: true }).order("cuenta_id").range(a, b)
+    ),
     incluyeCierre
-      ? db.rpc("saldos", { p_desde: desde, p_hasta: hasta, p_excluir_cierre: false })
+      ? leerPaginado((a, b) =>
+          db
+            .rpc("saldos", { p_desde: desde, p_hasta: hasta, p_excluir_cierre: false })
+            .order("cuenta_id")
+            .range(a, b)
+        )
       : Promise.resolve(null),
     verCentros ? db.from("centros_costo").select("id, codigo, nombre, disciplina_id") : Promise.resolve(null),
     verCentros && idsResultado.length > 0
@@ -95,16 +103,16 @@ export default async function BalancesPage({ searchParams }: { searchParams: Sea
 
   const error =
     (errorCuentas && mensajeError(errorCuentas)) ||
-    (rango.error && mensajeError(rango.error)) ||
-    (conCierre?.error && mensajeError(conCierre.error)) ||
+    rango.error ||
+    conCierre?.error ||
     (centros?.error && mensajeError(centros.error)) ||
     lineasCentro?.error ||
     null;
 
-  const filas = rango.data ?? [];
+  const filas = rango.filas;
   const cuentaResultadoId = sistema?.cuenta_id ?? plan.find((c) => c.codigo === "3.4.02")?.id ?? null;
 
-  const sumas = sumasYSaldos(plan, conCierre?.data ?? filas);
+  const sumas = sumasYSaldos(plan, conCierre?.filas ?? filas);
   const situacion = estadoSituacion(plan, filas, { cuentaResultadoId });
   const resultados = estadoResultados(plan, filas);
   let porCentro: ResultadosPorCentro | null = null;

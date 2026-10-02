@@ -152,13 +152,13 @@ isOneToOne: false
                   ]
                 },"ejercicios": {
                   Row: {
-                    "cerrado_at": string | null,"cerrado_por": string | null,"created_at": string,"estado": Database["contabilidad"]['Enums']["estado_periodo"],"fecha_fin": string,"fecha_inicio": string,"id": string,"nombre": string
+                    "cerrado_at": string | null,"cerrado_por": string | null,"created_at": string,"estado": Database["contabilidad"]['Enums']["estado_periodo"],"fecha_fin": string,"fecha_inicio": string,"id": string,"nombre": string,"sin_saldos_iniciales": boolean
                   }
                   Insert: {
-                    "cerrado_at"?: string | null,"cerrado_por"?: string | null,"created_at"?: string,"estado"?: Database["contabilidad"]['Enums']["estado_periodo"],"fecha_fin": string,"fecha_inicio": string,"id"?: string,"nombre": string
+                    "cerrado_at"?: string | null,"cerrado_por"?: string | null,"created_at"?: string,"estado"?: Database["contabilidad"]['Enums']["estado_periodo"],"fecha_fin": string,"fecha_inicio": string,"id"?: string,"nombre": string,"sin_saldos_iniciales"?: boolean
                   }
                   Update: {
-                    "cerrado_at"?: string | null,"cerrado_por"?: string | null,"created_at"?: string,"estado"?: Database["contabilidad"]['Enums']["estado_periodo"],"fecha_fin"?: string,"fecha_inicio"?: string,"id"?: string,"nombre"?: string
+                    "cerrado_at"?: string | null,"cerrado_por"?: string | null,"created_at"?: string,"estado"?: Database["contabilidad"]['Enums']["estado_periodo"],"fecha_fin"?: string,"fecha_inicio"?: string,"id"?: string,"nombre"?: string,"sin_saldos_iniciales"?: boolean
                   }
                   Relationships: [
                     
@@ -324,8 +324,14 @@ isOneToOne: false
 "crear_ejercicio":
 { Args: { "p_anio": number }; Returns: string
                            },
+"cuenta_para":
+{ Args: { "p_moneda"?: string,"p_proceso": string,"p_rol": string }; Returns: string
+                           },
 "cuenta_sistema":
 { Args: { "p_rol": string }; Returns: string
+                           },
+"declarar_sin_saldos_iniciales":
+{ Args: { "p_ejercicio": string,"p_valor": boolean }; Returns: undefined
                            },
 "eliminar_borrador":
 { Args: { "p_id": string }; Returns: undefined

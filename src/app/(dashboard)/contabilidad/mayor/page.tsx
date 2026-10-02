@@ -80,7 +80,12 @@ export default async function LibroMayorPage({ searchParams }: { searchParams: S
   if (elegida) {
     const tipoAux = elegida.requiere_auxiliar;
     const [mayor, saldo, anteriores] = await Promise.all([
-      db.rpc("libro_mayor", { p_cuenta: elegida.id, p_desde: desde, p_hasta: hasta }),
+      // PostgREST también corta las funciones en max_rows: se pide por lotes.
+      // Sin .order(): libro_mayor ya devuelve las filas ordenadas (fecha,
+      // número, orden de línea) y reordenar acá perdería el orden de línea.
+      leerPaginado<MovimientoMayor>((a, b) =>
+        db.rpc("libro_mayor", { p_cuenta: elegida.id, p_desde: desde, p_hasta: hasta }).range(a, b)
+      ),
       db.rpc("saldos", { p_desde: desde, p_hasta: hasta }).eq("cuenta_id", elegida.id).maybeSingle(),
       // Saldo anterior por auxiliar: líneas del ejercicio previas a `desde`
       tipoAux && desde > ejercicio.fecha_inicio
@@ -98,11 +103,11 @@ export default async function LibroMayorPage({ searchParams }: { searchParams: S
         : Promise.resolve({ filas: [], error: null }),
     ]);
 
-    if (mayor.error) error = mensajeError(mayor.error);
+    if (mayor.error) error = mayor.error;
     else if (saldo.error) error = mensajeError(saldo.error);
     else if (anteriores.error) error = anteriores.error;
 
-    movimientos = mayor.data ?? [];
+    movimientos = mayor.filas;
     if (saldo.data) {
       saldoAnterior = saldoPresentacion(
         elegida.clase,

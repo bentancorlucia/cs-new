@@ -21,7 +21,7 @@ INSERT INTO public.proveedores (id, nombre) VALUES (990001, 'Proveedor de prueba
 -- Plan de cuentas
 -- ------------------------------------------------------------
 SELECT cmp_ok((SELECT count(*) FROM contabilidad.cuentas), '>', 100::bigint, 'plan de cuentas base cargado');
-SELECT is((SELECT count(*) FROM contabilidad.cuentas_sistema), 4::bigint, 'cuentas de sistema configuradas');
+SELECT is((SELECT count(*) FROM contabilidad.cuentas_sistema), 6::bigint, 'cuentas de sistema configuradas');
 SELECT is((SELECT clase::text FROM contabilidad.cuentas WHERE codigo = '1.2.01.02'), 'activo',
           'la clase se hereda del padre');
 SELECT is((SELECT naturaleza::text FROM contabilidad.cuentas WHERE codigo = '1.2.01.02'), 'acreedora',

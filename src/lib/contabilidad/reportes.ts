@@ -16,7 +16,7 @@
  * de presentación de sus hijas: todas son de la misma clase.
  */
 import type { Database } from "@/types/contabilidad";
-import { saldoPresentacion, type ClaseCuenta } from "./formato";
+import { mensajeError, saldoPresentacion, type ClaseCuenta } from "./formato";
 
 type Tablas = Database["contabilidad"]["Tables"];
 type Funciones = Database["contabilidad"]["Functions"];
@@ -925,17 +925,21 @@ export function resultadoDelMes(
 /**
  * Pide páginas de `tamanio` filas hasta que una venga incompleta.
  * `pedir(desde, hasta)` tiene que aplicar `.range(desde, hasta)` sobre
- * una consulta con orden estable.
+ * una consulta (o función, vía `rpc`) con orden estable: el límite
+ * max_rows de PostgREST también corta lo que devuelven las funciones.
  */
 export async function leerPaginado<T>(
-  pedir: (desde: number, hasta: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  pedir: (
+    desde: number,
+    hasta: number
+  ) => PromiseLike<{ data: T[] | null; error: { message: string; code?: string } | null }>,
   tamanio = 1000,
   maxPaginas = 200
 ): Promise<{ filas: T[]; error: string | null }> {
   const filas: T[] = [];
   for (let p = 0; p < maxPaginas; p++) {
     const { data, error } = await pedir(p * tamanio, (p + 1) * tamanio - 1);
-    if (error) return { filas, error: error.message };
+    if (error) return { filas, error: mensajeError(error) };
     const lote = data ?? [];
     filas.push(...lote);
     if (lote.length < tamanio) return { filas, error: null };

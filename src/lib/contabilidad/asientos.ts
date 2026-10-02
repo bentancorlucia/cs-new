@@ -172,6 +172,8 @@ function consultaLibro(supabase: ContabilidadClient, f: FiltrosLibro, contar = f
     .order("fecha", { ascending: true })
     .order("numero", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true })
+    // Desempate único: sin él la paginación por rangos puede repetir u omitir asientos.
+    .order("id", { ascending: true })
     .order("orden", { referencedTable: "lineas", ascending: true });
 }
 
@@ -240,7 +242,11 @@ export async function listarLibroDiario(f: FiltrosLibro): Promise<{
   };
 }
 
-/** Todos los asientos del rango filtrado (para totales y exportación). */
+/**
+ * Todos los asientos del rango filtrado (para totales y exportación).
+ * Las líneas vienen embebidas: el max_rows de PostgREST solo limita los
+ * asientos (nivel superior), que se recorren en lotes.
+ */
 export async function todosLosAsientos(f: FiltrosLibro): Promise<AsientoLibro[]> {
   const supabase = await createContabilidadClient();
   const salida: AsientoLibro[] = [];
@@ -254,13 +260,17 @@ export async function todosLosAsientos(f: FiltrosLibro): Promise<AsientoLibro[]>
   return salida;
 }
 
+/** Totales del período: solo asientos confirmados; los borradores se cuentan aparte. */
 export async function totalesLibro(f: FiltrosLibro): Promise<{ debe: number; haber: number; borradores: number }> {
   const asientos = await todosLosAsientos(f);
   let debe = 0;
   let haber = 0;
   let borradores = 0;
   for (const a of asientos) {
-    if (a.estado === "borrador") borradores++;
+    if (a.estado === "borrador") {
+      borradores++;
+      continue;
+    }
     for (const l of a.lineas) {
       debe += l.debe;
       haber += l.haber;

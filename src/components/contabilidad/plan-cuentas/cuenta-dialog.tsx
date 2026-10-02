@@ -85,6 +85,8 @@ export function CuentaDialog({
     base?.naturaleza ?? naturalezaPorDefecto(clase)
   );
   const [moneda, setMoneda] = useState<"UYU" | "USD">(base?.moneda === "USD" ? "USD" : "UYU");
+  // Por defecto las cuentas en USD son monetarias (se revalúan).
+  const [revalua, setRevalua] = useState(base?.moneda === "USD" ? base.revalua : true);
   const [disponibilidad, setDisponibilidad] = useState(base?.es_disponibilidad ?? false);
   const [auxiliar, setAuxiliar] = useState<Auxiliar>(base?.requiere_auxiliar ?? "ninguno");
   const [centroCosto, setCentroCosto] = useState(base?.requiere_centro_costo ?? false);
@@ -105,6 +107,7 @@ export function CuentaDialog({
       imputable,
       naturaleza,
       moneda,
+      revalua: moneda === "USD" && revalua,
       es_disponibilidad: disponibilidad,
       requiere_auxiliar: auxiliar,
       requiere_centro_costo: centroCosto,
@@ -239,7 +242,9 @@ export function CuentaDialog({
                       etiqueta="Moneda"
                       ayuda={
                         moneda === "USD"
-                          ? "Se revalúa con la cotización BCU al cierre."
+                          ? revalua
+                            ? "Se revalúa con la cotización BCU al cierre."
+                            : "No se revalúa: queda a la cotización histórica."
                           : "Moneda funcional del club."
                       }
                     >
@@ -255,6 +260,27 @@ export function CuentaDialog({
                           ]}
                         />
                       </Bloqueable>
+                      <AnimatePresence initial={false}>
+                        {moneda === "USD" && (
+                          <motion.div
+                            key="revalua"
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={easeSnappy}
+                            className="overflow-hidden"
+                          >
+                            <div className="pt-1">
+                              <FilaSwitch
+                                titulo="Revaluar al cierre (partida monetaria)"
+                                ayuda="Saldos en dólares que se ajustan a la cotización del cierre: cajas, bancos, deudas y créditos en USD. Los anticipos no se revalúan."
+                                checked={revalua}
+                                onChange={setRevalua}
+                              />
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </Campo>
                   )}
 

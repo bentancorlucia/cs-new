@@ -97,6 +97,8 @@ const flagsCuenta = {
   imputable: z.boolean(),
   naturaleza: z.enum(["deudora", "acreedora"]),
   moneda: z.enum(["UYU", "USD"]),
+  /** Solo cuenta si la moneda es USD: partida monetaria que se ajusta al cierre. */
+  revalua: z.boolean(),
   es_disponibilidad: z.boolean(),
   requiere_auxiliar: z.enum(["ninguno", "proveedor", "disciplina"]),
   requiere_centro_costo: z.boolean(),
@@ -138,7 +140,8 @@ function normalizarFlags(f: Flags, clase: Database["contabilidad"]["Enums"]["cla
   return {
     imputable: true,
     moneda,
-    revalua: moneda !== null,
+    // Las partidas no monetarias en USD (ej. anticipos) no se revalúan.
+    revalua: moneda !== null && f.revalua,
     es_disponibilidad: clase === "activo" ? f.es_disponibilidad : false,
     requiere_auxiliar: f.requiere_auxiliar === "ninguno" ? null : f.requiere_auxiliar,
     requiere_centro_costo: f.requiere_centro_costo,

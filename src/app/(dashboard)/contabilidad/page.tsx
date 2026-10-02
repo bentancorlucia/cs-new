@@ -1,11 +1,12 @@
 import { createContabilidadClient } from "@/lib/contabilidad/server";
 import { permisosContabilidad } from "@/lib/contabilidad/permisos";
-import { hoyUruguay, mensajeError } from "@/lib/contabilidad/formato";
+import { hoyUruguay } from "@/lib/contabilidad/formato";
 import {
   COLUMNAS_CUENTA_PLAN,
   diasEntre,
   ejercicioActual,
   finDeMes,
+  leerPaginado,
   resultadoAcumulado,
   resultadoDelMes,
   totalDisponibilidades,
@@ -57,6 +58,15 @@ export default async function ContabilidadResumenPage() {
     d = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
   }
 
+  // Una fila por cuenta: hoy entra en una página, pero se pagina igual.
+  const saldos = (pDesde: string, pHasta: string) =>
+    leerPaginado((a, b) =>
+      db
+        .rpc("saldos", { p_desde: pDesde, p_hasta: pHasta, p_excluir_cierre: true })
+        .order("cuenta_id")
+        .range(a, b)
+    );
+
   const [
     { data: cuentas },
     { data: periodos },
@@ -68,7 +78,7 @@ export default async function ContabilidadResumenPage() {
   ] = await Promise.all([
     db.from("cuentas").select(COLUMNAS_CUENTA_PLAN),
     db.from("periodos").select("id, mes, anio, estado, fecha_inicio, fecha_fin").eq("ejercicio_id", ejercicio.id).order("fecha_inicio"),
-    db.rpc("saldos", { p_desde: ini, p_hasta: hasta, p_excluir_cierre: true }),
+    saldos(ini, hasta),
     db.from("asientos").select("id", { count: "exact", head: true }).eq("estado", "borrador"),
     db
       .from("asientos")
@@ -76,18 +86,18 @@ export default async function ContabilidadResumenPage() {
       .eq("ejercicio_id", ejercicio.id)
       .eq("estado", "confirmado"),
     db.from("cotizaciones").select("fecha, tasa, fuente").eq("moneda", "USD").order("fecha", { ascending: false }).limit(1).maybeSingle(),
-    ...meses.map((m) => db.rpc("saldos", { p_desde: m.desde, p_hasta: m.hasta, p_excluir_cierre: true })),
+    ...meses.map((m) => saldos(m.desde, m.hasta)),
   ]);
 
   const plan = cuentas ?? [];
-  const filas = saldosEjercicio.data ?? [];
+  const filas = saldosEjercicio.filas;
   const disponibilidades = totalDisponibilidades(plan, filas);
   const resultado = resultadoAcumulado(plan, filas);
-  const evolucion: ResultadoMes[] = meses.map((m, i) => resultadoDelMes(m.mes, plan, porMes[i]?.data ?? []));
+  const evolucion: ResultadoMes[] = meses.map((m, i) => resultadoDelMes(m.mes, plan, porMes[i]?.filas ?? []));
 
   const error =
-    (saldosEjercicio.error && mensajeError(saldosEjercicio.error)) ||
-    porMes.map((r) => r.error && mensajeError(r.error)).find(Boolean) ||
+    saldosEjercicio.error ||
+    porMes.map((r) => r.error).find(Boolean) ||
     null;
 
   return (
