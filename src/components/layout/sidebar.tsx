@@ -67,29 +67,26 @@ interface NavSection {
 
 const NAV_SECTIONS: NavSection[] = [
   {
-    title: "Tienda",
+    title: "Tienda · Ventas",
     requiredRoles: ["super_admin", "tienda"],
     items: [
-      { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
+      { href: "/admin", label: "Resumen", icon: LayoutDashboard, exact: true },
       { href: "/admin/pedidos", label: "Pedidos", icon: ClipboardList },
-      { href: "/admin/productos", label: "Productos", icon: Package },
-      { href: "/admin/categorias", label: "Categorías", icon: Tag },
-      { href: "/admin/promocodes", label: "Promocodes", icon: TicketPercent },
-      { href: "/admin/stock", label: "Stock", icon: BarChart3 },
-      { href: "/admin/pos", label: "POS", icon: MonitorSmartphone },
-      { href: "/admin/pos/caja", label: "Historial de caja", icon: Wallet },
-      { href: "/admin/donaciones", label: "Donaciones", icon: Heart },
+      { href: "/admin/pos", label: "Punto de venta", icon: MonitorSmartphone, exact: true },
+      { href: "/admin/pos/caja", label: "Caja", icon: Wallet },
       { href: "/pedidos-disciplinas", label: "Pedidos de disciplinas", icon: Dumbbell },
+      { href: "/admin/donaciones", label: "Donaciones", icon: Heart },
       { href: "/admin/reportes", label: "Reportes", icon: FileSpreadsheet },
     ],
   },
   {
-    title: "Eventos",
-    requiredRoles: ["super_admin", "eventos", "scanner"],
+    title: "Tienda · Catálogo y stock",
+    requiredRoles: ["super_admin", "tienda"],
     items: [
-      { href: "/eventos/admin", label: "Eventos", icon: Calendar },
-      { href: "/eventos/crear", label: "Crear evento", icon: Plus },
-      { href: "/eventos/scanner", label: "Scanner", icon: QrCode },
+      { href: "/admin/productos", label: "Productos", icon: Package },
+      { href: "/admin/categorias", label: "Categorías", icon: Tag },
+      { href: "/admin/promocodes", label: "Promocodes", icon: TicketPercent },
+      { href: "/admin/stock", label: "Stock", icon: BarChart3 },
     ],
   },
   {
@@ -112,9 +109,9 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/contabilidad/balance", label: "Balances", icon: Scale },
       { href: "/contabilidad/plan-de-cuentas", label: "Plan de cuentas", icon: ListTree },
       { href: "/contabilidad/ejercicios", label: "Ejercicios", icon: CalendarRange },
+      { href: "/contabilidad/cotizaciones", label: "Cotizaciones", icon: DollarSign },
       { href: "/pedidos-disciplinas", label: "Cuenta de disciplinas", icon: Dumbbell, roles: ["super_admin", "tesorero"] },
       { href: "/admin/reportes", label: "Reportes de tienda", icon: FileSpreadsheet, roles: ["tesorero", "comision_fiscal"] },
-      { href: "/contabilidad/cotizaciones", label: "Cotizaciones", icon: DollarSign },
     ],
   },
   {
@@ -125,6 +122,15 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/secretaria/disciplinas", label: "Disciplinas", icon: Dumbbell },
       { href: "/secretaria/staff", label: "Staff", icon: UserCog },
       { href: "/secretaria/popups", label: "Popups", icon: Megaphone },
+    ],
+  },
+  {
+    title: "Eventos",
+    requiredRoles: ["super_admin", "eventos", "scanner"],
+    items: [
+      { href: "/eventos/admin", label: "Eventos", icon: Calendar },
+      { href: "/eventos/crear", label: "Crear evento", icon: Plus },
+      { href: "/eventos/scanner", label: "Scanner", icon: QrCode },
     ],
   },
   {
