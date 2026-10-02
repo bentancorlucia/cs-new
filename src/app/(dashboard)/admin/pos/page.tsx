@@ -1,20 +1,29 @@
 import { redirect } from "next/navigation";
-import { getUserRoles } from "@/lib/supabase/roles";
-import { POSClient } from "./pos-client";
+import { permisosComercial } from "@/lib/comercial/server";
+import { leerCatalogosCaja, leerEstadoCaja } from "@/lib/comercial/caja";
+import { catalogoPos } from "./datos";
+import { PosClient } from "./pos-client";
 
 export const metadata = {
   title: "POS",
-  description: "Punto de venta presencial",
+  description: "Punto de venta presencial con caja",
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function POSPage() {
-  const roles = await getUserRoles();
-  const hasAccess =
-    roles.includes("super_admin") || roles.includes("tienda");
+  const { puedeOperar } = await permisosComercial();
+  if (!puedeOperar) redirect("/login");
 
-  if (!hasAccess) {
-    redirect("/login");
-  }
+  const [catalogo, estado] = await Promise.all([catalogoPos(), leerEstadoCaja()]);
+  const catalogos = await leerCatalogosCaja(estado.caja?.cuenta_id ?? null);
 
-  return <POSClient />;
+  return (
+    <PosClient
+      productosIniciales={catalogo.productos}
+      categorias={catalogo.categorias}
+      estadoInicial={estado}
+      catalogosCaja={catalogos}
+    />
+  );
 }

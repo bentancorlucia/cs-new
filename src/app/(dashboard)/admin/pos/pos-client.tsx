@@ -1,589 +1,183 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import Image from "next/image";
-import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-  Search,
-  Plus,
-  Minus,
-  Trash2,
+  ArrowLeft,
   Banknote,
+  Building2,
+  Check,
+  Coins,
+  Lock,
+  Mail,
+  PackageOpen,
+  Percent,
+  RefreshCw,
+  Search,
+  ShoppingCart,
+  Trash2,
   UserSearch,
   X,
-  ShoppingCart,
-  PackageOpen,
-  Check,
-  Loader2,
-  ArrowLeft,
-  Percent,
-  Building2,
-  Upload,
-  Copy,
-  FileImage,
-  Coins,
-  Mail,
-  Sparkles,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { createBrowserClient } from "@/lib/supabase/client";
-import { MtoForm, calcularExtraSeguro } from "@/components/tienda/mto-form";
-import { validarValoresMto, validarRestriccionSocios } from "@/lib/mto/schema";
-import { resumirPersonalizacion } from "@/lib/mto/pricing";
-import {
-  calcularDescuentoManual,
-  precioListaUnitario,
-  precioSocioUnitario,
-  round2,
-} from "@/lib/tienda/precios";
-import type { MtoCampo, MtoValores } from "@/types/mto";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import type { CatalogosCaja, EstadoCaja, TipoMovimientoCaja } from "@/lib/comercial/caja";
+import { calcularDescuentoManual, precioListaUnitario, precioSocioUnitario, round2 } from "@/lib/tienda/precios";
+import { easeSnappy, fadeInLeft, fadeInRight, springBouncy, springSmooth, staggerContainer } from "@/lib/motion";
+import type {
+  CategoriaPos,
+  ItemCarrito,
+  MetodoPagoPos,
+  ProductoPos,
+  SocioPos,
+  VariantePos,
+} from "@/components/pos/tipos";
+import { nuevaClave, pesos } from "@/components/pos/formato";
+import { PrecioAnimado } from "@/components/pos/precio-animado";
+import { TarjetaProducto } from "@/components/pos/tarjeta-producto";
+import { LineaCarrito, precioLinea } from "@/components/pos/linea-carrito";
+import { SelectorVariante } from "@/components/pos/selector-variante";
+import { DialogoEncargue } from "@/components/pos/dialogo-encargue";
+import { DialogoSocio } from "@/components/pos/dialogo-socio";
+import { DialogoCobro, type ConfirmacionCobro, type ResultadoVenta } from "@/components/pos/dialogo-cobro";
+import { AbrirCaja } from "@/components/caja/abrir-caja";
+import { BarraCaja } from "@/components/caja/barra-caja";
+import { DialogoMovimiento, type DatosMovimiento } from "@/components/caja/dialogo-movimiento";
+import { DialogoCierre } from "@/components/caja/dialogo-cierre";
 import {
-  fadeInUp,
-  fadeInLeft,
-  fadeInRight,
-  scaleIn,
-  staggerContainer,
-  staggerContainerFast,
-  springBouncy,
-  springSmooth,
-  easeSnappy,
-} from "@/lib/motion";
+  abrirCaja,
+  buscarSocio,
+  cerrarCaja,
+  refrescarCaja,
+  refrescarCatalogo,
+  registrarMovimientoCaja,
+} from "./actions";
 
-// ─── Types ───────────────────────────────────────────────────
-
-interface ProductoVariante {
-  id: number;
-  nombre: string;
-  sku: string | null;
-  precio_override: number | null;
-  stock_actual: number;
-  atributos: Record<string, string>;
-  activo: boolean;
-}
-
-interface Producto {
-  id: number;
-  nombre: string;
-  slug: string;
-  precio: number;
-  precio_socio: number | null;
-  stock_actual: number;
-  categoria_id: number | null;
-  activo: boolean;
-  imagen_url: string | null;
-  imagen_focal_point: string | null;
-  variantes: ProductoVariante[];
-  mto_disponible: boolean;
-  mto_solo: boolean;
-  mto_campos: MtoCampo[];
-  mto_tiempo_fabricacion_dias: number | null;
-}
-
-interface Categoria {
-  id: number;
-  nombre: string;
-  slug: string;
-}
-
-interface POSCartItem {
-  /** Identidad de la línea: producto+variante para stock, única por encargue. */
-  key: string;
-  producto_id: number;
-  variante_id: number | null;
-  nombre: string;
-  precio: number;
-  precio_socio: number | null;
-  cantidad: number;
-  stock_actual: number;
-  imagen_url: string | null;
-  imagen_focal_point: string | null;
-  es_encargue: boolean;
-  personalizacion: MtoValores;
-  /** Recargo por unidad de la personalización (0 si no es encargue). */
-  precio_extra: number;
-  resumen: string | null;
-}
-
-// Tope de unidades por línea de encargue (no depende de stock).
-const MAX_CANTIDAD_ENCARGUE = 99;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-interface SocioInfo {
-  id: string;
-  nombre: string;
-  apellido: string;
-  cedula: string | null;
-  es_socio: boolean;
-}
-
-// ─── Animated Counter ────────────────────────────────────────
-
-function AnimatedPrice({ value }: { value: number }) {
-  const motionVal = useMotionValue(0);
-  const display = useTransform(motionVal, (v) =>
-    `$${Math.round(v).toLocaleString("es-UY")}`
-  );
-
-  useEffect(() => {
-    const controls = animate(motionVal, value, {
-      duration: 0.4,
-      ease: [0.25, 0.46, 0.45, 0.94],
-    });
-    return controls.stop;
-  }, [value, motionVal]);
-
-  return <motion.span>{display}</motion.span>;
-}
-
-// ─── Product Card (POS) ─────────────────────────────────────
-
-function POSProductCard({
-  producto,
-  onAdd,
-  usarPrecioSocio,
+export function PosClient({
+  productosIniciales,
+  categorias: categoriasIniciales,
+  estadoInicial,
+  catalogosCaja,
 }: {
-  producto: Producto;
-  onAdd: (p: Producto) => void;
-  usarPrecioSocio: boolean;
+  productosIniciales: ProductoPos[];
+  categorias: CategoriaPos[];
+  estadoInicial: EstadoCaja;
+  catalogosCaja: CatalogosCaja;
 }) {
-  const precioSocio = precioSocioUnitario(producto);
-  const precio = usarPrecioSocio && precioSocio != null
-    ? precioSocio
-    : producto.precio;
-  const sinStock = producto.stock_actual <= 0;
-  // Sin stock pero con encargue: se puede seguir vendiendo bajo encargue.
-  const bloqueado = sinStock && !producto.mto_disponible;
-  const soloEncargue = producto.mto_disponible && (producto.mto_solo || sinStock);
+  // ─── Catálogo y caja ─────────────────────────────────────
+  const [productos, setProductos] = useState(productosIniciales);
+  const [categorias, setCategorias] = useState(categoriasIniciales);
+  const [estado, setEstado] = useState(estadoInicial);
+  const [soloTransferencia, setSoloTransferencia] = useState(false);
+  const [actualizando, iniciarActualizacion] = useTransition();
+  const cajaAbierta = !!estado.sesion;
 
-  return (
-    <motion.button
-      variants={fadeInUp}
-      whileHover={bloqueado ? {} : { scale: 1.03, y: -2 }}
-      whileTap={bloqueado ? {} : { scale: 0.97 }}
-      transition={springBouncy}
-      onClick={() => !bloqueado && onAdd(producto)}
-      disabled={bloqueado}
-      className={`
-        relative flex flex-col items-center rounded-xl border bg-white p-3 text-center
-        transition-shadow duration-200 cursor-pointer select-none
-        ${bloqueado
-          ? "opacity-50 cursor-not-allowed border-gray-200"
-          : "border-linea hover:shadow-card hover:border-bordo-200 active:shadow-sm"
-        }
-      `}
-    >
-      {/* Image */}
-      <div className="relative w-full aspect-square rounded-lg bg-superficie overflow-hidden mb-2">
-        {producto.imagen_url ? (
-          <Image
-            src={producto.imagen_url}
-            alt={producto.nombre}
-            fill
-            className="object-cover"
-            style={{ objectPosition: producto.imagen_focal_point || "50% 50%" }}
-            sizes="120px"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-            <PackageOpen className="size-8" strokeWidth={1} />
-          </div>
-        )}
-        {bloqueado && (
-          <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
-            <Badge variant="destructive" className="text-xs">Agotado</Badge>
-          </div>
-        )}
-      </div>
-
-      {/* Info */}
-      <p className="font-body font-medium text-sm leading-tight line-clamp-2 mb-1">
-        {producto.nombre}
-      </p>
-      <p className="font-heading font-bold text-bordo-700 text-base">
-        ${precio.toLocaleString("es-UY")}
-      </p>
-      {usarPrecioSocio && precioSocio != null && (
-        <p className="text-xs text-muted-foreground line-through">
-          ${producto.precio.toLocaleString("es-UY")}
-        </p>
-      )}
-
-      {/* Stock badge */}
-      {!producto.mto_solo && (
-        <span className="text-[10px] text-muted-foreground mt-1">
-          Stock: {producto.stock_actual}
-        </span>
-      )}
-
-      {/* Encargue indicator */}
-      {producto.mto_disponible && (
-        <Badge className="mt-1 gap-1 text-[9px] px-1.5 py-0 bg-dorado-300/20 text-bordo-800 border border-dorado-300/60">
-          <Sparkles className="size-2.5" />
-          {soloEncargue ? "Bajo encargue" : "Stock o encargue"}
-        </Badge>
-      )}
-
-      {/* Variants indicator */}
-      {producto.variantes.length > 0 && (
-        <Badge variant="outline" className="mt-1 text-[9px] px-1.5 py-0 border-bordo-200 text-bordo-600">
-          {producto.variantes.length} variantes
-        </Badge>
-      )}
-
-      {/* Add overlay */}
-      {!bloqueado && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          whileHover={{ opacity: 1 }}
-          className="absolute inset-0 rounded-xl bg-bordo-800/10 flex items-center justify-center"
-        >
-          <div className="bg-bordo-800 text-white rounded-full p-2 shadow-lg">
-            <Plus className="size-5" />
-          </div>
-        </motion.div>
-      )}
-    </motion.button>
-  );
-}
-
-// ─── Cart Item Row ──────────────────────────────────────────
-
-function CartItemRow({
-  item,
-  usarPrecioSocio,
-  onUpdateQty,
-  onRemove,
-}: {
-  item: POSCartItem;
-  usarPrecioSocio: boolean;
-  onUpdateQty: (key: string, qty: number) => void;
-  onRemove: (key: string) => void;
-}) {
-  const precio = (usarPrecioSocio && item.precio_socio != null
-    ? item.precio_socio
-    : item.precio) + item.precio_extra;
-
-  return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20, height: 0, marginBottom: 0 }}
-      transition={springSmooth}
-      className="flex items-center gap-3 py-2"
-    >
-      {/* Thumbnail */}
-      <div className="size-10 rounded-lg bg-superficie overflow-hidden shrink-0">
-        {item.imagen_url ? (
-          <Image
-            src={item.imagen_url}
-            alt={item.nombre}
-            width={40}
-            height={40}
-            className="object-cover w-full h-full"
-            style={{ objectPosition: item.imagen_focal_point || "50% 50%" }}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <PackageOpen className="size-4 text-muted-foreground" strokeWidth={1} />
-          </div>
-        )}
-      </div>
-
-      {/* Name & price */}
-      <div className="flex-1 min-w-0">
-        <p className="font-body font-medium text-sm leading-tight truncate">
-          {item.nombre}
-        </p>
-        {item.es_encargue && (
-          <p className="flex items-center gap-1 text-[11px] text-bordo-700 truncate">
-            <Sparkles className="size-3 shrink-0" />
-            <span className="truncate">
-              Encargue{item.resumen ? ` · ${item.resumen}` : ""}
-            </span>
-          </p>
-        )}
-        <p className="text-xs text-muted-foreground">
-          ${precio.toLocaleString("es-UY")} c/u
-        </p>
-      </div>
-
-      {/* Quantity controls */}
-      <div className="flex items-center gap-1">
-        <motion.button
-          whileTap={{ scale: 0.85 }}
-          onClick={() => onUpdateQty(item.key, item.cantidad - 1)}
-          className="size-7 rounded-md bg-superficie flex items-center justify-center text-foreground hover:bg-gray-200 transition-colors"
-        >
-          <Minus className="size-3.5" />
-        </motion.button>
-        <span className="w-6 text-center font-body font-semibold text-sm">
-          {item.cantidad}
-        </span>
-        <motion.button
-          whileTap={{ scale: 0.85 }}
-          onClick={() => onUpdateQty(item.key, item.cantidad + 1)}
-          disabled={item.cantidad >= item.stock_actual}
-          className="size-7 rounded-md bg-superficie flex items-center justify-center text-foreground hover:bg-gray-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <Plus className="size-3.5" />
-        </motion.button>
-      </div>
-
-      {/* Subtotal */}
-      <span className="font-heading font-bold text-sm w-20 text-right">
-        ${(precio * item.cantidad).toLocaleString("es-UY")}
-      </span>
-
-      {/* Remove */}
-      <motion.button
-        whileTap={{ scale: 0.85 }}
-        onClick={() => onRemove(item.key)}
-        className="size-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
-      >
-        <Trash2 className="size-3.5" />
-      </motion.button>
-    </motion.div>
-  );
-}
-
-// ─── Main POS Component ─────────────────────────────────────
-
-export function POSClient() {
-  const supabase = useMemo(() => createBrowserClient(), []);
-
-  // State
-  const [productos, setProductos] = useState<Producto[]>([]);
-  const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [loading, setLoading] = useState(true);
+  // ─── Venta ───────────────────────────────────────────────
   const [search, setSearch] = useState("");
   const [categoriaActiva, setCategoriaActiva] = useState<number | null>(null);
-  const [cart, setCart] = useState<POSCartItem[]>([]);
+  const [cart, setCart] = useState<ItemCarrito[]>([]);
   const [nombreCliente, setNombreCliente] = useState("");
   const [emailCliente, setEmailCliente] = useState("");
-  const [socio, setSocio] = useState<SocioInfo | null>(null);
-  const [buscandoSocio, setBuscandoSocio] = useState(false);
-  const [cedulaBusqueda, setCedulaBusqueda] = useState("");
-  const [showSocioSearch, setShowSocioSearch] = useState(false);
-  const [showEfectivoModal, setShowEfectivoModal] = useState(false);
-  const [procesando, setProcesando] = useState(false);
-  const [ventaExitosa, setVentaExitosa] = useState(false);
+  const [socio, setSocio] = useState<SocioPos | null>(null);
+  const [showSocio, setShowSocio] = useState(false);
   const [showMobileCart, setShowMobileCart] = useState(false);
   const [showDescuento, setShowDescuento] = useState(false);
-  const [descuentoManualTipo, setDescuentoManualTipo] = useState<"porcentaje" | "fijo">("porcentaje");
-  const [descuentoManualValor, setDescuentoManualValor] = useState("");
-  const [descuentoManualMotivo, setDescuentoManualMotivo] = useState("");
-  const [showTransferenciaModal, setShowTransferenciaModal] = useState(false);
-  // Pago mixto: el modal de transferencia pide además cuánto se cobra en efectivo.
-  const [modoMixto, setModoMixto] = useState(false);
-  const [montoEfectivoMixto, setMontoEfectivoMixto] = useState("");
-  const [comprobanteFile, setComprobanteFile] = useState<File | null>(null);
-  const [comprobantePreview, setComprobantePreview] = useState<string | null>(null);
-  const [subiendoComprobante, setSubiendoComprobante] = useState(false);
-  const [transferExitosa, setTransferExitosa] = useState(false);
-  const [cuentaCopiada, setCuentaCopiada] = useState(false);
-  const [showVariantePicker, setShowVariantePicker] = useState(false);
-  const [productoVarianteSeleccion, setProductoVarianteSeleccion] = useState<Producto | null>(null);
-  const [productoEncargue, setProductoEncargue] = useState<Producto | null>(null);
-  const [mtoValores, setMtoValores] = useState<MtoValores>({});
-  const comprobanteInputRef = useRef<HTMLInputElement>(null);
+  const [descTipo, setDescTipo] = useState<"porcentaje" | "fijo">("porcentaje");
+  const [descValor, setDescValor] = useState("");
+  const [descMotivo, setDescMotivo] = useState("");
+  const [productoVariantes, setProductoVariantes] = useState<ProductoPos | null>(null);
+  const [productoEncargue, setProductoEncargue] = useState<ProductoPos | null>(null);
+
+  // ─── Cobro ───────────────────────────────────────────────
+  const [metodoCobro, setMetodoCobro] = useState<MetodoPagoPos | null>(null);
+  const [procesando, setProcesando] = useState(false);
+  const [resultado, setResultado] = useState<ResultadoVenta | null>(null);
+  // Una clave por intento de cobro: reintentos y doble click no duplican la venta.
+  const claveRef = useRef<string>("");
+  const enviandoRef = useRef(false);
+
+  // ─── Caja: diálogos ─────────────────────────────────────
+  const [tipoMovimiento, setTipoMovimiento] = useState<TipoMovimientoCaja | null>(null);
+  const [showCierre, setShowCierre] = useState(false);
+
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Computed
+  // ─── Cálculos (misma regla que el servidor) ─────────────
   const esSocio = socio?.es_socio === true;
-  const usarPrecioSocio = esSocio;
 
-  // Los encargues suman su recargo de personalización por unidad.
-  const subtotal = useMemo(
-    () =>
-      cart.reduce((sum, item) => {
-        const precio = usarPrecioSocio && item.precio_socio != null
-          ? item.precio_socio
-          : item.precio;
-        return sum + (precio + item.precio_extra) * item.cantidad;
-      }, 0),
-    [cart, usarPrecioSocio]
+  const subtotal = useMemo(() => cart.reduce((s, i) => s + precioLinea(i, esSocio) * i.cantidad, 0), [cart, esSocio]);
+  const subtotalLista = useMemo(() => cart.reduce((s, i) => s + precioLinea(i, false) * i.cantidad, 0), [cart]);
+  const descuentoSocio = round2(subtotalLista - subtotal);
+  const descuentoManual = useMemo(
+    () => calcularDescuentoManual(subtotal, descTipo, parseFloat(descValor.replace(",", ".")) || 0),
+    [subtotal, descTipo, descValor]
   );
+  const total = round2(subtotal - descuentoManual);
 
-  const descuentoSocio = useMemo(() => {
-    if (!usarPrecioSocio) return 0;
-    const totalSinDesc = cart.reduce(
-      (sum, item) => sum + (item.precio + item.precio_extra) * item.cantidad,
-      0
-    );
-    return totalSinDesc - subtotal;
-  }, [cart, subtotal, usarPrecioSocio]);
-
-  // Misma regla que el servidor (`calcularDescuentoManual`).
-  const descuentoManualMonto = useMemo(
-    () =>
-      calcularDescuentoManual(
-        subtotal,
-        descuentoManualTipo,
-        parseFloat(descuentoManualValor) || 0
-      ),
-    [subtotal, descuentoManualTipo, descuentoManualValor]
-  );
-
-  const total = round2(subtotal - descuentoManualMonto);
-
-  // Encargues: email para avisar al cliente presencial (si no hay socio
-  // vinculado, que ya recibe los avisos en el email de su cuenta).
-  const hayEncargues = cart.some((item) => item.es_encargue);
-  const emailClienteTrim = emailCliente.trim();
+  const hayEncargues = cart.some((i) => i.es_encargue);
+  const emailTrim = emailCliente.trim();
   const pideEmail = hayEncargues && !socio;
-  const emailValido = !pideEmail || emailClienteTrim === "" || EMAIL_RE.test(emailClienteTrim);
-  const emailClienteParaVenta = pideEmail && emailClienteTrim ? emailClienteTrim : null;
-
-  // Precios, descuento de socio y recargo de encargue los calcula el backend;
-  // acá solo viaja qué se vende. `total_esperado` detecta diferencias (ej.
-  // precio cambiado con la pantalla abierta) antes de registrar la venta.
-  const itemsPayload = useMemo(
-    () =>
-      cart.map((item) => ({
-        producto_id: item.producto_id,
-        variante_id: item.variante_id,
-        cantidad: item.cantidad,
-        es_encargue: item.es_encargue,
-        personalizacion: item.personalizacion,
-      })),
-    [cart]
-  );
-
-  // Diálogo de encargue
-  const mtoValidacion = useMemo(() => {
-    if (!productoEncargue) return null;
-    const campos = productoEncargue.mto_campos;
-    const validacion = validarValoresMto(campos, mtoValores);
-    const bloqueos = validarRestriccionSocios(campos, validacion.cleaned, esSocio);
-    const precioSocio = precioSocioUnitario(productoEncargue);
-    const base = usarPrecioSocio && precioSocio != null
-      ? precioSocio
-      : productoEncargue.precio;
-    return {
-      validacion,
-      valido: validacion.valid && bloqueos.length === 0,
-      precio: base + calcularExtraSeguro(campos, validacion.cleaned, esSocio),
-    };
-  }, [productoEncargue, mtoValores, esSocio, usarPrecioSocio]);
-
-  const efectivoMixto = Math.round((parseFloat(montoEfectivoMixto) || 0) * 100) / 100;
-  const transferenciaMixto = Math.round((total - efectivoMixto) * 100) / 100;
-  const mixtoValido = efectivoMixto > 0 && efectivoMixto < total;
-  const montoATransferir = modoMixto ? Math.max(transferenciaMixto, 0) : total;
-
-  // ─── Data fetching ─────────────────────────────────────────
-
-  const fetchProductos = useCallback(async () => {
-    setLoading(true);
-    const db = supabase as any;
-
-    const { data: prods } = await db
-      .from("productos")
-      .select("id, nombre, slug, precio, precio_socio, stock_actual, categoria_id, activo, mto_disponible, mto_solo, mto_campos, mto_tiempo_fabricacion_dias, producto_imagenes(url, es_principal, focal_point), producto_variantes(id, nombre, sku, precio_override, stock_actual, atributos, activo)")
-      .eq("activo_pos", true)
-      .order("nombre");
-
-    const { data: cats } = await db
-      .from("categorias_producto")
-      .select("id, nombre, slug")
-      .eq("activa", true)
-      .order("orden");
-
-    const mapped = (prods || []).map((p: any) => {
-      const img = p.producto_imagenes?.find((i: any) => i.es_principal) || p.producto_imagenes?.[0];
-      const variantes = (p.producto_variantes || []).filter((v: any) => v.activo);
-      return {
-        id: p.id,
-        nombre: p.nombre,
-        slug: p.slug,
-        precio: p.precio,
-        precio_socio: p.precio_socio,
-        stock_actual: p.stock_actual,
-        categoria_id: p.categoria_id,
-        activo: p.activo,
-        imagen_url: img?.url || null,
-        imagen_focal_point: img?.focal_point || null,
-        variantes,
-        mto_disponible: p.mto_disponible === true,
-        mto_solo: p.mto_solo === true,
-        mto_campos: Array.isArray(p.mto_campos) ? p.mto_campos : [],
-        mto_tiempo_fabricacion_dias: p.mto_tiempo_fabricacion_dias ?? null,
-      };
-    });
-
-    setProductos(mapped);
-    setCategorias(cats || []);
-    setLoading(false);
-  }, [supabase]);
-
-  useEffect(() => {
-    fetchProductos();
-  }, [fetchProductos]);
-
-  // ─── Filtered products ────────────────────────────────────
+  const emailValido = !pideEmail || emailTrim === "" || EMAIL_RE.test(emailTrim);
+  const emailParaVenta = pideEmail && emailTrim ? emailTrim : null;
+  const unidades = cart.reduce((s, i) => s + i.cantidad, 0);
 
   const productosFiltrados = useMemo(() => {
-    let filtered = productos;
-    if (categoriaActiva) {
-      filtered = filtered.filter((p) => p.categoria_id === categoriaActiva);
-    }
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      filtered = filtered.filter((p) => p.nombre.toLowerCase().includes(q));
-    }
-    return filtered;
+    let lista = productos;
+    if (categoriaActiva) lista = lista.filter((p) => p.categoria_id === categoriaActiva);
+    const q = search.trim().toLowerCase();
+    if (q) lista = lista.filter((p) => p.nombre.toLowerCase().includes(q));
+    return lista;
   }, [productos, categoriaActiva, search]);
 
-  // ─── Cart actions ─────────────────────────────────────────
+  // ─── Refrescos ──────────────────────────────────────────
+  const actualizarCatalogo = useCallback(() => {
+    iniciarActualizacion(async () => {
+      const r = await refrescarCatalogo();
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      setProductos(r.productos);
+      setCategorias(r.categorias);
+    });
+  }, []);
 
-  // Cart key for uniqueness: producto_id + variante_id
-  const cartKey = (productoId: number, varianteId: number | null) =>
-    `${productoId}-${varianteId ?? "base"}`;
+  const actualizarCaja = useCallback(async () => {
+    const r = await refrescarCaja();
+    if (r.ok && r.estado) setEstado(r.estado);
+  }, []);
 
-  const addToCartDirect = useCallback((producto: Producto, variante: ProductoVariante | null) => {
-    const key = cartKey(producto.id, variante?.id ?? null);
-    const stock = variante ? variante.stock_actual : producto.stock_actual;
-    const precio = precioListaUnitario(producto, variante?.precio_override);
-    const precioSocio = precioSocioUnitario(producto, variante?.precio_override);
-    const nombre = variante
-      ? `${producto.nombre} - ${variante.nombre}`
-      : producto.nombre;
-
+  // ─── Carrito ────────────────────────────────────────────
+  const agregar = useCallback((p: ProductoPos, v: VariantePos | null) => {
+    const key = `${p.id}-${v?.id ?? "base"}`;
+    const maximo = v ? v.disponible : p.disponible;
     setCart((prev) => {
-      const existing = prev.find((i) => i.key === key);
-      if (existing) {
-        if (existing.cantidad >= stock) return prev;
-        return prev.map((i) =>
-          i.key === key ? { ...i, cantidad: i.cantidad + 1 } : i
-        );
+      const existe = prev.find((i) => i.key === key);
+      if (existe) {
+        if (existe.cantidad >= maximo) {
+          toast.warning(`No hay más ${existe.nombre} disponibles`);
+          return prev;
+        }
+        return prev.map((i) => (i.key === key ? { ...i, cantidad: i.cantidad + 1 } : i));
       }
       return [
         ...prev,
         {
           key,
-          producto_id: producto.id,
-          variante_id: variante?.id ?? null,
-          nombre,
-          precio,
-          precio_socio: precioSocio,
+          producto_id: p.id,
+          variante_id: v?.id ?? null,
+          nombre: v ? `${p.nombre} - ${v.nombre}` : p.nombre,
+          precio: precioListaUnitario(p, v?.precio_override),
+          precio_socio: precioSocioUnitario(p, v?.precio_override),
           cantidad: 1,
-          stock_actual: stock,
-          imagen_url: producto.imagen_url,
-          imagen_focal_point: producto.imagen_focal_point,
+          maximo,
+          imagen_url: p.imagen_url,
+          imagen_focal_point: p.imagen_focal_point,
           es_encargue: false,
           personalizacion: {},
           precio_extra: 0,
@@ -591,1337 +185,650 @@ export function POSClient() {
         },
       ];
     });
-
-    // Close variant picker if open
-    setShowVariantePicker(false);
-    setProductoVarianteSeleccion(null);
+    setProductoVariantes(null);
   }, []);
 
-  const abrirEncargue = useCallback((producto: Producto) => {
-    setShowVariantePicker(false);
-    setProductoVarianteSeleccion(null);
-    setMtoValores({});
-    setProductoEncargue(producto);
+  const clickProducto = useCallback(
+    (p: ProductoPos) => {
+      const puedeStock = !p.mto_solo && p.disponible > 0;
+      if (p.mto_disponible && !puedeStock) setProductoEncargue(p);
+      else if (p.variantes.length > 0 || p.mto_disponible) setProductoVariantes(p);
+      else agregar(p, null);
+    },
+    [agregar]
+  );
+
+  const cambiarCantidad = useCallback((key: string, n: number) => {
+    setCart((prev) =>
+      n <= 0 ? prev.filter((i) => i.key !== key) : prev.map((i) => (i.key === key ? { ...i, cantidad: Math.min(n, i.maximo) } : i))
+    );
   }, []);
 
-  const handleProductClick = useCallback((producto: Producto) => {
-    const puedeStock = !producto.mto_solo && producto.stock_actual > 0;
-    if (producto.mto_disponible && !puedeStock) {
-      abrirEncargue(producto);
-    } else if (producto.variantes.length > 0 || producto.mto_disponible) {
-      // El picker ofrece variantes del stock y, si aplica, "Encargar".
-      setProductoVarianteSeleccion(producto);
-      setShowVariantePicker(true);
-    } else {
-      addToCartDirect(producto, null);
-    }
-  }, [addToCartDirect, abrirEncargue]);
+  const quitar = useCallback((key: string) => setCart((prev) => prev.filter((i) => i.key !== key)), []);
 
-  const agregarEncargue = useCallback(() => {
-    if (!productoEncargue || !mtoValidacion?.valido) return;
-    const campos = productoEncargue.mto_campos;
-    const cleaned = mtoValidacion.validacion.cleaned;
-    const resumen = resumirPersonalizacion(campos, cleaned)
-      .map((r) => `${r.label}: ${r.valor}`)
-      .join(" · ");
-
-    setCart((prev) => [
-      ...prev,
-      {
-        // Cada encargue es su propia línea (personalizaciones distintas).
-        key: `mto-${productoEncargue.id}-${Date.now()}`,
-        producto_id: productoEncargue.id,
-        variante_id: null,
-        nombre: productoEncargue.nombre,
-        precio: precioListaUnitario(productoEncargue),
-        precio_socio: precioSocioUnitario(productoEncargue),
-        cantidad: 1,
-        stock_actual: MAX_CANTIDAD_ENCARGUE,
-        imagen_url: productoEncargue.imagen_url,
-        imagen_focal_point: productoEncargue.imagen_focal_point,
-        es_encargue: true,
-        personalizacion: cleaned,
-        precio_extra: calcularExtraSeguro(campos, cleaned, esSocio),
-        resumen: resumen || null,
-      },
-    ]);
-    toast.success(`${productoEncargue.nombre} agregado como encargue`);
-    setProductoEncargue(null);
-    setMtoValores({});
-  }, [productoEncargue, mtoValidacion, esSocio]);
-
-  const updateCartQty = useCallback((key: string, qty: number) => {
-    setCart((prev) => {
-      if (qty <= 0) return prev.filter((i) => i.key !== key);
-      return prev.map((i) =>
-        i.key === key
-          ? { ...i, cantidad: Math.min(qty, i.stock_actual) }
-          : i
-      );
-    });
-  }, []);
-
-  const removeFromCart = useCallback((key: string) => {
-    setCart((prev) => prev.filter((i) => i.key !== key));
-  }, []);
-
-  const clearCart = useCallback(() => {
+  const limpiarVenta = useCallback(() => {
     setCart([]);
     setNombreCliente("");
     setEmailCliente("");
     setSocio(null);
-    setCedulaBusqueda("");
+    setShowDescuento(false);
+    setDescValor("");
+    setDescMotivo("");
+    setShowMobileCart(false);
   }, []);
 
-  // ─── Socio search ─────────────────────────────────────────
-
-  const buscarSocio = useCallback(async () => {
-    if (!cedulaBusqueda.trim()) return;
-    setBuscandoSocio(true);
-
-    const db = supabase as any;
-    const { data, error } = await db
-      .from("perfiles")
-      .select("id, nombre, apellido, cedula, es_socio")
-      .or(`cedula.eq.${cedulaBusqueda.trim()}`)
-      .limit(1)
-      .single();
-
-    if (error || !data) {
-      toast.error("No se encontró un socio con esa cédula o número");
-    } else {
-      setSocio(data as SocioInfo);
-      setShowSocioSearch(false);
-      toast.success(`Socio: ${data.nombre} ${data.apellido}`);
+  // ─── Cobro ──────────────────────────────────────────────
+  const abrirCobro = (m: MetodoPagoPos) => {
+    if (m !== "transferencia" && !cajaAbierta) {
+      toast.error("Abrí la caja antes de cobrar en efectivo");
+      return;
     }
-    setBuscandoSocio(false);
-  }, [cedulaBusqueda, supabase]);
+    claveRef.current = nuevaClave();
+    setResultado(null);
+    setMetodoCobro(m);
+  };
 
-  // ─── Process sale ─────────────────────────────────────────
+  const cerrarCobro = () => {
+    if (procesando) return;
+    setMetodoCobro(null);
+    setResultado(null);
+  };
 
-  const procesarVentaEfectivo = useCallback(
-    async () => {
-      if (cart.length === 0) return;
-      setProcesando(true);
-
-      try {
-        const items = itemsPayload;
-
-        const res = await fetch("/api/admin/pos/venta", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            items,
-            metodo_pago: "efectivo",
-            nombre_cliente: nombreCliente || null,
-            perfil_socio_id: socio?.id || null,
-            email_cliente: emailClienteParaVenta,
-            descuento_manual_tipo: descuentoManualMonto > 0 ? descuentoManualTipo : null,
-            descuento_manual_valor: descuentoManualMonto > 0 ? parseFloat(descuentoManualValor) || 0 : null,
-            descuento_motivo: descuentoManualMotivo || null,
-            total_esperado: total,
-            notas: null,
-          }),
-        });
-
-        const json = await res.json();
-
-        if (!res.ok) {
-          toast.error(json.error || "Error al procesar la venta");
-          setProcesando(false);
-          return;
-        }
-
-        setVentaExitosa(true);
-        toast.success(`Venta #${json.data.numero_pedido} registrada`);
-
-        // Refresh products for updated stock
-        fetchProductos();
-
-        // Reset after showing success
-        setTimeout(() => {
-          setVentaExitosa(false);
-          setShowEfectivoModal(false);
-          clearCart();
-        }, 2000);
-      } catch (err) {
-        toast.error("Error de conexión");
-      } finally {
-        setProcesando(false);
-      }
-    },
-    [cart, itemsPayload, emailClienteParaVenta, nombreCliente, socio, total, descuentoManualMonto, descuentoManualTipo, descuentoManualValor, descuentoManualMotivo, clearCart, fetchProductos]
-  );
-
-  // ─── Process transfer sale ───────────────────────────────
-
-  const procesarTransferencia = useCallback(async () => {
-    if (cart.length === 0 || !comprobanteFile) return;
-    if (modoMixto && !mixtoValido) return;
-    setSubiendoComprobante(true);
-
+  const confirmarCobro = async (c: ConfirmacionCobro) => {
+    if (enviandoRef.current || cart.length === 0) return;
+    enviandoRef.current = true;
+    setProcesando(true);
     try {
-      // 1. Create order with transferencia
-      const items = itemsPayload;
+      const datos = {
+        idempotency_key: claveRef.current || (claveRef.current = nuevaClave()),
+        items: cart.map((i) => ({
+          producto_id: i.producto_id,
+          variante_id: i.variante_id,
+          cantidad: i.cantidad,
+          es_encargue: i.es_encargue,
+          personalizacion: i.personalizacion,
+        })),
+        metodo_pago: c.metodo,
+        monto_efectivo: c.montoEfectivo,
+        nombre_cliente: nombreCliente.trim() || null,
+        email_cliente: emailParaVenta,
+        perfil_socio_id: socio?.id ?? null,
+        descuento_manual_tipo: descuentoManual > 0 ? descTipo : null,
+        descuento_manual_valor: descuentoManual > 0 ? parseFloat(descValor.replace(",", ".")) || 0 : null,
+        descuento_motivo: descMotivo.trim() || null,
+        total_esperado: total,
+      };
+      const form = new FormData();
+      form.append("datos", JSON.stringify(datos));
+      if (c.archivo) form.append("archivo", c.archivo);
 
-      const res = await fetch("/api/admin/pos/venta", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items,
-          metodo_pago: modoMixto ? "mixto" : "transferencia",
-          monto_efectivo: modoMixto ? efectivoMixto : null,
-          nombre_cliente: nombreCliente || null,
-          perfil_socio_id: socio?.id || null,
-          email_cliente: emailClienteParaVenta,
-          descuento_manual_tipo: descuentoManualMonto > 0 ? descuentoManualTipo : null,
-          descuento_manual_valor: descuentoManualMonto > 0 ? parseFloat(descuentoManualValor) || 0 : null,
-          descuento_motivo: descuentoManualMotivo || null,
-          total_esperado: total,
-          notas: null,
-        }),
-      });
-
-      const json = await res.json();
-
+      const res = await fetch("/api/admin/pos/venta", { method: "POST", body: form });
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(json.error || "Error al procesar la venta");
-        setSubiendoComprobante(false);
+        toast.error(json.error || "No se pudo registrar la venta");
+        if (json.code === "caja_cerrada") void actualizarCaja();
+        if (json.code === "total_cambio" || json.faltantes) actualizarCatalogo();
         return;
       }
-
-      // 2. Upload comprobante
-      const formData = new FormData();
-      formData.append("archivo", comprobanteFile);
-      formData.append("pedido_id", String(json.data.id));
-
-      const compRes = await fetch("/api/admin/pos/comprobante", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!compRes.ok) {
-        const compJson = await compRes.json();
-        toast.error(compJson.error || "Error al subir comprobante");
-        setSubiendoComprobante(false);
-        return;
-      }
-
-      // 3. Success
-      setTransferExitosa(true);
-      toast.success(
-        modoMixto
-          ? `Venta #${json.data.numero_pedido}: efectivo registrado, transferencia pendiente de verificación`
-          : `Venta #${json.data.numero_pedido} pendiente de verificación`
-      );
-      fetchProductos();
-
-      setTimeout(() => {
-        setTransferExitosa(false);
-        setShowTransferenciaModal(false);
-        setComprobanteFile(null);
-        setComprobantePreview(null);
-        setModoMixto(false);
-        setMontoEfectivoMixto("");
-        clearCart();
-      }, 2000);
-    } catch (err) {
-      toast.error("Error de conexión");
+      setResultado({ ticket: json.ticket, pago: c.pago });
+      setMetodoCobro(null);
+      limpiarVenta();
+      toast.success(json.idempotent_replay ? `La venta ${json.data.numero_pedido} ya estaba registrada` : `Venta ${json.data.numero_pedido} registrada`);
+      actualizarCatalogo();
+      if (c.metodo !== "transferencia") void actualizarCaja();
+    } catch {
+      toast.error("Error de conexión. Podés reintentar: si la venta ya se registró, no se duplica.");
     } finally {
-      setSubiendoComprobante(false);
+      enviandoRef.current = false;
+      setProcesando(false);
     }
-  }, [cart, itemsPayload, emailClienteParaVenta, comprobanteFile, modoMixto, mixtoValido, efectivoMixto, nombreCliente, socio, total, descuentoManualMonto, descuentoManualTipo, descuentoManualValor, descuentoManualMotivo, clearCart, fetchProductos]);
+  };
 
-  // Handle file selection for comprobante
-  const handleComprobanteSelect = useCallback((file: File | null) => {
-    if (!file) return;
-    const allowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
-    if (!allowed.includes(file.type)) {
-      toast.error("Formato no permitido. Usá JPG, PNG, WebP o PDF.");
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error("El archivo no puede superar 10MB");
-      return;
-    }
-    setComprobanteFile(file);
-    if (file.type.startsWith("image/")) {
-      const url = URL.createObjectURL(file);
-      setComprobantePreview(url);
+  // ─── Caja: acciones ─────────────────────────────────────
+  // El estado nuevo se aplica recién en `onListo`: si se aplicara ya, la
+  // pantalla de apertura desaparecería antes de mostrar la diferencia.
+  const estadoAbiertoRef = useRef<EstadoCaja | null>(null);
+  const onAbrirCaja = async (contado: number, notas: string | null) => {
+    const r = await abrirCaja({ contado, notas });
+    if (r.ok && r.estado) estadoAbiertoRef.current = r.estado;
+    return r;
+  };
+  const cajaLista = () => {
+    if (estadoAbiertoRef.current) {
+      setEstado(estadoAbiertoRef.current);
+      estadoAbiertoRef.current = null;
     } else {
-      setComprobantePreview(null);
+      void actualizarCaja();
     }
-  }, []);
+  };
 
-  const copiarCuenta = useCallback(() => {
-    navigator.clipboard.writeText("9500100");
-    setCuentaCopiada(true);
-    setTimeout(() => setCuentaCopiada(false), 2000);
-  }, []);
+  const onMovimiento = async (d: DatosMovimiento) => {
+    if (!estado.sesion) return { ok: false, error: "La caja no está abierta" };
+    const r = await registrarMovimientoCaja({ sesion: estado.sesion.id, ...d });
+    if (r.ok && r.estado) setEstado(r.estado);
+    return r;
+  };
 
-  // ─── Keyboard shortcut: focus search ──────────────────────
+  // Igual que al abrir: el estado cerrado se aplica cuando se termina de ver el resultado.
+  const estadoCerradoRef = useRef<EstadoCaja | null>(null);
+  const onCerrarCaja = async (contado: number, notas: string | null) => {
+    if (!estado.sesion) return { ok: false, error: "La caja no está abierta" };
+    const r = await cerrarCaja({ sesion: estado.sesion.id, contado, notas });
+    if (r.ok) {
+      estadoCerradoRef.current = r.estado ?? { ...estado, sesion: null, esperado: contado, resumen: [], movimientos: [] };
+    }
+    return r;
+  };
+  const cajaCerrada = () => {
+    setShowCierre(false);
+    setSoloTransferencia(false);
+    if (estadoCerradoRef.current) {
+      setEstado(estadoCerradoRef.current);
+      estadoCerradoRef.current = null;
+    } else {
+      void actualizarCaja();
+    }
+  };
 
+  // ─── Atajo: "/" enfoca la búsqueda ──────────────────────
   useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
+    function onKey(e: KeyboardEvent) {
       if (e.key === "/" && !e.ctrlKey && !e.metaKey) {
-        const active = document.activeElement?.tagName;
-        if (active !== "INPUT" && active !== "TEXTAREA") {
+        const tag = document.activeElement?.tagName;
+        if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") {
           e.preventDefault();
           searchRef.current?.focus();
         }
       }
     }
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // ─── Render ───────────────────────────────────────────────
+  // ─── Sin caja abierta: primero se abre ──────────────────
+  if (!cajaAbierta && !soloTransferencia) {
+    return (
+      <AbrirCaja
+        nombreCaja={estado.caja?.nombre ?? "la caja"}
+        saldoContable={estado.esperado}
+        onAbrir={onAbrirCaja}
+        onListo={cajaLista}
+        onSoloTransferencia={() => setSoloTransferencia(true)}
+      />
+    );
+  }
+
+  const lineasResumen = cart.map((i) => ({
+    key: i.key,
+    texto: `${i.nombre} × ${i.cantidad}`,
+    importe: precioLinea(i, esSocio) * i.cantidad,
+    encargue: i.es_encargue,
+  }));
+
+  const botonesDeshabilitados = cart.length === 0 || procesando || !emailValido;
 
   return (
-    <div className="h-[calc(100vh-2rem)] lg:h-[calc(100vh-4rem)] flex flex-col lg:flex-row gap-4">
-      {/* ═══ LEFT PANEL: Products ═══ */}
-      <motion.div
-        variants={fadeInLeft}
-        initial="hidden"
-        animate="visible"
-        transition={easeSnappy}
-        className="flex-1 flex flex-col min-h-0 bg-white rounded-2xl shadow-card border border-linea overflow-hidden"
-      >
-        {/* Header */}
-        <div className="p-4 border-b border-linea space-y-3">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <Input
-              ref={searchRef}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder='Buscar producto... (presioná "/" )'
-              className="pl-10 h-11 text-base font-body bg-superficie border-none rounded-xl"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="size-4" />
-              </button>
-            )}
-          </div>
+    <div className="flex h-[calc(100dvh-6.5rem)] flex-col gap-3 lg:h-[calc(100dvh-4rem)]">
+      <BarraCaja
+        estado={estado}
+        onMovimiento={setTipoMovimiento}
+        onCerrar={() => setShowCierre(true)}
+        onAbrir={() => setSoloTransferencia(false)}
+      />
 
-          {/* Category filters */}
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setCategoriaActiva(null)}
-              className={`
-                shrink-0 px-4 py-2 rounded-xl text-sm font-body font-medium transition-all duration-200
-                ${!categoriaActiva
-                  ? "bg-bordo-800 text-white shadow-sm"
-                  : "bg-superficie text-foreground hover:bg-gray-200"
-                }
-              `}
-            >
-              Todas
-            </motion.button>
-            {categorias.map((cat) => (
-              <motion.button
-                key={cat.id}
-                whileTap={{ scale: 0.95 }}
-                onClick={() =>
-                  setCategoriaActiva(categoriaActiva === cat.id ? null : cat.id)
-                }
-                className={`
-                  shrink-0 px-4 py-2 rounded-xl text-sm font-body font-medium transition-all duration-200
-                  ${categoriaActiva === cat.id
-                    ? "bg-bordo-800 text-white shadow-sm"
-                    : "bg-superficie text-foreground hover:bg-gray-200"
-                  }
-                `}
-              >
-                {cat.nombre}
-              </motion.button>
-            ))}
-          </div>
-        </div>
-
-        {/* Product Grid */}
-        <div className="flex-1 overflow-y-auto p-4">
-          {loading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
-              {Array.from({ length: 12 }).map((_, i) => (
-                <Skeleton key={i} className="aspect-[3/4] rounded-xl" />
-              ))}
-            </div>
-          ) : productosFiltrados.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center h-full text-muted-foreground"
-            >
-              <PackageOpen className="size-12 mb-3" strokeWidth={1} />
-              <p className="font-body">No se encontraron productos</p>
-            </motion.div>
-          ) : (
-            <motion.div
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
-              className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3"
-            >
-              {productosFiltrados.map((producto) => (
-                <POSProductCard
-                  key={producto.id}
-                  producto={producto}
-                  onAdd={handleProductClick}
-                  usarPrecioSocio={usarPrecioSocio}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
+        {/* ═══ Productos ═══ */}
+        <motion.div
+          variants={fadeInLeft}
+          initial="hidden"
+          animate="visible"
+          transition={easeSnappy}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-linea bg-white shadow-card"
+        >
+          <div className="space-y-3 border-b border-linea p-3 sm:p-4">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  ref={searchRef}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder='Buscar producto… (tecla "/")'
+                  className="h-12 rounded-xl border-none bg-superficie pl-10 text-base"
                 />
-              ))}
-            </motion.div>
-          )}
-        </div>
-      </motion.div>
-
-      {/* ═══ Mobile cart toggle ═══ */}
-      <AnimatePresence>
-        {cart.length > 0 && !showMobileCart && (
-          <motion.button
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 100, opacity: 0 }}
-            transition={springBouncy}
-            onClick={() => setShowMobileCart(true)}
-            className="lg:hidden fixed bottom-6 right-6 z-40 bg-bordo-800 text-white rounded-2xl px-5 py-3 shadow-xl flex items-center gap-3"
-          >
-            <ShoppingCart className="size-5" />
-            <span className="font-heading font-bold">{cart.length}</span>
-            <Separator orientation="vertical" className="h-5 bg-white/30" />
-            <span className="font-heading font-bold">
-              ${total.toLocaleString("es-UY")}
-            </span>
-          </motion.button>
-        )}
-      </AnimatePresence>
-
-      {/* ═══ RIGHT PANEL: Cart ═══ */}
-      <motion.div
-        variants={fadeInRight}
-        initial="hidden"
-        animate="visible"
-        transition={easeSnappy}
-        className={`
-          w-full lg:w-[380px] xl:w-[420px] flex flex-col bg-white rounded-2xl shadow-card border border-linea overflow-hidden shrink-0
-          ${showMobileCart
-            ? "fixed inset-0 z-50 rounded-none lg:relative lg:inset-auto lg:z-auto lg:rounded-2xl"
-            : "hidden lg:flex"
-          }
-        `}
-      >
-        {/* Cart header */}
-        <div className="p-4 border-b border-linea flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {showMobileCart && (
-              <button
-                onClick={() => setShowMobileCart(false)}
-                className="lg:hidden mr-1 p-1"
-              >
-                <ArrowLeft className="size-5" />
-              </button>
-            )}
-            <ShoppingCart className="size-5 text-bordo-700" />
-            <h2 className="font-heading font-bold text-lg">Carrito</h2>
-            {cart.length > 0 && (
-              <Badge variant="secondary" className="ml-1 font-body">
-                {cart.length}
-              </Badge>
-            )}
-          </div>
-          {cart.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearCart}
-              className="text-muted-foreground hover:text-red-600 text-xs"
-            >
-              <Trash2 className="size-3.5 mr-1" />
-              Limpiar
-            </Button>
-          )}
-        </div>
-
-        {/* Cart items */}
-        <div className="flex-1 overflow-y-auto px-4">
-          {cart.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center h-full text-muted-foreground py-12"
-            >
-              <ShoppingCart className="size-10 mb-3" strokeWidth={1} />
-              <p className="font-body text-sm">Agregá productos para empezar</p>
-            </motion.div>
-          ) : (
-            <AnimatePresence mode="popLayout">
-              {cart.map((item) => (
-                <CartItemRow
-                  key={item.key}
-                  item={item}
-                  usarPrecioSocio={usarPrecioSocio}
-                  onUpdateQty={updateCartQty}
-                  onRemove={removeFromCart}
-                />
-              ))}
-            </AnimatePresence>
-          )}
-        </div>
-
-        {/* Cart footer */}
-        <div className="border-t border-linea p-4 space-y-3">
-          {/* Customer name */}
-          <Input
-            value={nombreCliente}
-            onChange={(e) => setNombreCliente(e.target.value)}
-            placeholder="Nombre del cliente (opcional)"
-            className="h-9 text-sm bg-superficie border-none rounded-lg"
-          />
-
-          {/* Email para avisos del encargue */}
-          <AnimatePresence initial={false}>
-            {hayEncargues && (
-              <motion.div
-                key="email-avisos"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={springSmooth}
-                className="overflow-hidden"
-              >
-                {socio ? (
-                  <p className="flex items-center gap-1.5 rounded-lg bg-superficie px-3 py-2 text-xs text-muted-foreground">
-                    <Mail className="size-3.5 shrink-0" />
-                    Los avisos del encargue van al email de la cuenta del socio.
-                  </p>
-                ) : (
-                  <div className="space-y-1">
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-                      <Input
-                        type="email"
-                        inputMode="email"
-                        autoComplete="off"
-                        value={emailCliente}
-                        onChange={(e) => setEmailCliente(e.target.value)}
-                        placeholder="Email para avisos del encargue"
-                        aria-invalid={!emailValido}
-                        className="h-9 pl-8 text-sm bg-superficie border-none rounded-lg"
-                      />
-                    </div>
-                    <p
-                      className={`text-[11px] font-body ${
-                        !emailValido ? "text-red-600" : emailClienteTrim ? "text-green-700" : "text-amber-700"
-                      }`}
-                    >
-                      {!emailValido
-                        ? "Email inválido"
-                        : emailClienteTrim
-                          ? "Le avisamos por mail cuando esté listo para retirar."
-                          : "Sin email no se le puede avisar cuando esté listo."}
-                    </p>
-                  </div>
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-foreground"
+                    aria-label="Limpiar búsqueda"
+                  >
+                    <X className="size-4" />
+                  </button>
                 )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Socio lookup */}
-          {socio ? (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-center justify-between bg-amarillo-50 border border-amarillo-200 rounded-lg px-3 py-2"
-            >
-              <div>
-                <p className="text-sm font-body font-medium">
-                  {socio.nombre} {socio.apellido}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Socio - CI: {socio.cedula}
-                </p>
               </div>
-              <button
-                onClick={() => setSocio(null)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X className="size-4" />
-              </button>
-            </motion.div>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowSocioSearch(true)}
-              className="w-full text-sm rounded-lg"
-            >
-              <UserSearch className="size-4 mr-2" />
-              Buscar socio (descuento)
-            </Button>
-          )}
-
-          {/* Descuento manual */}
-          <AnimatePresence>
-            {showDescuento ? (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/50 p-3"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-amber-800">Descuento manual</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowDescuento(false);
-                      setDescuentoManualValor("");
-                      setDescuentoManualMotivo("");
-                    }}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                </div>
-
-                <div className="flex gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setDescuentoManualTipo("porcentaje")}
-                    className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-                      descuentoManualTipo === "porcentaje"
-                        ? "bg-primary text-white"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    %
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDescuentoManualTipo("fijo")}
-                    className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-                      descuentoManualTipo === "fijo"
-                        ? "bg-primary text-white"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    $ Fijo
-                  </button>
-                </div>
-
-                <Input
-                  type="number"
-                  min="0"
-                  max={descuentoManualTipo === "porcentaje" ? "100" : undefined}
-                  value={descuentoManualValor}
-                  onChange={(e) => setDescuentoManualValor(e.target.value)}
-                  placeholder={descuentoManualTipo === "porcentaje" ? "Ej: 10" : "Ej: 500"}
-                  className="h-8 text-sm"
-                />
-
-                <Input
-                  value={descuentoManualMotivo}
-                  onChange={(e) => setDescuentoManualMotivo(e.target.value)}
-                  placeholder="Motivo (opcional)"
-                  className="h-8 text-xs"
-                />
-
-                {descuentoManualMonto > 0 && (
-                  <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="text-xs text-green-600 flex items-center gap-1"
-                  >
-                    <Check className="size-3" />
-                    -${descuentoManualMonto.toLocaleString("es-UY")}
-                  </motion.p>
-                )}
-              </motion.div>
-            ) : (
               <motion.button
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
                 type="button"
-                onClick={() => setShowDescuento(true)}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+                whileTap={{ scale: 0.9 }}
+                onClick={actualizarCatalogo}
+                disabled={actualizando}
+                title="Actualizar stock y precios"
+                aria-label="Actualizar catálogo"
+                className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-superficie text-muted-foreground hover:text-bordo-800"
               >
-                <Percent className="size-3" />
-                Aplicar descuento manual
+                <RefreshCw className={`size-5 ${actualizando ? "animate-spin" : ""}`} />
               </motion.button>
-            )}
-          </AnimatePresence>
-
-          {/* Totals */}
-          <div className="space-y-1 pt-1">
-            <div className="flex justify-between text-sm text-muted-foreground font-body">
-              <span>Subtotal</span>
-              <AnimatedPrice value={usarPrecioSocio ? subtotal + descuentoSocio : subtotal} />
             </div>
-            {descuentoSocio > 0 && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                className="flex justify-between text-sm text-green-600 font-body"
-              >
-                <span>Descuento socio</span>
-                <span>-${descuentoSocio.toLocaleString("es-UY")}</span>
-              </motion.div>
-            )}
-            {descuentoManualMonto > 0 && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                className="flex justify-between text-sm text-amber-600 font-body"
-              >
-                <span>
-                  Desc. manual
-                  {descuentoManualTipo === "porcentaje" && ` (${descuentoManualValor}%)`}
-                </span>
-                <span>-${descuentoManualMonto.toLocaleString("es-UY")}</span>
-              </motion.div>
-            )}
-            <Separator />
-            <div className="flex justify-between font-heading font-bold text-xl">
-              <span>Total</span>
-              <AnimatedPrice value={total} />
-            </div>
-          </div>
 
-          {/* Payment buttons */}
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <motion.div whileTap={{ scale: 0.97 }}>
-              <Button
-                onClick={() => setShowEfectivoModal(true)}
-                disabled={cart.length === 0 || procesando || !emailValido}
-                className="w-full h-14 bg-green-600 hover:bg-green-700 text-white rounded-xl font-heading font-bold text-sm gap-1.5"
-              >
-                <Banknote className="size-5" />
-                Efectivo
-              </Button>
-            </motion.div>
-            <motion.div whileTap={{ scale: 0.97 }}>
-              <Button
-                onClick={() => {
-                  setModoMixto(false);
-                  setShowTransferenciaModal(true);
-                }}
-                disabled={cart.length === 0 || procesando || !emailValido}
-                className="w-full h-14 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-heading font-bold text-sm gap-1.5"
-              >
-                <Building2 className="size-5" />
-                Transferencia
-              </Button>
-            </motion.div>
-            <motion.div whileTap={{ scale: 0.97 }} className="col-span-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setModoMixto(true);
-                  setMontoEfectivoMixto("");
-                  setShowTransferenciaModal(true);
-                }}
-                disabled={cart.length === 0 || procesando || !emailValido}
-                className="w-full h-11 rounded-xl font-heading font-bold text-sm gap-1.5 border-bordo-200 text-bordo-800 hover:bg-bordo-50 hover:text-bordo-900"
-              >
-                <Coins className="size-4" />
-                Mixto: efectivo + transferencia
-              </Button>
-            </motion.div>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* ═══ MODALS ═══ */}
-
-      {/* Variant Picker Modal */}
-      <Dialog
-        open={showVariantePicker}
-        onOpenChange={(open) => {
-          setShowVariantePicker(open);
-          if (!open) setProductoVarianteSeleccion(null);
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-heading">
-              {productoVarianteSeleccion?.nombre}
-            </DialogTitle>
-            <DialogDescription>
-              {productoVarianteSeleccion?.mto_disponible
-                ? "Vendé del stock o tomá un encargue personalizado."
-                : "Elegí la variante para agregar al carrito."}
-            </DialogDescription>
-          </DialogHeader>
-          {productoVarianteSeleccion && (
-            <motion.div
-              variants={staggerContainerFast}
-              initial="hidden"
-              animate="visible"
-              className="grid gap-2 py-2 max-h-[60vh] overflow-y-auto"
-            >
-              {productoVarianteSeleccion.variantes.length === 0 && (
-                <motion.button
-                  variants={fadeInUp}
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => addToCartDirect(productoVarianteSeleccion, null)}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-linea p-3 text-left transition-all hover:border-bordo-300 hover:bg-bordo-50/50 cursor-pointer"
-                >
-                  <p className="flex-1 font-body font-medium text-sm">Del stock</p>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="text-xs text-muted-foreground">
-                      Stock: {productoVarianteSeleccion.stock_actual}
-                    </span>
-                    <span className="font-heading font-bold text-sm text-bordo-700">
-                      ${productoVarianteSeleccion.precio.toLocaleString("es-UY")}
-                    </span>
-                    <div className="size-7 rounded-lg bg-bordo-800 text-white flex items-center justify-center">
-                      <Plus className="size-4" />
-                    </div>
-                  </div>
-                </motion.button>
-              )}
-              {productoVarianteSeleccion.variantes.map((v) => {
-                const precio = v.precio_override ?? productoVarianteSeleccion.precio;
-                const sinStock = v.stock_actual <= 0;
-                const attrLabel = Object.values(v.atributos || {}).join(" / ") || v.nombre;
+            <div className="scrollbar-hide -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+              {[{ id: null as number | null, nombre: "Todas" }, ...categorias].map((cat) => {
+                const activa = categoriaActiva === cat.id;
                 return (
                   <motion.button
-                    key={v.id}
-                    variants={fadeInUp}
-                    whileHover={sinStock ? {} : { scale: 1.01 }}
-                    whileTap={sinStock ? {} : { scale: 0.98 }}
-                    disabled={sinStock}
-                    onClick={() => addToCartDirect(productoVarianteSeleccion, v)}
-                    className={`
-                      flex items-center justify-between gap-3 rounded-xl border p-3 text-left transition-all
-                      ${sinStock
-                        ? "opacity-40 cursor-not-allowed border-gray-200 bg-gray-50"
-                        : "border-linea hover:border-bordo-300 hover:bg-bordo-50/50 cursor-pointer"
-                      }
-                    `}
+                    key={cat.id ?? "todas"}
+                    type="button"
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setCategoriaActiva(cat.id === null || activa ? null : cat.id)}
+                    className={`relative h-10 shrink-0 rounded-xl px-4 text-sm font-medium transition-colors ${activa ? "" : "bg-superficie hover:bg-gray-200"}`}
                   >
-                    <div className="flex-1 min-w-0">
-                      <p className="font-body font-medium text-sm">{attrLabel}</p>
-                      {v.sku && (
-                        <p className="text-[11px] text-muted-foreground font-mono">{v.sku}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-xs text-muted-foreground">
-                        Stock: {v.stock_actual}
-                      </span>
-                      <span className="font-heading font-bold text-sm text-bordo-700">
-                        ${precio.toLocaleString("es-UY")}
-                      </span>
-                      {!sinStock && (
-                        <div className="size-7 rounded-lg bg-bordo-800 text-white flex items-center justify-center">
-                          <Plus className="size-4" />
-                        </div>
-                      )}
-                    </div>
+                    {activa && (
+                      <motion.span layoutId="pos-categoria" transition={springSmooth} className="absolute inset-0 rounded-xl bg-bordo-800 shadow-sm" />
+                    )}
+                    <span className={`relative ${activa ? "text-white" : "text-foreground"}`}>{cat.nombre}</span>
                   </motion.button>
                 );
               })}
-            </motion.div>
-          )}
-          {productoVarianteSeleccion?.mto_disponible && (
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+            {productosFiltrados.length === 0 ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex h-full flex-col items-center justify-center py-12 text-muted-foreground"
+              >
+                <PackageOpen className="mb-3 size-12" strokeWidth={1} />
+                <p>{productos.length === 0 ? "No hay productos habilitados para el POS" : "No se encontraron productos"}</p>
+              </motion.div>
+            ) : (
+              <motion.div
+                variants={staggerContainer}
+                initial="hidden"
+                animate="visible"
+                className="grid grid-cols-[repeat(auto-fill,minmax(128px,1fr))] gap-3"
+              >
+                <AnimatePresence mode="popLayout">
+                  {productosFiltrados.map((p) => (
+                    <TarjetaProducto key={p.id} producto={p} onAgregar={clickProducto} precioSocio={esSocio} />
+                  ))}
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </div>
+        </motion.div>
+
+        {/* ═══ Botón flotante del carrito (celular) ═══ */}
+        <AnimatePresence>
+          {cart.length > 0 && !showMobileCart && (
             <motion.button
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={springSmooth}
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => abrirEncargue(productoVarianteSeleccion)}
-              className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-dorado-300 bg-dorado-300/10 p-3 text-left transition-colors hover:border-bordo-300 hover:bg-dorado-300/20"
+              type="button"
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              transition={springBouncy}
+              onClick={() => setShowMobileCart(true)}
+              className="fixed bottom-5 right-5 z-40 flex items-center gap-3 rounded-2xl bg-bordo-800 px-5 py-4 text-white shadow-xl lg:hidden"
             >
-              <span className="flex items-center gap-2 font-body font-medium text-sm text-bordo-800">
-                <Sparkles className="size-4" />
-                Encargar personalizado
-              </span>
-              <span className="text-xs text-muted-foreground">No descuenta stock</span>
+              <ShoppingCart className="size-5" />
+              <span className="font-heading font-bold">{unidades}</span>
+              <Separator orientation="vertical" className="h-5 bg-white/30" />
+              <PrecioAnimado valor={total} className="font-heading font-bold" />
             </motion.button>
           )}
-        </DialogContent>
-      </Dialog>
+        </AnimatePresence>
 
-      {/* Encargue (MTO) Modal */}
-      <Dialog
-        open={!!productoEncargue}
-        onOpenChange={(open) => {
-          if (!open) {
-            setProductoEncargue(null);
-            setMtoValores({});
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-heading flex items-center gap-2">
-              <Sparkles className="size-4 text-bordo-700" />
-              Encargue — {productoEncargue?.nombre}
-            </DialogTitle>
-            <DialogDescription>
-              Completá la personalización. No descuenta stock: el pedido queda
-              como Encargado hasta que llegue el producto.
-            </DialogDescription>
-          </DialogHeader>
-          {productoEncargue && (
-            <div className="py-2">
-              <MtoForm
-                campos={productoEncargue.mto_campos}
-                valores={mtoValores}
-                onChange={setMtoValores}
-                esSocio={esSocio}
-                tiempoFabricacionDias={productoEncargue.mto_tiempo_fabricacion_dias}
-                contexto="pos"
-              />
-            </div>
-          )}
-          <DialogFooter className="gap-2 sm:items-center">
-            <p className="mr-auto font-heading font-bold text-lg text-bordo-800">
-              <AnimatedPrice value={mtoValidacion?.precio ?? 0} />
-            </p>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setProductoEncargue(null);
-                setMtoValores({});
-              }}
-            >
-              Cancelar
-            </Button>
-            <motion.div whileTap={{ scale: 0.97 }}>
-              <Button
-                onClick={agregarEncargue}
-                disabled={!mtoValidacion?.valido}
-                className="gap-2"
-              >
-                <Plus className="size-4" />
-                Agregar encargue
-              </Button>
-            </motion.div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Socio Search Modal */}
-      <Dialog open={showSocioSearch} onOpenChange={setShowSocioSearch}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-heading">Buscar socio</DialogTitle>
-            <DialogDescription>
-              Ingresá la cédula o número de socio para aplicar descuento.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex gap-2">
-            <Input
-              value={cedulaBusqueda}
-              onChange={(e) => setCedulaBusqueda(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && buscarSocio()}
-              placeholder="Cédula o N° de socio"
-              className="flex-1"
-              autoFocus
-            />
-            <Button onClick={buscarSocio} disabled={buscandoSocio}>
-              {buscandoSocio ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Search className="size-4" />
+        {/* ═══ Carrito ═══ */}
+        <motion.div
+          variants={fadeInRight}
+          initial="hidden"
+          animate="visible"
+          transition={easeSnappy}
+          className={`w-full shrink-0 flex-col overflow-hidden border border-linea bg-white shadow-card lg:w-[340px] xl:w-[390px] 2xl:w-[430px]
+            ${showMobileCart ? "fixed inset-0 z-50 flex rounded-none lg:relative lg:inset-auto lg:z-auto lg:rounded-2xl" : "hidden rounded-2xl lg:flex"}`}
+        >
+          <div className="flex items-center justify-between border-b border-linea p-4">
+            <div className="flex items-center gap-2">
+              {showMobileCart && (
+                <button type="button" onClick={() => setShowMobileCart(false)} className="mr-1 p-2 lg:hidden" aria-label="Volver">
+                  <ArrowLeft className="size-5" />
+                </button>
               )}
-            </Button>
+              <ShoppingCart className="size-5 text-bordo-700" />
+              <h2 className="font-heading text-lg font-bold">Carrito</h2>
+              <AnimatePresence>
+                {unidades > 0 && (
+                  <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
+                    <Badge variant="secondary">{unidades}</Badge>
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </div>
+            {cart.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={limpiarVenta} className="h-9 text-xs text-muted-foreground hover:text-red-600">
+                <Trash2 className="mr-1 size-3.5" />
+                Vaciar
+              </Button>
+            )}
           </div>
-        </DialogContent>
-      </Dialog>
 
-      {/* Cash Confirmation Modal */}
-      <Dialog open={showEfectivoModal} onOpenChange={setShowEfectivoModal}>
-        <DialogContent className="sm:max-w-sm">
-          <AnimatePresence mode="wait">
-            {ventaExitosa ? (
+          <div className="flex-1 overflow-y-auto px-4">
+            {cart.length === 0 ? (
               <motion.div
-                key="success"
-                variants={scaleIn}
-                initial="hidden"
-                animate="visible"
-                transition={springBouncy}
-                className="flex flex-col items-center py-8"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex h-full flex-col items-center justify-center py-12 text-muted-foreground"
               >
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ ...springBouncy, delay: 0.1 }}
-                  className="size-16 rounded-full bg-green-100 flex items-center justify-center mb-4"
-                >
-                  <Check className="size-8 text-green-600" />
-                </motion.div>
-                <h3 className="font-heading font-bold text-xl mb-1">¡Venta registrada!</h3>
-                <p className="text-muted-foreground text-sm font-body">
-                  El carrito se limpiará automáticamente
-                </p>
+                <ShoppingCart className="mb-3 size-10" strokeWidth={1} />
+                <p className="text-sm">Tocá un producto para empezar</p>
               </motion.div>
             ) : (
-              <motion.div key="confirm">
-                <DialogHeader>
-                  <DialogTitle className="font-heading">Confirmar cobro en efectivo</DialogTitle>
-                  <DialogDescription>
-                    {hayEncargues
-                      ? "Se registrará la venta. Los encargues no descuentan stock y quedan como Encargado hasta que lleguen."
-                      : "Se registrará la venta y se descontará el stock."}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="py-4">
-                  <div className="bg-superficie rounded-xl p-4 space-y-2">
-                    {cart.map((item) => {
-                      const precio = (usarPrecioSocio && item.precio_socio != null
-                        ? item.precio_socio
-                        : item.precio) + item.precio_extra;
-                      return (
-                        <div key={item.key} className="flex justify-between text-sm font-body">
-                          <span>
-                            {item.nombre} × {item.cantidad}
-                            {item.es_encargue && (
-                              <span className="ml-1.5 text-xs text-bordo-700">(encargue)</span>
-                            )}
-                          </span>
-                          <span className="font-medium">
-                            ${(precio * item.cantidad).toLocaleString("es-UY")}
-                          </span>
-                        </div>
-                      );
-                    })}
-                    <Separator />
-                    <div className="flex justify-between font-heading font-bold text-lg">
-                      <span>Total</span>
-                      <span>${total.toLocaleString("es-UY")}</span>
-                    </div>
-                  </div>
-                  {emailClienteParaVenta && (
-                    <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <AnimatePresence mode="popLayout">
+                {cart.map((i) => (
+                  <LineaCarrito key={i.key} item={i} precioSocio={esSocio} onCantidad={cambiarCantidad} onQuitar={quitar} />
+                ))}
+              </AnimatePresence>
+            )}
+          </div>
+
+          <div className="space-y-3 border-t border-linea p-4">
+            <Input
+              value={nombreCliente}
+              onChange={(e) => setNombreCliente(e.target.value)}
+              placeholder="Nombre del cliente (opcional)"
+              className="h-11 rounded-lg border-none bg-superficie text-sm"
+            />
+
+            <AnimatePresence initial={false}>
+              {hayEncargues && (
+                <motion.div
+                  key="email"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={springSmooth}
+                  className="overflow-hidden"
+                >
+                  {socio ? (
+                    <p className="flex items-center gap-1.5 rounded-lg bg-superficie px-3 py-2 text-xs text-muted-foreground">
                       <Mail className="size-3.5 shrink-0" />
-                      Se enviará la confirmación a {emailClienteParaVenta}
+                      Los avisos del encargue van al email de la cuenta del socio.
                     </p>
+                  ) : (
+                    <div className="space-y-1">
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          type="email"
+                          inputMode="email"
+                          autoComplete="off"
+                          value={emailCliente}
+                          onChange={(e) => setEmailCliente(e.target.value)}
+                          placeholder="Email para avisos del encargue"
+                          aria-invalid={!emailValido}
+                          className="h-11 rounded-lg border-none bg-superficie pl-8 text-sm"
+                        />
+                      </div>
+                      <p className={`text-[11px] ${!emailValido ? "text-red-600" : emailTrim ? "text-green-700" : "text-amber-700"}`}>
+                        {!emailValido
+                          ? "Email inválido"
+                          : emailTrim
+                            ? "Le avisamos por mail cuando esté listo para retirar."
+                            : "Sin email no se le puede avisar cuando esté listo."}
+                      </p>
+                    </div>
                   )}
-                </div>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowEfectivoModal(false)}
-                    disabled={procesando}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={() => procesarVentaEfectivo()}
-                    disabled={procesando}
-                    className="bg-green-600 hover:bg-green-700 text-white gap-2"
-                  >
-                    {procesando ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Banknote className="size-4" />
-                    )}
-                    Cobrar ${total.toLocaleString("es-UY")}
-                  </Button>
-                </DialogFooter>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </DialogContent>
-      </Dialog>
-
-      {/* Transferencia Modal */}
-      <Dialog
-        open={showTransferenciaModal}
-        onOpenChange={(open) => {
-          setShowTransferenciaModal(open);
-          if (!open && !transferExitosa) {
-            setComprobanteFile(null);
-            setComprobantePreview(null);
-            setMontoEfectivoMixto("");
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <AnimatePresence mode="wait">
-            {transferExitosa ? (
-              <motion.div
-                key="transfer-success"
-                variants={scaleIn}
-                initial="hidden"
-                animate="visible"
-                transition={springBouncy}
-                className="flex flex-col items-center py-8"
-              >
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ ...springBouncy, delay: 0.1 }}
-                  className="size-16 rounded-full bg-amber-100 flex items-center justify-center mb-4"
-                >
-                  <Check className="size-8 text-amber-600" />
                 </motion.div>
-                <h3 className="font-heading font-bold text-xl mb-1">Venta registrada</h3>
-                <p className="text-muted-foreground text-sm font-body text-center">
-                  Pendiente de verificación en &quot;Por conciliar&quot;
-                </p>
-              </motion.div>
-            ) : (
-              <motion.div key="transfer-form">
-                <DialogHeader>
-                  <DialogTitle className="font-heading">
-                    {modoMixto ? "Pago mixto" : "Pago por transferencia"}
-                  </DialogTitle>
-                  <DialogDescription>
-                    {modoMixto
-                      ? "Indicá cuánto se cobra en efectivo; el resto se transfiere."
-                      : "Datos bancarios para la transferencia y comprobante."}
-                  </DialogDescription>
-                </DialogHeader>
+              )}
+            </AnimatePresence>
 
-                <div className="py-4 space-y-4">
-                  {/* Split efectivo / transferencia */}
-                  {modoMixto && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="rounded-xl border border-linea p-4 space-y-3"
-                    >
-                      <div className="flex justify-between text-sm font-body">
-                        <span className="text-muted-foreground">Total de la venta</span>
-                        <span className="font-heading font-bold">
-                          ${total.toLocaleString("es-UY")}
-                        </span>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label
-                          htmlFor="monto-efectivo-mixto"
-                          className="flex items-center gap-1.5 text-sm font-body font-medium"
-                        >
-                          <Banknote className="size-4 text-green-600" />
-                          Monto en efectivo
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                            $
-                          </span>
-                          <Input
-                            id="monto-efectivo-mixto"
-                            type="number"
-                            inputMode="decimal"
-                            min={0}
-                            max={total}
-                            step="1"
-                            value={montoEfectivoMixto}
-                            onChange={(e) => setMontoEfectivoMixto(e.target.value)}
-                            placeholder="0"
-                            className="pl-7 tabular-nums"
-                            autoFocus
-                          />
-                        </div>
-                        <AnimatePresence>
-                          {montoEfectivoMixto !== "" && !mixtoValido && (
-                            <motion.p
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: "auto" }}
-                              exit={{ opacity: 0, height: 0 }}
-                              className="text-xs text-red-600"
-                            >
-                              Debe ser mayor a $0 y menor al total
-                            </motion.p>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                      <Separator />
-                      <div className="grid grid-cols-2 gap-2 text-sm font-body">
-                        <div className="rounded-lg bg-green-50 px-3 py-2">
-                          <p className="text-xs text-green-700">Efectivo</p>
-                          <p className="font-heading font-bold text-green-700">
-                            <AnimatedPrice value={mixtoValido ? efectivoMixto : 0} />
-                          </p>
-                        </div>
-                        <div className="rounded-lg bg-amber-50 px-3 py-2">
-                          <p className="text-xs text-amber-700">Transferencia</p>
-                          <p className="font-heading font-bold text-amber-700">
-                            <AnimatedPrice value={mixtoValido ? transferenciaMixto : 0} />
-                          </p>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
+            <div className="flex gap-2">
+              {socio ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`flex flex-1 items-center justify-between rounded-lg border px-3 py-2 ${esSocio ? "border-dorado-300/70 bg-dorado-300/15" : "border-linea bg-superficie"}`}
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      {socio.nombre} {socio.apellido}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {esSocio ? "Socio" : "No socio"} · CI {socio.cedula}
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => setSocio(null)} className="p-2 text-muted-foreground hover:text-foreground" aria-label="Quitar socio">
+                    <X className="size-4" />
+                  </button>
+                </motion.div>
+              ) : (
+                <Button variant="outline" onClick={() => setShowSocio(true)} className="h-11 flex-1 rounded-lg text-sm">
+                  <UserSearch className="mr-2 size-4" />
+                  Socio (precio socio)
+                </Button>
+              )}
+              {!showDescuento && (
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDescuento(true)}
+                  className="h-11 rounded-lg text-sm"
+                  title="Descuento manual"
+                >
+                  <Percent className="size-4" />
+                </Button>
+              )}
+            </div>
 
-                  {/* Bank details */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-superficie rounded-xl p-4 space-y-2"
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <Building2 className="size-4 text-bordo-700" />
-                      <span className="font-heading font-bold text-sm text-bordo-800">
-                        Datos bancarios
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm font-body">
-                      <span className="text-muted-foreground">Banco:</span>
-                      <span className="font-medium">ITAU</span>
-                      <span className="text-muted-foreground">Cuenta:</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-bordo-800">9500100</span>
-                        <motion.button
-                          whileTap={{ scale: 0.9 }}
-                          onClick={copiarCuenta}
-                          className="text-muted-foreground hover:text-bordo-700 transition-colors"
-                          title="Copiar número de cuenta"
-                        >
-                          {cuentaCopiada ? (
-                            <Check className="size-3.5 text-green-600" />
-                          ) : (
-                            <Copy className="size-3.5" />
-                          )}
-                        </motion.button>
-                      </div>
-                      <span className="text-muted-foreground">Titular:</span>
-                      <span className="font-medium">Club Seminario</span>
-                    </div>
-                    <div className="pt-2 border-t border-linea mt-2">
-                      <div className="flex justify-between font-heading font-bold text-lg">
-                        <span>Total a transferir:</span>
-                        <span className="text-bordo-800">${montoATransferir.toLocaleString("es-UY")}</span>
-                      </div>
-                    </div>
-                  </motion.div>
-
-                  {/* Upload comprobante */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                    className="space-y-2"
-                  >
-                    <label className="text-sm font-body font-medium">
-                      Comprobante de transferencia
-                    </label>
-                    <input
-                      ref={comprobanteInputRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,application/pdf"
-                      className="hidden"
-                      onChange={(e) => handleComprobanteSelect(e.target.files?.[0] || null)}
-                    />
-
-                    {comprobanteFile ? (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="relative border-2 border-green-200 bg-green-50/50 rounded-xl p-3"
-                      >
-                        <div className="flex items-center gap-3">
-                          {comprobantePreview ? (
-                            <img
-                              src={comprobantePreview}
-                              alt="Preview"
-                              className="size-16 rounded-lg object-cover border border-linea"
-                            />
-                          ) : (
-                            <div className="size-16 rounded-lg bg-superficie flex items-center justify-center border border-linea">
-                              <FileImage className="size-6 text-muted-foreground" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-body font-medium truncate">
-                              {comprobanteFile.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {(comprobanteFile.size / 1024).toFixed(0)} KB
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setComprobanteFile(null);
-                              setComprobantePreview(null);
-                              if (comprobanteInputRef.current) {
-                                comprobanteInputRef.current.value = "";
-                              }
-                            }}
-                            className="text-muted-foreground hover:text-red-600 transition-colors"
-                          >
-                            <X className="size-4" />
-                          </button>
-                        </div>
-                      </motion.div>
-                    ) : (
-                      <motion.button
+            <AnimatePresence initial={false}>
+              {showDescuento && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-amber-800">Descuento manual</span>
+                      <button
                         type="button"
-                        whileHover={{ scale: 1.01 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => comprobanteInputRef.current?.click()}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
+                        onClick={() => {
+                          setShowDescuento(false);
+                          setDescValor("");
+                          setDescMotivo("");
                         }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleComprobanteSelect(e.dataTransfer.files?.[0] || null);
-                        }}
-                        className="w-full border-2 border-dashed border-gray-300 hover:border-bordo-400 rounded-xl p-6 flex flex-col items-center gap-2 text-muted-foreground hover:text-bordo-700 transition-colors cursor-pointer"
+                        className="p-1 text-muted-foreground hover:text-foreground"
+                        aria-label="Quitar descuento"
                       >
-                        <Upload className="size-6" />
-                        <span className="text-sm font-body font-medium">
-                          Subir comprobante
-                        </span>
-                        <span className="text-xs">
-                          JPG, PNG, WebP o PDF (máx. 10MB)
-                        </span>
-                      </motion.button>
-                    )}
-                  </motion.div>
-                </div>
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-[auto_1fr] gap-2">
+                      <div className="flex gap-1 rounded-lg bg-white p-1">
+                        {(["porcentaje", "fijo"] as const).map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => setDescTipo(t)}
+                            className={`h-9 rounded-md px-3 text-sm font-medium transition-colors ${descTipo === t ? "bg-primary text-white" : "text-muted-foreground"}`}
+                          >
+                            {t === "porcentaje" ? "%" : "$"}
+                          </button>
+                        ))}
+                      </div>
+                      <Input
+                        inputMode="decimal"
+                        value={descValor}
+                        onChange={(e) => setDescValor(e.target.value.replace(/[^\d,.]/g, ""))}
+                        placeholder={descTipo === "porcentaje" ? "Ej.: 10" : "Ej.: 500"}
+                        className="h-11 text-base"
+                      />
+                    </div>
+                    <Input
+                      value={descMotivo}
+                      onChange={(e) => setDescMotivo(e.target.value)}
+                      placeholder="Motivo (opcional)"
+                      className="h-10 text-sm"
+                      maxLength={500}
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-                <DialogFooter className="gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setShowTransferenciaModal(false);
-                      setComprobanteFile(null);
-                      setComprobantePreview(null);
-                      setMontoEfectivoMixto("");
-                    }}
-                    disabled={subiendoComprobante}
+            <div className="space-y-1 pt-1">
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>Subtotal</span>
+                <PrecioAnimado valor={subtotalLista} />
+              </div>
+              <AnimatePresence initial={false}>
+                {descuentoSocio > 0 && (
+                  <motion.div
+                    key="ds"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="flex justify-between text-sm text-green-700"
                   >
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={procesarTransferencia}
-                    disabled={
-                      !comprobanteFile ||
-                      subiendoComprobante ||
-                      (modoMixto && !mixtoValido)
-                    }
-                    className="bg-amber-500 hover:bg-amber-600 text-white gap-2"
+                    <span>Beneficio socio</span>
+                    <span className="tabular-nums">- {pesos(descuentoSocio)}</span>
+                  </motion.div>
+                )}
+                {descuentoManual > 0 && (
+                  <motion.div
+                    key="dm"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="flex justify-between text-sm text-amber-700"
                   >
-                    {subiendoComprobante ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Building2 className="size-4" />
-                    )}
-                    {subiendoComprobante ? "Procesando..." : `Confirmar $${total.toLocaleString("es-UY")}`}
-                  </Button>
-                </DialogFooter>
+                    <span>Descuento{descTipo === "porcentaje" ? ` (${descValor}%)` : ""}</span>
+                    <span className="tabular-nums">- {pesos(descuentoManual)}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              <Separator />
+              <div className="flex items-baseline justify-between font-heading text-2xl font-bold">
+                <span>Total</span>
+                <PrecioAnimado valor={total} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <motion.div whileTap={{ scale: 0.97 }}>
+                <Button
+                  onClick={() => abrirCobro("efectivo")}
+                  disabled={botonesDeshabilitados || !cajaAbierta}
+                  className="h-14 w-full gap-1.5 rounded-xl bg-green-600 font-heading text-base font-bold text-white hover:bg-green-700"
+                >
+                  {cajaAbierta ? <Banknote className="size-5" /> : <Lock className="size-4" />}
+                  Efectivo
+                </Button>
               </motion.div>
-            )}
-          </AnimatePresence>
-        </DialogContent>
-      </Dialog>
+              <motion.div whileTap={{ scale: 0.97 }}>
+                <Button
+                  onClick={() => abrirCobro("transferencia")}
+                  disabled={botonesDeshabilitados}
+                  className="h-14 w-full gap-1.5 rounded-xl bg-amber-500 font-heading text-base font-bold text-white hover:bg-amber-600"
+                >
+                  <Building2 className="size-5" />
+                  Transferencia
+                </Button>
+              </motion.div>
+              <motion.div whileTap={{ scale: 0.97 }} className="col-span-2">
+                <Button
+                  variant="outline"
+                  onClick={() => abrirCobro("mixto")}
+                  disabled={botonesDeshabilitados || !cajaAbierta}
+                  className="h-12 w-full gap-1.5 rounded-xl border-bordo-200 font-heading text-sm font-bold text-bordo-800 hover:bg-bordo-50 hover:text-bordo-900"
+                >
+                  {cajaAbierta ? <Coins className="size-4" /> : <Lock className="size-4" />}
+                  Mixto: efectivo + transferencia
+                </Button>
+              </motion.div>
+            </div>
+            <AnimatePresence initial={false}>
+              {!cajaAbierta && (
+                <motion.p
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="flex items-center gap-1.5 text-xs text-amber-800"
+                >
+                  <Lock className="size-3.5" />
+                  Para cobrar en efectivo o mixto, abrí la caja.
+                </motion.p>
+              )}
+            </AnimatePresence>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* ═══ Diálogos ═══ */}
+      <SelectorVariante
+        producto={productoVariantes}
+        onCerrar={() => setProductoVariantes(null)}
+        onElegir={agregar}
+        onEncargar={(p) => {
+          setProductoVariantes(null);
+          setProductoEncargue(p);
+        }}
+      />
+      <DialogoEncargue
+        producto={productoEncargue}
+        esSocio={esSocio}
+        onCerrar={() => setProductoEncargue(null)}
+        onAgregar={(item) => {
+          setCart((prev) => [...prev, item]);
+          toast.success(`${item.nombre} agregado como encargue`, { icon: <Check className="size-4" /> });
+          setProductoEncargue(null);
+        }}
+      />
+      <DialogoSocio
+        abierto={showSocio}
+        onCambio={setShowSocio}
+        buscar={buscarSocio}
+        onEncontrado={(s) => {
+          setSocio(s);
+          setShowSocio(false);
+        }}
+      />
+      <DialogoCobro
+        metodo={metodoCobro}
+        total={total}
+        lineas={lineasResumen}
+        emailAviso={emailParaVenta}
+        hayEncargues={hayEncargues}
+        procesando={procesando}
+        resultado={resultado}
+        onConfirmar={confirmarCobro}
+        onCerrar={cerrarCobro}
+      />
+      <DialogoMovimiento
+        tipo={tipoMovimiento}
+        catalogos={catalogosCaja}
+        esperado={estado.esperado}
+        onCambiarTipo={setTipoMovimiento}
+        onCerrar={() => setTipoMovimiento(null)}
+        onRegistrar={onMovimiento}
+      />
+      <DialogoCierre
+        abierto={showCierre}
+        estado={estado}
+        onCerrarDialogo={() => setShowCierre(false)}
+        onCerrarCaja={onCerrarCaja}
+        onListo={cajaCerrada}
+      />
     </div>
   );
 }

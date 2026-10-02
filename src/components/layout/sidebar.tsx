@@ -31,6 +31,7 @@ import {
   FileSpreadsheet,
   TicketPercent,
   Heart,
+  Wallet,
   BookOpen,
   ListTree,
   NotebookPen,
@@ -76,6 +77,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/admin/promocodes", label: "Promocodes", icon: TicketPercent },
       { href: "/admin/stock", label: "Stock", icon: BarChart3 },
       { href: "/admin/pos", label: "POS", icon: MonitorSmartphone },
+      { href: "/admin/pos/caja", label: "Historial de caja", icon: Wallet },
       { href: "/admin/donaciones", label: "Donaciones", icon: Heart },
       { href: "/pedidos-disciplinas", label: "Pedidos de disciplinas", icon: Dumbbell },
       { href: "/admin/reportes", label: "Reportes", icon: FileSpreadsheet },
@@ -97,6 +99,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/admin/proveedores", label: "Proveedores", icon: Truck },
       { href: "/admin/compras", label: "Compras y pagos", icon: ShoppingCart },
       { href: "/admin/stock", label: "Stock valorizado", icon: BarChart3, roles: ["tesorero"] },
+      { href: "/admin/pos/caja", label: "Caja del POS", icon: Wallet, roles: ["tesorero"] },
     ],
   },
   {

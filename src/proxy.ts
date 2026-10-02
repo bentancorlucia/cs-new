@@ -36,7 +36,7 @@ const EVENTOS_PROTECTED_PREFIXES = [
 const PROTECTED_ROUTES: Record<string, string[]> = {
   "/admin/proveedores": ["super_admin", "tienda", "tesorero"],
   "/admin/compras": ["super_admin", "tienda", "tesorero"],
-  "/admin/pos": ["super_admin", "tienda"],
+  "/admin/pos": ["super_admin", "tienda", "tesorero"],
   "/admin/pedidos": ["super_admin", "tienda", "tesorero"],
   "/admin/donaciones": ["super_admin", "tienda", "tesorero"],
   "/admin/stock": ["super_admin", "tienda", "tesorero"],
