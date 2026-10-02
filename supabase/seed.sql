@@ -10,8 +10,8 @@ INSERT INTO roles (nombre, descripcion) VALUES
   ('eventos', 'Gestión de eventos y entradas'),
   ('scanner', 'Escaneo de QR en eventos'),
   ('socio', 'Socio activo del club'),
-  ('no_socio', 'Usuario registrado sin membresía'),
-  ('tesorero', 'Tesorería y contabilidad');
+  ('no_socio', 'Usuario registrado sin membresía');
+-- tesorero y comision_fiscal los crea la migración de contabilidad
 
 -- Disciplinas deportivas (las de producción al 2026-10-02)
 INSERT INTO disciplinas (nombre, slug) VALUES
@@ -78,3 +78,6 @@ INSERT INTO contenido_paginas (pagina, seccion, titulo, contenido, orden) VALUES
 
   ('beneficios', 'tarjeta', 'Tarjeta de Membresía',
    'Como socio del club, accedés a descuentos exclusivos en comercios asociados presentando tu carnet digital.', 1);
+
+-- Contabilidad: un centro de costo por disciplina
+SELECT contabilidad.sincronizar_centros_disciplinas();
