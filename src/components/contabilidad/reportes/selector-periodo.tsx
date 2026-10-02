@@ -154,7 +154,7 @@ export function SelectorPeriodo({
         </div>
       </div>
       <p className="mt-2 text-[11px] text-muted-foreground">
-        Ejercicio {ejercicio.nombre}: {formatFecha(ejercicio.fecha_inicio)} al {formatFecha(ejercicio.fecha_fin)}
+        {ejercicio.nombre}: {formatFecha(ejercicio.fecha_inicio)} al {formatFecha(ejercicio.fecha_fin)}
         {ejercicio.estado === "cerrado" ? " · cerrado" : ""}
       </p>
     </motion.div>
