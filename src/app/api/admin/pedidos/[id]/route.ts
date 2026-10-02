@@ -1,11 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireRole, getCurrentUser } from "@/lib/supabase/roles";
 import { sendOrderReady, sendOrderCancelled } from "@/lib/email";
 import { resolverEmailPedido } from "@/lib/tienda/email-pedido";
-import { z } from "zod";
-
-const TIENDA_ROLES = ["super_admin", "tienda"];
+import { mensajeError } from "@/lib/contabilidad/formato";
+import {
+  ErrorHttp,
+  contabilidadDePedido,
+  exigir,
+  idNumerico,
+  respuestaError,
+} from "@/lib/comercial/pedidos";
+import type {
+  CampoMto,
+  Comprobante,
+  DatosOcr,
+  EstadoDonacion,
+  EstadoPedido,
+  PedidoDetalle,
+  TipoPedido,
+} from "@/components/pedidos/tipos";
 
 const estadoSchema = z.object({
   estado: z.enum([
@@ -18,12 +32,12 @@ const estadoSchema = z.object({
     "retirado",
     "cancelado",
   ]),
-  motivo_cancelacion: z.string().optional(),
+  motivo_cancelacion: z.string().trim().max(500).optional(),
 });
 
 // Transiciones manuales permitidas. La aprobación de transferencias va por
-// /verificar y el pago de MercadoPago por el webhook: acá no se puede pasar
-// a "pagado" ni salir de "cancelado" sin tocar stock y tesorería.
+// /verificar: acá no se puede pasar a "pagado" ni salir de "cancelado".
+// Pasar a "retirado" reconoce la venta de los encargues (trigger en la base).
 const TRANSICIONES: Record<string, string[]> = {
   pendiente: ["cancelado"],
   pendiente_verificacion: ["cancelado"],
@@ -46,248 +60,254 @@ const contactoSchema = z.object({
     .transform((v) => (v === "" ? null : v.toLowerCase())),
 });
 
-// GET /api/admin/pedidos/[id] — detalle de pedido
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    await requireRole(TIENDA_ROLES);
-    const { id } = await params;
-    const supabase = createAdminClient();
+const uno = <T,>(v: T | T[] | null | undefined): T | null =>
+  v == null ? null : Array.isArray(v) ? v[0] ?? null : v;
 
-    const { data, error } = await supabase
+// GET /api/admin/pedidos/[id] — detalle con comprobante y contabilidad
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const permisos = await exigir((p) => p.puedeVer);
+    const pedidoId = idNumerico((await params).id);
+    const db = createAdminClient();
+
+    const { data: p, error } = await db
       .from("pedidos")
       .select(
-        `
-        *,
-        perfiles!perfil_id(id, nombre, apellido, telefono, cedula, es_socio),
+        `*,
+        perfiles!perfil_id(nombre, apellido, telefono, cedula, es_socio),
+        disciplinas(id, nombre),
         pedido_items(
-          id, cantidad, precio_unitario, subtotal,
+          id, cantidad, precio_unitario, subtotal, costo_unitario_venta,
           es_encargue, personalizacion, precio_extra_personalizacion,
           productos(id, nombre, slug, mto_campos),
           producto_variantes(id, nombre)
         ),
-        donaciones(id, monto, estado, cobrada_at, transferencia_id)
-      `
+        donaciones(id, monto, estado, transferencia_id)`
       )
-      .eq("id", parseInt(id))
-      .single();
+      .eq("id", pedidoId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!p) throw new ErrorHttp(404, "Pedido no encontrado");
 
-    if (error || !data) {
-      return NextResponse.json({ error: "Pedido no encontrado" }, { status: 404 });
-    }
+    const [{ data: comps }, contabilidad] = await Promise.all([
+      db
+        .from("comprobantes")
+        .select("id, url, nombre_archivo, tipo, tamano_bytes, datos_extraidos, estado, verificado_at, motivo_rechazo")
+        .eq("pedido_id", pedidoId)
+        .order("created_at", { ascending: false }),
+      contabilidadDePedido(pedidoId),
+    ]);
 
-    // Normalizar donaciones a array (PostgREST devuelve objeto único por UNIQUE en pedido_id)
-    const dRaw = (data as any).donaciones;
-    (data as any).donaciones = dRaw == null ? [] : Array.isArray(dRaw) ? dRaw : [dRaw];
-
-    const { data: comprobantesData } = await supabase
-      .from("comprobantes")
-      .select(
-        "id, url, nombre_archivo, tipo, tamano_bytes, datos_extraidos, estado, verificado_at, motivo_rechazo"
-      )
-      .eq("pedido_id", parseInt(id))
-      .order("created_at", { ascending: false });
-
-    (data as any).comprobantes = comprobantesData ?? [];
-
-    if (Array.isArray((data as any).comprobantes) && (data as any).comprobantes.length > 0) {
-      const pathRegex = /\/storage\/v1\/object\/(?:sign|public)\/comprobantes\/([^?]+)/;
-      await Promise.all(
-        (data as any).comprobantes.map(async (comp: any) => {
-          if (!comp?.url) return;
-          const match = pathRegex.exec(comp.url);
-          if (!match) return;
-          const path = decodeURIComponent(match[1]);
-          const { data: signed } = await supabase.storage
+    // URL re-firmada por 1 h (la guardada puede estar vencida)
+    const pathRegex = /\/storage\/v1\/object\/(?:sign|public)\/comprobantes\/([^?]+)/;
+    const comprobantes: Comprobante[] = await Promise.all(
+      (comps ?? []).map(async (c) => {
+        let url = c.url;
+        const m = c.url ? pathRegex.exec(c.url) : null;
+        if (m) {
+          const { data: firmada } = await db.storage
             .from("comprobantes")
-            .createSignedUrl(path, 3600);
-          if (signed?.signedUrl) {
-            comp.url = signed.signedUrl;
+            .createSignedUrl(decodeURIComponent(m[1]), 3600);
+          if (firmada?.signedUrl) url = firmada.signedUrl;
+        }
+        return {
+          id: c.id,
+          url,
+          nombre_archivo: c.nombre_archivo,
+          tipo: c.tipo,
+          tamano_bytes: c.tamano_bytes,
+          datos_extraidos: (c.datos_extraidos as DatosOcr | null) ?? null,
+          estado: c.estado,
+          verificado_at: c.verificado_at,
+          motivo_rechazo: c.motivo_rechazo,
+        };
+      })
+    );
+
+    const perfil = uno(p.perfiles);
+    const disc = uno(p.disciplinas);
+    const don = uno(p.donaciones);
+
+    const data: PedidoDetalle = {
+      id: p.id,
+      numero_pedido: p.numero_pedido ?? String(p.id),
+      tipo: p.tipo as TipoPedido,
+      estado: p.estado as EstadoPedido,
+      subtotal: Number(p.subtotal),
+      descuento: Number(p.descuento ?? 0),
+      total: Number(p.total),
+      metodo_pago: p.metodo_pago,
+      monto_efectivo: p.monto_efectivo == null ? null : Number(p.monto_efectivo),
+      monto_transferencia: p.monto_transferencia == null ? null : Number(p.monto_transferencia),
+      nombre_cliente: p.nombre_cliente,
+      telefono_cliente: p.telefono_cliente,
+      email_cliente: p.email_cliente,
+      perfil_id: p.perfil_id,
+      notas: p.notas,
+      created_at: p.created_at ?? "",
+      aplico_precio_socio: p.aplico_precio_socio,
+      disciplina: disc ? { id: disc.id, nombre: disc.nombre } : null,
+      perfil: perfil
+        ? {
+            nombre: perfil.nombre,
+            apellido: perfil.apellido,
+            telefono: perfil.telefono,
+            cedula: perfil.cedula,
+            es_socio: perfil.es_socio,
           }
-        })
-      );
-    }
+        : null,
+      items: (p.pedido_items ?? [])
+        .slice()
+        .sort((a, b) => a.id - b.id)
+        .map((i) => {
+          const prod = uno(i.productos);
+          const v = uno(i.producto_variantes);
+          return {
+            id: i.id,
+            cantidad: i.cantidad,
+            precio_unitario: Number(i.precio_unitario),
+            subtotal: Number(i.subtotal),
+            es_encargue: i.es_encargue,
+            personalizacion: (i.personalizacion ?? {}) as Record<string, string | number>,
+            precio_extra_personalizacion: Number(i.precio_extra_personalizacion ?? 0),
+            costo_unitario_venta: i.costo_unitario_venta == null ? null : Number(i.costo_unitario_venta),
+            producto: {
+              id: prod?.id ?? 0,
+              nombre: prod?.nombre ?? "Producto",
+              slug: prod?.slug ?? null,
+              mto_campos: Array.isArray(prod?.mto_campos) ? (prod.mto_campos as unknown as CampoMto[]) : [],
+            },
+            variante: v ? { id: v.id, nombre: v.nombre } : null,
+          };
+        }),
+      donacion: don
+        ? {
+            id: don.id,
+            monto: Number(don.monto),
+            estado: don.estado as EstadoDonacion,
+            transferencia_id: don.transferencia_id,
+          }
+        : null,
+      comprobantes,
+      contabilidad,
+      permisos: {
+        puedeOperar: permisos.puedeOperar,
+        puedeOperarComercial: permisos.puedeOperarComercial,
+        puedeVerContabilidad: permisos.puedeVerContabilidad,
+        puedeEscribirContabilidad: permisos.puedeEscribirContabilidad,
+      },
+    };
 
     return NextResponse.json({ data });
-  } catch (error: any) {
-    if (error.message === "No autorizado") {
-      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-    }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return respuestaError(error);
   }
 }
 
-// PUT /api/admin/pedidos/[id] — actualizar estado
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+// PUT /api/admin/pedidos/[id] — cambio de estado (cancelación vía cancelar_pedido)
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireRole(TIENDA_ROLES);
-    const { id } = await params;
-    const supabase = createAdminClient();
-    const body = await request.json();
-    const parsed = estadoSchema.parse(body);
-
-    const db = supabase as any;
-    const pedidoId = parseInt(id);
+    const permisos = await exigir((p) => p.puedeOperar);
+    const pedidoId = idNumerico((await params).id);
+    const db = createAdminClient();
+    const parsed = estadoSchema.parse(await request.json());
 
     const { data: actual } = await db
       .from("pedidos")
       .select("id, estado")
       .eq("id", pedidoId)
-      .single();
-
-    if (!actual) {
-      return NextResponse.json({ error: "Pedido no encontrado" }, { status: 404 });
-    }
+      .maybeSingle();
+    if (!actual) throw new ErrorHttp(404, "Pedido no encontrado");
 
     if (actual.estado === parsed.estado) {
-      return NextResponse.json(
-        { error: `El pedido ya está en estado "${parsed.estado}"` },
-        { status: 400 }
-      );
+      throw new ErrorHttp(400, `El pedido ya está en estado "${parsed.estado}"`);
     }
-
     if (!(TRANSICIONES[actual.estado] ?? []).includes(parsed.estado)) {
-      return NextResponse.json(
-        {
-          error: `No se puede pasar de "${actual.estado}" a "${parsed.estado}"`,
-        },
-        { status: 400 }
-      );
+      throw new ErrorHttp(400, `No se puede pasar de "${actual.estado}" a "${parsed.estado}"`);
     }
-
-    let data: any;
 
     if (parsed.estado === "cancelado") {
-      // Atómico: repone stock (o libera la reserva), revierte ingresos en
-      // tesorería, cancela la donación y devuelve el uso del promocode.
-      const user = await getCurrentUser();
+      // Atómico: revierte los asientos del pedido, devuelve la mercadería al
+      // costo con que salió (o libera la reserva), cancela la donación y
+      // devuelve el uso del promocode.
       const { data: canc, error: cancError } = await db.rpc("cancelar_pedido", {
         p_pedido_id: pedidoId,
-        p_motivo: parsed.motivo_cancelacion || null,
-        p_registrado_por: user?.id ?? null,
+        p_motivo: parsed.motivo_cancelacion || undefined,
+        p_registrado_por: permisos.userId ?? undefined,
       });
-      if (cancError) throw cancError;
-      if (canc?.ok === false) {
-        return NextResponse.json({ error: "No se pudo cancelar el pedido" }, { status: 400 });
+      if (cancError) throw new ErrorHttp(400, mensajeError(cancError));
+      if ((canc as { ok?: boolean } | null)?.ok === false) {
+        throw new ErrorHttp(400, "No se pudo cancelar el pedido");
       }
-
-      const { data: row, error } = await db
-        .from("pedidos")
-        .select()
-        .eq("id", pedidoId)
-        .single();
-      if (error) throw error;
-      data = row;
     } else {
-      const { data: row, error } = await db
+      const { data: fila, error } = await db
         .from("pedidos")
-        .update({
-          estado: parsed.estado,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ estado: parsed.estado, updated_at: new Date().toISOString() })
         .eq("id", pedidoId)
         .eq("estado", actual.estado)
-        .select()
+        .select("id")
         .maybeSingle();
-
-      if (error) throw error;
-      if (!row) {
-        return NextResponse.json(
-          { error: "El pedido cambió mientras lo editabas. Recargá la página." },
-          { status: 409 }
-        );
+      if (error) throw new ErrorHttp(400, mensajeError(error));
+      if (!fila) {
+        throw new ErrorHttp(409, "El pedido cambió mientras lo editabas. Recargá la página.");
       }
-      data = row;
     }
 
-    // Send cancellation email (cuenta o email_cliente del POS)
-    if (parsed.estado === "cancelado") {
+    const { data, error } = await db
+      .from("pedidos")
+      .select("id, estado, numero_pedido, nombre_cliente, perfil_id, email_cliente")
+      .eq("id", pedidoId)
+      .single();
+    if (error) throw error;
+
+    // Avisos por email (cuenta o email_cliente del POS); un error no corta.
+    if (parsed.estado === "cancelado" || parsed.estado === "listo_retiro") {
       try {
-        const { email: userEmail } = await resolverEmailPedido(db, data);
-        if (userEmail) {
-          await sendOrderCancelled(userEmail, {
+        const { email, tieneCuenta } = await resolverEmailPedido(db, data);
+        if (email && parsed.estado === "cancelado") {
+          await sendOrderCancelled(email, {
             nombreCliente: data.nombre_cliente || "Cliente",
-            numeroPedido: data.numero_pedido,
+            numeroPedido: data.numero_pedido ?? String(data.id),
             motivo: parsed.motivo_cancelacion,
           });
         }
-      } catch (emailError) {
-        console.error("Error sending order cancelled email:", emailError);
-      }
-    }
-
-    // Send "ready for pickup" email when order transitions to listo_retiro
-    if (parsed.estado === "listo_retiro") {
-      try {
-        const { email: userEmail, tieneCuenta } = await resolverEmailPedido(db, data);
-        if (userEmail) {
+        if (email && parsed.estado === "listo_retiro") {
           const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://clubseminario.com.uy";
-          await sendOrderReady(userEmail, {
+          await sendOrderReady(email, {
             nombreCliente: data.nombre_cliente || "Cliente",
-            numeroPedido: data.numero_pedido,
+            numeroPedido: data.numero_pedido ?? String(data.id),
             pedidoUrl: tieneCuenta ? `${APP_URL}/tienda/pedido/${data.id}` : undefined,
           });
         }
       } catch (emailError) {
-        console.error("Error sending order ready email:", emailError);
+        console.error("Error al enviar el aviso del pedido:", emailError);
       }
     }
 
-    return NextResponse.json({ data });
-  } catch (error: any) {
-    if (error.message === "No autorizado") {
-      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-    }
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Datos inválidos", details: error.issues },
-        { status: 400 }
-      );
-    }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ data: { id: data.id, estado: data.estado } });
+  } catch (error) {
+    return respuestaError(error);
   }
 }
 
-// PATCH /api/admin/pedidos/[id] — actualizar email de contacto para avisos
-// (clientes presenciales sin cuenta).
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+// PATCH /api/admin/pedidos/[id] — email de contacto para avisos (clientes sin cuenta)
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireRole(TIENDA_ROLES);
-    const { id } = await params;
-    const db = createAdminClient() as any;
+    await exigir((p) => p.puedeOperar);
+    const pedidoId = idNumerico((await params).id);
+    const db = createAdminClient();
     const parsed = contactoSchema.parse(await request.json());
 
     const { data, error } = await db
       .from("pedidos")
-      .update({
-        email_cliente: parsed.email_cliente,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", parseInt(id))
+      .update({ email_cliente: parsed.email_cliente, updated_at: new Date().toISOString() })
+      .eq("id", pedidoId)
       .select("id, email_cliente")
       .single();
-
-    if (error) throw error;
+    if (error) throw new ErrorHttp(400, mensajeError(error));
 
     return NextResponse.json({ data });
-  } catch (error: any) {
-    if (error.message === "No autorizado") {
-      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-    }
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: error.issues[0]?.message ?? "Datos inválidos" },
-        { status: 400 }
-      );
-    }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return respuestaError(error);
   }
 }

@@ -26,26 +26,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { fadeInUp, springSmooth, springBouncy } from "@/lib/motion";
+import { fadeInUp, springSmooth } from "@/lib/motion";
 import { toast } from "sonner";
 import { createBrowserClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { useDocumentTitle } from "@/hooks/use-document-title";
+import { mensajeError } from "@/lib/contabilidad/formato";
+import type { ItemCatalogoDisciplina } from "@/components/pedidos/tipos";
 
 interface Disciplina {
   id: number;
   nombre: string;
 }
 
-interface CatalogoItem {
-  producto_id: number;
-  variante_id: number | null;
-  precio_mayorista: number;
-  precio_base: number;
-  nombre: string;
-  variante_nombre: string | null;
-  sku: string | null;
-}
+type CatalogoItem = ItemCatalogoDisciplina;
 
 interface CartItem extends CatalogoItem {
   cantidad: number;
@@ -90,53 +84,23 @@ export default function NuevoPedidoDisciplinaPage() {
       setLoadingCatalogo(true);
 
       try {
-        // Find price lists for this disciplina
-        const { data: listaLinks } = await supabase
-          .from("lista_precio_disciplinas")
-          .select("lista_precio_id")
-          .eq("disciplina_id", parseInt(discId));
-
-        if (!listaLinks || listaLinks.length === 0) {
-          setCatalogo([]);
-          toast.info("No hay lista de precios asignada a esta disciplina");
-          setLoadingCatalogo(false);
-          return;
+        // Catálogo armado en el servidor: solo listas activas y un renglón por
+        // producto/variante al mismo precio que se va a cobrar.
+        const res = await fetch(`/api/admin/pedidos-disciplina/catalogo?disciplina_id=${discId}`);
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error);
+        if (json.listas === 0) {
+          toast.info("La disciplina no tiene una lista de precios activa");
         }
-
-        const listaIds = listaLinks.map((l: any) => l.lista_precio_id);
-
-        // Get items from those lists
-        const { data: items } = await supabase
-          .from("lista_precio_items")
-          .select(
-            `
-            producto_id, variante_id, precio,
-            productos(id, nombre, sku, precio, stock_actual, activo),
-            producto_variantes(id, nombre, sku)
-          `
-          )
-          .in("lista_precio_id", listaIds);
-
-        const catalogoItems: CatalogoItem[] = (items || [])
-          .filter((i: any) => i.productos?.activo)
-          .map((i: any) => ({
-            producto_id: i.producto_id,
-            variante_id: i.variante_id,
-            precio_mayorista: i.precio,
-            precio_base: i.productos.precio,
-            nombre: i.productos.nombre,
-            variante_nombre: i.producto_variantes?.nombre || null,
-            sku: i.producto_variantes?.sku || i.productos.sku,
-          }));
-
-        setCatalogo(catalogoItems);
-      } catch (error: any) {
-        toast.error("Error al cargar catálogo");
+        setCatalogo(json.data ?? []);
+      } catch (error) {
+        setCatalogo([]);
+        toast.error(mensajeError({ message: (error as Error).message || "Error al cargar el catálogo" }));
       } finally {
         setLoadingCatalogo(false);
       }
     },
-    [supabase]
+    []
   );
 
   useEffect(() => {
@@ -157,7 +121,7 @@ export default function NuevoPedidoDisciplinaPage() {
         return prev.map((c) =>
           c.producto_id === item.producto_id &&
           c.variante_id === item.variante_id
-            ? { ...c, cantidad: c.cantidad + 1 }
+            ? { ...c, cantidad: Math.min(c.stock, c.cantidad + 1) }
             : c
         );
       }
@@ -170,7 +134,7 @@ export default function NuevoPedidoDisciplinaPage() {
       prev
         .map((item, i) =>
           i === index
-            ? { ...item, cantidad: Math.max(0, item.cantidad + delta) }
+            ? { ...item, cantidad: Math.min(item.stock, Math.max(0, item.cantidad + delta)) }
             : item
         )
         .filter((item) => item.cantidad > 0)
@@ -222,8 +186,8 @@ export default function NuevoPedidoDisciplinaPage() {
       const { data } = await res.json();
       toast.success(`Pedido ${data.numero_pedido} creado`);
       router.push("/pedidos-disciplinas");
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error) {
+      toast.error(mensajeError({ message: (error as Error).message }));
     } finally {
       setProcesando(false);
     }
@@ -326,7 +290,8 @@ export default function NuevoPedidoDisciplinaPage() {
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => addToCart(item)}
-                      className={`text-left rounded-xl border p-3 transition-colors ${
+                      disabled={item.stock <= 0}
+                      className={`text-left rounded-xl border p-3 transition-colors disabled:opacity-40 ${
                         inCart
                           ? "border-primary/30 bg-primary/5"
                           : "border-border/50 hover:border-primary/20"
@@ -349,8 +314,11 @@ export default function NuevoPedidoDisciplinaPage() {
                             ${item.precio_base.toLocaleString("es-UY")}
                           </span>
                         )}
+                        <span className="ml-auto text-[10px] text-muted-foreground">
+                          {item.stock > 0 ? `stock ${item.stock}` : "sin stock"}
+                        </span>
                         {inCart && (
-                          <Badge className="text-[10px] h-4 ml-auto">
+                          <Badge className="text-[10px] h-4">
                             ×{inCart.cantidad}
                           </Badge>
                         )}
@@ -467,7 +435,7 @@ export default function NuevoPedidoDisciplinaPage() {
                   />
 
                   <p className="text-[11px] text-muted-foreground">
-                    Se cargará a cuenta corriente de la disciplina
+                    Se carga a la cuenta corriente de la disciplina (Fondos en poder de disciplinas) y se contabiliza la venta y su costo
                   </p>
 
                   <motion.div

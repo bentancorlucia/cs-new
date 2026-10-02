@@ -14,6 +14,9 @@ import {
   Sparkles,
   Check,
   Eye,
+  BookOpen,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { springSmooth } from "@/lib/motion";
@@ -46,7 +49,10 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { fadeInUp } from "@/lib/motion";
+import { fadeInUp, staggerContainerFast } from "@/lib/motion";
+import { hoyUruguay, mensajeError, formatImporte } from "@/lib/contabilidad/formato";
+import { ImporteAnimado, EnteroAnimado } from "@/components/contabilidad/reportes/importe-animado";
+import { NumeroAsiento } from "@/components/pedidos/asiento-link";
 import { toast } from "sonner";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 
@@ -68,7 +74,7 @@ interface PendienteRow {
   cobrada_at: string | null;
   created_at: string;
   pedido: {
-    id: number;
+    id: number | null;
     numero_pedido: string;
     cliente: string;
   };
@@ -82,6 +88,20 @@ interface TransferenciaRow {
   comprobante_url: string | null;
   notas: string | null;
   created_at: string;
+  asiento: { id: string; numero: number | null } | null;
+}
+
+interface Contable {
+  cuenta: { id: string; codigo: string; nombre: string } | null;
+  saldo: number | null;
+  diferencia: number | null;
+  error: string | null;
+}
+
+interface Permisos {
+  puedeConfigurar: boolean;
+  puedeTransferir: boolean;
+  puedeVerContabilidad: boolean;
 }
 
 interface Kpis {
@@ -113,19 +133,27 @@ export default function AdminDonacionesPage() {
   const [transferencias, setTransferencias] = useState<TransferenciaRow[]>([]);
   const [savingConfig, setSavingConfig] = useState(false);
   const [transferDialog, setTransferDialog] = useState(false);
+  const [contable, setContable] = useState<Contable | null>(null);
+  const [permisos, setPermisos] = useState<Permisos>({
+    puedeConfigurar: false,
+    puedeTransferir: false,
+    puedeVerContabilidad: false,
+  });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch("/api/admin/donaciones");
-      if (!res.ok) throw new Error("Error al cargar donaciones");
       const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Error al cargar las donaciones");
       setConfig(json.config);
       setKpis(json.kpis);
       setPendientes(json.pendientes || []);
       setTransferencias(json.transferencias || []);
-    } catch {
-      toast.error("Error al cargar datos");
+      setContable(json.contable ?? null);
+      if (json.permisos) setPermisos(json.permisos);
+    } catch (e) {
+      toast.error(mensajeError({ message: (e as Error).message }));
     } finally {
       setLoading(false);
     }
@@ -156,8 +184,8 @@ export default function AdminDonacionesPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Error");
       toast.success("Configuración guardada");
-    } catch (e: any) {
-      toast.error(e.message || "Error al guardar");
+    } catch (e) {
+      toast.error(mensajeError({ message: (e as Error).message || "Error al guardar" }));
     } finally {
       setSavingConfig(false);
     }
@@ -209,42 +237,122 @@ export default function AdminDonacionesPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border bg-pink-50/40 p-4">
+      <motion.div
+        variants={staggerContainerFast}
+        initial="hidden"
+        animate="visible"
+        className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+      >
+        <motion.div variants={fadeInUp} whileHover={{ y: -2 }} className="rounded-xl border bg-pink-50/40 p-4">
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-pink-700">
             <Wallet className="size-4" />
             Pendiente de transferir
           </div>
-          <p className="mt-2 font-display text-3xl tracking-tight text-bordo-950">
-            {fmt$(kpis?.totalPendiente || 0)}
-          </p>
+          <ImporteAnimado
+            valor={kpis?.totalPendiente || 0}
+            moneda="UYU"
+            className="mt-2 block font-display text-3xl tracking-tight text-bordo-950"
+          />
           <p className="text-xs text-muted-foreground">
-            {kpis?.cantidadPendiente || 0} donaciones cobradas
+            <EnteroAnimado valor={kpis?.cantidadPendiente || 0} /> donaciones cobradas
           </p>
-        </div>
-        <div className="rounded-xl border bg-white p-4">
+        </motion.div>
+        <motion.div variants={fadeInUp} whileHover={{ y: -2 }} className="rounded-xl border bg-white p-4">
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
             <History className="size-4" />
             Transferido a la Olla
           </div>
-          <p className="mt-2 font-display text-3xl tracking-tight text-bordo-950">
-            {fmt$(kpis?.totalTransferido || 0)}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {transferencias.length} transferencias
-          </p>
-        </div>
-        <div className="rounded-xl border bg-white p-4">
+          <ImporteAnimado
+            valor={kpis?.totalTransferido || 0}
+            moneda="UYU"
+            className="mt-2 block font-display text-3xl tracking-tight text-bordo-950"
+          />
+          <p className="text-xs text-muted-foreground">{transferencias.length} transferencias</p>
+        </motion.div>
+        <motion.div variants={fadeInUp} whileHover={{ y: -2 }} className="rounded-xl border bg-white p-4">
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
             <Heart className="size-4" />
             Recaudado total
           </div>
-          <p className="mt-2 font-display text-3xl tracking-tight text-bordo-950">
-            {fmt$(kpis?.totalRecaudado || 0)}
-          </p>
+          <ImporteAnimado
+            valor={kpis?.totalRecaudado || 0}
+            moneda="UYU"
+            className="mt-2 block font-display text-3xl tracking-tight text-bordo-950"
+          />
           <p className="text-xs text-muted-foreground">desde el inicio</p>
-        </div>
-      </div>
+        </motion.div>
+        <motion.div
+          variants={fadeInUp}
+          whileHover={{ y: -2 }}
+          className={cn(
+            "rounded-xl border p-4",
+            contable?.diferencia ? "border-amber-300 bg-amber-50/60" : "bg-white"
+          )}
+        >
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <BookOpen className="size-4" />
+            Saldo contable
+          </div>
+          {contable?.saldo != null ? (
+            <ImporteAnimado
+              valor={contable.saldo}
+              moneda="UYU"
+              className="mt-2 block font-display text-3xl tracking-tight text-bordo-950"
+            />
+          ) : (
+            <p className="mt-2 font-display text-3xl tracking-tight text-muted-foreground">—</p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            {contable?.cuenta ? (
+              permisos.puedeVerContabilidad ? (
+                <Link
+                  href={`/contabilidad/mayor?cuenta=${contable.cuenta.id}`}
+                  className="hover:text-bordo-800 hover:underline"
+                >
+                  {contable.cuenta.nombre} ({contable.cuenta.codigo})
+                </Link>
+              ) : (
+                `${contable.cuenta.nombre} (${contable.cuenta.codigo})`
+              )
+            ) : (
+              "Cuenta sin configurar"
+            )}
+          </p>
+        </motion.div>
+      </motion.div>
+
+      <AnimatePresence>
+        {contable && (contable.error || contable.diferencia !== null) && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            {contable.error ? (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                {contable.error}
+              </div>
+            ) : contable.diferencia ? (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <span>
+                  El saldo contable difiere en{" "}
+                  <strong className="tabular-nums">{formatImporte(contable.diferencia, "UYU")}</strong> de la suma de
+                  donaciones cobradas sin transferir. Puede haber donaciones cobradas que no se marcaron (o al revés),
+                  o asientos manuales en la cuenta: revisalo con tesorería antes de transferir.
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                <CheckCircle2 className="size-3.5 shrink-0" />
+                El saldo contable coincide con las donaciones cobradas pendientes de transferir.
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <Tabs defaultValue="pendientes" className="w-full">
         <TabsList>
@@ -262,18 +370,22 @@ export default function AdminDonacionesPage() {
 
         {/* Pendientes */}
         <TabsContent value="pendientes" className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">
               Donaciones cobradas que aún no se transfirieron a la Olla.
             </p>
-            <Button
-              onClick={() => setTransferDialog(true)}
-              disabled={pendientes.length === 0}
-              className="gap-1.5"
-            >
-              <Plus className="size-4" />
-              Registrar transferencia
-            </Button>
+            {permisos.puedeTransferir && (
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                <Button
+                  onClick={() => setTransferDialog(true)}
+                  disabled={pendientes.length === 0}
+                  className="gap-1.5"
+                >
+                  <Plus className="size-4" />
+                  Registrar transferencia
+                </Button>
+              </motion.div>
+            )}
           </div>
 
           <div className="rounded-xl border bg-white">
@@ -296,12 +408,16 @@ export default function AdminDonacionesPage() {
                   {pendientes.map((d) => (
                     <TableRow key={d.id}>
                       <TableCell>
-                        <Link
-                          href={`/admin/pedidos/${d.pedido.id}`}
-                          className="font-mono text-sm font-medium text-bordo-800 hover:underline"
-                        >
-                          {d.pedido.numero_pedido}
-                        </Link>
+                        {d.pedido.id ? (
+                          <Link
+                            href={`/admin/pedidos/${d.pedido.id}`}
+                            className="font-mono text-sm font-medium text-bordo-800 hover:underline"
+                          >
+                            {d.pedido.numero_pedido}
+                          </Link>
+                        ) : (
+                          <span className="font-mono text-sm">{d.pedido.numero_pedido}</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm">
                         {d.pedido.cliente}
@@ -346,6 +462,7 @@ export default function AdminDonacionesPage() {
                     <TableHead>Cantidad</TableHead>
                     <TableHead>Notas</TableHead>
                     <TableHead>Comprobante</TableHead>
+                    <TableHead>Asiento</TableHead>
                     <TableHead className="text-right">Monto</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -373,6 +490,15 @@ export default function AdminDonacionesPage() {
                           </a>
                         ) : (
                           <span className="text-sm text-muted-foreground">
+                            —
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {t.asiento ? (
+                          <NumeroAsiento asiento={t.asiento} conLink={permisos.puedeVerContabilidad} />
+                        ) : (
+                          <span className="text-sm text-muted-foreground" title="Registrada antes de la contabilidad">
                             —
                           </span>
                         )}
@@ -614,6 +740,11 @@ export default function AdminDonacionesPage() {
                 </motion.div>
 
                 {/* Save */}
+                {!permisos.puedeConfigurar ? (
+                  <p className="rounded-lg bg-superficie px-4 py-3 text-sm text-muted-foreground">
+                    Solo lectura: la configuración la cambia el equipo de tienda.
+                  </p>
+                ) : (
                 <div className="sticky bottom-4 z-10 flex justify-end">
                   <motion.button
                     whileTap={{ scale: 0.97 }}
@@ -634,6 +765,7 @@ export default function AdminDonacionesPage() {
                     )}
                   </motion.button>
                 </div>
+                )}
               </div>
 
               {/* Preview */}
@@ -677,6 +809,7 @@ export default function AdminDonacionesPage() {
         onOpenChange={setTransferDialog}
         montoPendiente={kpis?.totalPendiente || 0}
         cantidadPendiente={kpis?.cantidadPendiente || 0}
+        diferencia={contable?.diferencia ?? null}
         onSuccess={() => {
           setTransferDialog(false);
           fetchData();
@@ -691,15 +824,17 @@ function RegistrarTransferenciaDialog({
   onOpenChange,
   montoPendiente,
   cantidadPendiente,
+  diferencia,
   onSuccess,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   montoPendiente: number;
   cantidadPendiente: number;
+  diferencia: number | null;
   onSuccess: () => void;
 }) {
-  const today = new Date().toISOString().split("T")[0];
+  const today = hoyUruguay();
   const [fecha, setFecha] = useState(today);
   const [comprobanteUrl, setComprobanteUrl] = useState("");
   const [notas, setNotas] = useState("");
@@ -725,8 +860,8 @@ function RegistrarTransferenciaDialog({
       setComprobanteUrl("");
       setNotas("");
       onSuccess();
-    } catch (e: any) {
-      toast.error(e.message || "Error al registrar");
+    } catch (e) {
+      toast.error(mensajeError({ message: (e as Error).message || "Error al registrar" }));
     } finally {
       setSubmitting(false);
     }
@@ -738,8 +873,9 @@ function RegistrarTransferenciaDialog({
         <DialogHeader>
           <DialogTitle>Registrar transferencia a la Olla</DialogTitle>
           <DialogDescription>
-            Confirmá que ya transferiste el monto pendiente. Esto marcará todas
-            las donaciones cobradas como transferidas.
+            Confirmá que ya transferiste el monto pendiente. Se marcan todas las
+            donaciones cobradas como transferidas y se asienta la salida del banco
+            de la tienda contra Donaciones a transferir.
           </DialogDescription>
         </DialogHeader>
 
@@ -755,6 +891,13 @@ function RegistrarTransferenciaDialog({
               {cantidadPendiente} donaciones cobradas
             </p>
           </div>
+
+          {diferencia ? (
+            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+              El saldo contable de la cuenta difiere en {formatImporte(diferencia, "UYU")} de este total.
+            </div>
+          ) : null}
 
           <div>
             <Label>Fecha de la transferencia</Label>

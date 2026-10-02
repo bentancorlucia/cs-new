@@ -1,59 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { requireRole, getCurrentUser } from "@/lib/supabase/roles";
 import { z } from "zod";
-
-const TIENDA_ROLES = ["super_admin", "tienda"];
+import { createAdminClient } from "@/lib/supabase/admin";
+import { hoyUruguay, mensajeError } from "@/lib/contabilidad/formato";
+import { ErrorHttp, exigir, respuestaError } from "@/lib/comercial/pedidos";
 
 const transferenciaSchema = z.object({
-  fecha: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida (YYYY-MM-DD)"),
-  comprobante_url: z.string().url().optional().nullable(),
+  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"),
+  comprobante_url: z.string().trim().url("El comprobante tiene que ser un link (https://...)").optional().nullable(),
   notas: z.string().trim().max(2000).optional().nullable(),
 });
 
-// POST /api/admin/donaciones/transferencias — registrar nueva transferencia mensual
+// POST /api/admin/donaciones/transferencias — transferencia a la Olla
+//
+// registrar_transferencia_donaciones marca todas las donaciones cobradas
+// como transferidas y asienta D Donaciones a transferir / H Banco tienda,
+// en una transacción. Se llama con service role: el usuario va en
+// p_creado_por y la función vuelve a validar su rol.
 export async function POST(request: NextRequest) {
   try {
-    await requireRole(TIENDA_ROLES);
-    const user = await getCurrentUser();
-    const db = createAdminClient() as any;
+    const permisos = await exigir((p) => p.puedeOperarComercial);
+    const { fecha, comprobante_url, notas } = transferenciaSchema.parse(await request.json());
+    if (fecha > hoyUruguay()) throw new ErrorHttp(400, "La fecha no puede ser futura");
 
-    const body = await request.json();
-    const parsed = transferenciaSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues[0].message },
-        { status: 400 }
-      );
-    }
-
-    const { fecha, comprobante_url, notas } = parsed.data;
-
+    const db = createAdminClient();
     const { data, error } = await db.rpc("registrar_transferencia_donaciones", {
       p_fecha: fecha,
-      p_comprobante_url: comprobante_url ?? null,
-      p_notas: notas ?? null,
-      p_creado_por: user?.id ?? null,
+      p_comprobante_url: comprobante_url || (null as unknown as string),
+      p_notas: notas || (null as unknown as string),
+      p_creado_por: permisos.userId as string,
     });
+    if (error) throw new ErrorHttp(400, mensajeError(error));
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    const row = Array.isArray(data) ? data[0] : data;
-
+    const fila = Array.isArray(data) ? data[0] : data;
     return NextResponse.json({
       success: true,
-      transferencia_id: row?.transferencia_id,
-      monto_total: Number(row?.monto_total ?? 0),
-      cantidad: row?.cantidad ?? 0,
+      transferencia_id: fila?.transferencia_id ?? null,
+      monto_total: Number(fila?.monto_total ?? 0),
+      cantidad: fila?.cantidad ?? 0,
     });
-  } catch (error: any) {
-    if (error.message === "No autorizado") {
-      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-    }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return respuestaError(error);
   }
 }

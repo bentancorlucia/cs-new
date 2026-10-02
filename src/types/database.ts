@@ -118,19 +118,6 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"depositos": {
-                  Row: {
-                    "activo": boolean | null,"created_at": string | null,"descripcion": string | null,"id": number,"nombre": string,"ubicacion": string | null
-                  }
-                  Insert: {
-                    "activo"?: boolean | null,"created_at"?: string | null,"descripcion"?: string | null,"id"?: number,"nombre": string,"ubicacion"?: string | null
-                  }
-                  Update: {
-                    "activo"?: boolean | null,"created_at"?: string | null,"descripcion"?: string | null,"id"?: number,"nombre"?: string,"ubicacion"?: string | null
-                  }
-                  Relationships: [
-                    
-                  ]
                 },"disciplinas": {
                   Row: {
                     "activa": boolean | null,"contacto_email": string | null,"contacto_nombre": string | null,"contacto_telefono": string | null,"created_at": string | null,"descripcion": string | null,"id": number,"imagen_url": string | null,"nombre": string,"saldo_cuenta_corriente": number | null,"slug": string
@@ -803,55 +790,18 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"stock_deposito": {
-                  Row: {
-                    "cantidad": number,"deposito_id": number,"id": number,"producto_id": number,"updated_at": string | null,"variante_id": number | null
-                  }
-                  Insert: {
-                    "cantidad"?: number,"deposito_id": number,"id"?: number,"producto_id": number,"updated_at"?: string | null,"variante_id"?: number | null
-                  }
-                  Update: {
-                    "cantidad"?: number,"deposito_id"?: number,"id"?: number,"producto_id"?: number,"updated_at"?: string | null,"variante_id"?: number | null
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "stock_deposito_deposito_id_fkey"
-      columns: ["deposito_id"]
-isOneToOne: false
-      referencedRelation: "depositos"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "stock_deposito_producto_id_fkey"
-      columns: ["producto_id"]
-isOneToOne: false
-      referencedRelation: "productos"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "stock_deposito_variante_id_fkey"
-      columns: ["variante_id"]
-isOneToOne: false
-      referencedRelation: "producto_variantes"
-      referencedColumns: ["id"]
-    }
-                  ]
                 },"stock_movimientos": {
                   Row: {
-                    "cantidad": number,"created_at": string | null,"deposito_id": number | null,"id": number,"motivo": string | null,"producto_id": number,"referencia_id": number | null,"referencia_tipo": string | null,"registrado_por": string | null,"stock_anterior": number,"stock_nuevo": number,"tipo": string,"variante_id": number | null
+                    "cantidad": number,"created_at": string | null,"id": number,"motivo": string | null,"producto_id": number,"referencia_id": number | null,"referencia_tipo": string | null,"registrado_por": string | null,"stock_anterior": number,"stock_nuevo": number,"tipo": string,"variante_id": number | null
                   }
                   Insert: {
-                    "cantidad": number,"created_at"?: string | null,"deposito_id"?: number | null,"id"?: number,"motivo"?: string | null,"producto_id": number,"referencia_id"?: number | null,"referencia_tipo"?: string | null,"registrado_por"?: string | null,"stock_anterior": number,"stock_nuevo": number,"tipo": string,"variante_id"?: number | null
+                    "cantidad": number,"created_at"?: string | null,"id"?: number,"motivo"?: string | null,"producto_id": number,"referencia_id"?: number | null,"referencia_tipo"?: string | null,"registrado_por"?: string | null,"stock_anterior": number,"stock_nuevo": number,"tipo": string,"variante_id"?: number | null
                   }
                   Update: {
-                    "cantidad"?: number,"created_at"?: string | null,"deposito_id"?: number | null,"id"?: number,"motivo"?: string | null,"producto_id"?: number,"referencia_id"?: number | null,"referencia_tipo"?: string | null,"registrado_por"?: string | null,"stock_anterior"?: number,"stock_nuevo"?: number,"tipo"?: string,"variante_id"?: number | null
+                    "cantidad"?: number,"created_at"?: string | null,"id"?: number,"motivo"?: string | null,"producto_id"?: number,"referencia_id"?: number | null,"referencia_tipo"?: string | null,"registrado_por"?: string | null,"stock_anterior"?: number,"stock_nuevo"?: number,"tipo"?: string,"variante_id"?: number | null
                   }
                   Relationships: [
                     {
-      foreignKeyName: "stock_movimientos_deposito_id_fkey"
-      columns: ["deposito_id"]
-isOneToOne: false
-      referencedRelation: "depositos"
-      referencedColumns: ["id"]
-    },{
       foreignKeyName: "stock_movimientos_producto_id_fkey"
       columns: ["producto_id"]
 isOneToOne: false
@@ -887,68 +837,6 @@ isOneToOne: false
       columns: ["evento_id"]
 isOneToOne: false
       referencedRelation: "eventos"
-      referencedColumns: ["id"]
-    }
-                  ]
-                },"transferencia_items": {
-                  Row: {
-                    "cantidad": number,"id": number,"producto_id": number,"transferencia_id": number,"variante_id": number | null
-                  }
-                  Insert: {
-                    "cantidad": number,"id"?: number,"producto_id": number,"transferencia_id": number,"variante_id"?: number | null
-                  }
-                  Update: {
-                    "cantidad"?: number,"id"?: number,"producto_id"?: number,"transferencia_id"?: number,"variante_id"?: number | null
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "transferencia_items_producto_id_fkey"
-      columns: ["producto_id"]
-isOneToOne: false
-      referencedRelation: "productos"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "transferencia_items_transferencia_id_fkey"
-      columns: ["transferencia_id"]
-isOneToOne: false
-      referencedRelation: "transferencias_deposito"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "transferencia_items_variante_id_fkey"
-      columns: ["variante_id"]
-isOneToOne: false
-      referencedRelation: "producto_variantes"
-      referencedColumns: ["id"]
-    }
-                  ]
-                },"transferencias_deposito": {
-                  Row: {
-                    "completada_at": string | null,"created_at": string | null,"deposito_destino_id": number,"deposito_origen_id": number,"estado": string,"id": number,"notas": string | null,"registrado_por": string | null
-                  }
-                  Insert: {
-                    "completada_at"?: string | null,"created_at"?: string | null,"deposito_destino_id": number,"deposito_origen_id": number,"estado"?: string,"id"?: number,"notas"?: string | null,"registrado_por"?: string | null
-                  }
-                  Update: {
-                    "completada_at"?: string | null,"created_at"?: string | null,"deposito_destino_id"?: number,"deposito_origen_id"?: number,"estado"?: string,"id"?: number,"notas"?: string | null,"registrado_por"?: string | null
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "transferencias_deposito_deposito_destino_id_fkey"
-      columns: ["deposito_destino_id"]
-isOneToOne: false
-      referencedRelation: "depositos"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "transferencias_deposito_deposito_origen_id_fkey"
-      columns: ["deposito_origen_id"]
-isOneToOne: false
-      referencedRelation: "depositos"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "transferencias_deposito_registrado_por_fkey"
-      columns: ["registrado_por"]
-isOneToOne: false
-      referencedRelation: "perfiles"
       referencedColumns: ["id"]
     }
                   ]

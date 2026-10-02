@@ -1,110 +1,126 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireRole } from "@/lib/supabase/roles";
+import {
+  exigir,
+  patronBusqueda,
+  perfilesQueCoinciden,
+  respuestaError,
+} from "@/lib/comercial/pedidos";
 
-const TIENDA_ROLES = ["super_admin", "tienda"];
+const ESTADOS = [
+  "pendiente",
+  "pendiente_verificacion",
+  "pagado",
+  "encargado",
+  "preparando",
+  "listo_retiro",
+  "retirado",
+  "cancelado",
+] as const;
 
-// GET /api/admin/pedidos — listar pedidos
+const filtrosSchema = z.object({
+  estado: z.enum(ESTADOS).optional(),
+  tipo: z.enum(["online", "pos", "disciplina"]).optional(),
+  search: z.string().max(200).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  // Tope explícito: PostgREST corta en 1000 filas sin avisar.
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+// GET /api/admin/pedidos — listado paginado con contadores por estado
 export async function GET(request: NextRequest) {
   try {
-    await requireRole(TIENDA_ROLES);
-    const supabase = createAdminClient();
+    const permisos = await exigir((p) => p.puedeVer);
+    const db = createAdminClient();
 
-    const { searchParams } = new URL(request.url);
-    const estado = searchParams.get("estado") || "";
-    const tipo = searchParams.get("tipo") || "";
-    const search = searchParams.get("search") || "";
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
-    const offset = (page - 1) * limit;
+    const sp = request.nextUrl.searchParams;
+    const f = filtrosSchema.parse({
+      estado: sp.get("estado") || undefined,
+      tipo: sp.get("tipo") || undefined,
+      search: sp.get("search") || undefined,
+      page: sp.get("page") || undefined,
+      limit: sp.get("limit") || undefined,
+    });
+    const offset = (f.page - 1) * f.limit;
 
-    let query = supabase
+    // Búsqueda: número de pedido, nombre del cliente presencial o nombre
+    // del perfil (pedidos online). Valores entre comillas: sin inyección.
+    const patron = patronBusqueda(f.search);
+    let filtroOr: string | null = null;
+    if (patron) {
+      const perfiles = await perfilesQueCoinciden(db, f.search ?? "");
+      const partes = [`numero_pedido.ilike.${patron}`, `nombre_cliente.ilike.${patron}`];
+      if (perfiles.length > 0) partes.push(`perfil_id.in.(${perfiles.join(",")})`);
+      filtroOr = partes.join(",");
+    }
+
+    let query = db
       .from("pedidos")
       .select(
-        `
-        *,
-        perfiles!perfil_id(nombre, apellido, telefono),
-        pedido_items(es_encargue),
-        donaciones(monto, estado)
-      `,
+        `id, numero_pedido, tipo, estado, total, nombre_cliente, created_at, metodo_pago,
+         perfiles!perfil_id(nombre, apellido, telefono),
+         disciplinas(nombre),
+         pedido_items(es_encargue),
+         donaciones(monto, estado)`,
         { count: "exact" }
       )
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
 
-    if (estado) {
-      query = query.eq("estado", estado as "pendiente" | "pendiente_verificacion" | "pagado" | "encargado" | "preparando" | "listo_retiro" | "retirado" | "cancelado");
-    } else {
-      // En "Todos" no mostrar cancelados
-      query = query.neq("estado", "cancelado");
-    }
-    if (tipo) query = query.eq("tipo", tipo as "online" | "pos");
-    if (search) {
-      query = query.or(
-        `numero_pedido.ilike.%${search}%,nombre_cliente.ilike.%${search}%`
-      );
-    }
+    // En "Todos" no se muestran cancelados
+    query = f.estado ? query.eq("estado", f.estado) : query.neq("estado", "cancelado");
+    if (f.tipo) query = query.eq("tipo", f.tipo);
+    if (filtroOr) query = query.or(filtroOr);
 
-    query = query.range(offset, offset + limit - 1);
-
-    const { data: rawData, error, count } = await query;
+    const { data: filas, error, count } = await query.range(offset, offset + f.limit - 1);
     if (error) throw error;
 
-    // Aplanar tiene_encargue + donación por pedido y descartar arrays internos
-    const data = (rawData || []).map((p: any) => {
-      const tiene_encargue = Array.isArray(p.pedido_items)
-        ? p.pedido_items.some((i: any) => i.es_encargue)
-        : false;
-      // PostgREST devuelve un objeto (no array) por el UNIQUE en donaciones.pedido_id
-      const dRaw = Array.isArray(p.donaciones)
-        ? p.donaciones[0] ?? null
-        : p.donaciones ?? null;
-      const donacion = dRaw
-        ? {
-            monto: Number(dRaw.monto),
-            estado: dRaw.estado as
-              | "pendiente_pago"
-              | "cobrada"
-              | "transferida"
-              | "cancelada",
-          }
-        : null;
-      const { pedido_items, donaciones, ...rest } = p;
-      return { ...rest, tiene_encargue, donacion };
+    const data = (filas ?? []).map((p) => {
+      const d = Array.isArray(p.donaciones) ? p.donaciones[0] : p.donaciones;
+      const disc = Array.isArray(p.disciplinas) ? p.disciplinas[0] : p.disciplinas;
+      const perfil = Array.isArray(p.perfiles) ? p.perfiles[0] : p.perfiles;
+      return {
+        id: p.id,
+        numero_pedido: p.numero_pedido,
+        tipo: p.tipo,
+        estado: p.estado,
+        total: Number(p.total),
+        nombre_cliente: p.nombre_cliente,
+        created_at: p.created_at,
+        metodo_pago: p.metodo_pago,
+        perfiles: perfil ?? null,
+        disciplina: disc?.nombre ?? null,
+        tiene_encargue: (p.pedido_items ?? []).some((i) => i.es_encargue),
+        donacion: d ? { monto: Number(d.monto), estado: d.estado } : null,
+      };
     });
 
-    // Fetch counts per estado for tab badges
-    const estados = ["pagado", "encargado", "preparando", "listo_retiro", "retirado", "cancelado", "pendiente", "pendiente_verificacion"] as const;
+    // Contadores por estado con los mismos filtros (tipo y búsqueda)
     const counts: Record<string, number> = {};
+    await Promise.all(
+      ESTADOS.map(async (est) => {
+        let q = db.from("pedidos").select("id", { count: "exact", head: true }).eq("estado", est);
+        if (f.tipo) q = q.eq("tipo", f.tipo);
+        if (filtroOr) q = q.or(filtroOr);
+        const { count: c } = await q;
+        counts[est] = c ?? 0;
+      })
+    );
 
-    const countPromises = estados.map(async (est) => {
-      let q = supabase
-        .from("pedidos")
-        .select("id", { count: "exact", head: true })
-        .eq("estado", est);
-      if (tipo) q = q.eq("tipo", tipo as "online" | "pos");
-      if (search) {
-        q = q.or(`numero_pedido.ilike.%${search}%,nombre_cliente.ilike.%${search}%`);
-      }
-      const { count: c } = await q;
-      counts[est] = c || 0;
-    });
-
-    await Promise.all(countPromises);
-
+    const total = count ?? 0;
     return NextResponse.json({
       data,
       counts,
       pagination: {
-        page,
-        limit,
-        total: count || 0,
-        totalPages: Math.ceil((count || 0) / limit),
+        page: f.page,
+        limit: f.limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / f.limit)),
       },
+      permisos: { puedeOperar: permisos.puedeOperar },
     });
-  } catch (error: any) {
-    if (error.message === "No autorizado") {
-      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-    }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return respuestaError(error);
   }
 }

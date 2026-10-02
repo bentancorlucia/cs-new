@@ -36,6 +36,57 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"caja_movimientos": {
+                  Row: {
+                    "asiento_id": string | null,"creado_por": string | null,"created_at": string,"descripcion": string,"entra": boolean,"id": number,"importe": number,"sesion_id": number,"tipo": string
+                  }
+                  Insert: {
+                    "asiento_id"?: string | null,"creado_por"?: string | null,"created_at"?: string,"descripcion": string,"entra": boolean,"id"?: never,"importe": number,"sesion_id": number,"tipo": string
+                  }
+                  Update: {
+                    "asiento_id"?: string | null,"creado_por"?: string | null,"created_at"?: string,"descripcion"?: string,"entra"?: boolean,"id"?: never,"importe"?: number,"sesion_id"?: number,"tipo"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "caja_movimientos_sesion_id_fkey"
+      columns: ["sesion_id"]
+isOneToOne: false
+      referencedRelation: "caja_sesiones"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"caja_sesiones": {
+                  Row: {
+                    "abierta_at": string,"abierta_por": string | null,"caja_id": number,"cerrada_at": string | null,"cerrada_por": string | null,"contado_final": number | null,"contado_inicial": number,"estado": string,"id": number,"notas": string | null,"saldo_final": number | null,"saldo_inicial": number
+                  }
+                  Insert: {
+                    "abierta_at"?: string,"abierta_por"?: string | null,"caja_id": number,"cerrada_at"?: string | null,"cerrada_por"?: string | null,"contado_final"?: number | null,"contado_inicial": number,"estado"?: string,"id"?: never,"notas"?: string | null,"saldo_final"?: number | null,"saldo_inicial": number
+                  }
+                  Update: {
+                    "abierta_at"?: string,"abierta_por"?: string | null,"caja_id"?: number,"cerrada_at"?: string | null,"cerrada_por"?: string | null,"contado_final"?: number | null,"contado_inicial"?: number,"estado"?: string,"id"?: never,"notas"?: string | null,"saldo_final"?: number | null,"saldo_inicial"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "caja_sesiones_caja_id_fkey"
+      columns: ["caja_id"]
+isOneToOne: false
+      referencedRelation: "cajas"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"cajas": {
+                  Row: {
+                    "activa": boolean,"cuenta_id": string,"id": number,"nombre": string
+                  }
+                  Insert: {
+                    "activa"?: boolean,"cuenta_id": string,"id"?: never,"nombre": string
+                  }
+                  Update: {
+                    "activa"?: boolean,"cuenta_id"?: string,"id"?: never,"nombre"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"capas": {
                   Row: {
                     "cantidad_inicial": number,"cantidad_restante": number,"costo_unitario": number,"id": number,"item_id": number,"movimiento_id": number
@@ -60,6 +111,44 @@ isOneToOne: false
       referencedRelation: "movimientos"
       referencedColumns: ["id"]
     }
+                  ]
+                },"devolucion_items": {
+                  Row: {
+                    "cantidad": number,"costo": number,"devolucion_id": number,"es_nuevo": boolean,"id": number,"importe": number,"item_id": number,"pedido_item_id": number | null
+                  }
+                  Insert: {
+                    "cantidad": number,"costo": number,"devolucion_id": number,"es_nuevo": boolean,"id"?: never,"importe": number,"item_id": number,"pedido_item_id"?: number | null
+                  }
+                  Update: {
+                    "cantidad"?: number,"costo"?: number,"devolucion_id"?: number,"es_nuevo"?: boolean,"id"?: never,"importe"?: number,"item_id"?: number,"pedido_item_id"?: number | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "devolucion_items_devolucion_id_fkey"
+      columns: ["devolucion_id"]
+isOneToOne: false
+      referencedRelation: "devoluciones"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "devolucion_items_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "items"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"devoluciones": {
+                  Row: {
+                    "asiento_id": string | null,"creado_por": string | null,"created_at": string,"fecha": string,"id": number,"importe_devuelto": number,"importe_nuevo": number,"medio": string,"motivo": string,"neto": number,"pedido_id": number
+                  }
+                  Insert: {
+                    "asiento_id"?: string | null,"creado_por"?: string | null,"created_at"?: string,"fecha": string,"id"?: never,"importe_devuelto": number,"importe_nuevo": number,"medio": string,"motivo": string,"neto": number,"pedido_id": number
+                  }
+                  Update: {
+                    "asiento_id"?: string | null,"creado_por"?: string | null,"created_at"?: string,"fecha"?: string,"id"?: never,"importe_devuelto"?: number,"importe_nuevo"?: number,"medio"?: string,"motivo"?: string,"neto"?: number,"pedido_id"?: number
+                  }
+                  Relationships: [
+                    
                   ]
                 },"documento_proveedor_lineas": {
                   Row: {
@@ -267,6 +356,9 @@ isOneToOne: false
             "_anular_pedido":
 { Args: { "p_motivo": string,"p_pedido": number }; Returns: Json
                            },
+"_arqueo":
+{ Args: { "p_contado": number,"p_momento": string,"p_sesion": number }; Returns: number
+                           },
 "_centro_venta":
 { Args: { "p_pedido": unknown }; Returns: string
                            },
@@ -284,6 +376,9 @@ isOneToOne: false
                            },
 "_entrada":
 { Args: { "p_cantidad": number,"p_costo": number,"p_fecha": string,"p_item": number,"p_motivo"?: string,"p_origen_id": string,"p_origen_tipo": string,"p_tipo": string }; Returns: number
+                           },
+"_exigir_caja_abierta":
+{ Args: Record<PropertyKey, never>; Returns: undefined
                            },
 "_exigir_operador":
 { Args: Record<PropertyKey, never>; Returns: undefined
@@ -304,6 +399,9 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"_saldo_caja":
+{ Args: { "p_caja": number }; Returns: number
+                           },
 "_salida":
 { Args: { "p_cantidad": number,"p_fecha": string,"p_item": number,"p_motivo"?: string,"p_origen_id": string,"p_origen_tipo": string,"p_tipo": string }; Returns: number
                            },
@@ -318,6 +416,9 @@ isOneToOne: false
                            },
 "_vincular_asiento":
 { Args: { "p_asiento": string,"p_origen_id": string,"p_origen_tipo": string }; Returns: undefined
+                           },
+"abrir_caja":
+{ Args: { "p_caja": number,"p_contado": number,"p_notas"?: string }; Returns: number
                            },
 "ajustar_stock":
 { Args: { "p_cantidad": number,"p_costo_unitario"?: number,"p_motivo": string,"p_producto": number,"p_variante": number }; Returns: number
@@ -346,6 +447,9 @@ isOneToOne: false
 "cargar_inventario_inicial":
 { Args: { "p_items": Json }; Returns: number
                            },
+"cerrar_caja":
+{ Args: { "p_contado": number,"p_notas"?: string,"p_sesion": number }; Returns: number
+                           },
 "control_mercaderia":
 { Args: Record<PropertyKey, never>; Returns: {
               "diferencia": number,"movimientos_sin_asiento": number,"saldo_contable": number,"valor_stock": number
@@ -362,6 +466,9 @@ isOneToOne: false
 "guardar_orden_compra":
 { Args: { "p_fecha": string,"p_id": number,"p_items": Json,"p_moneda": string,"p_notas"?: string,"p_proveedor": number }; Returns: number
                            },
+"movimiento_caja":
+{ Args: { "p_centro_costo"?: string,"p_cuenta_contrapartida": string,"p_descripcion": string,"p_importe": number,"p_sesion": number,"p_tipo": string }; Returns: number
+                           },
 "pagar_orden":
 { Args: { "p_fecha"?: string,"p_id": number,"p_tc"?: number }; Returns: string
                            },
@@ -374,8 +481,16 @@ isOneToOne: false
 "recibir_mercaderia":
 { Args: { "p_fecha": string,"p_idempotency_key"?: string,"p_items": Json,"p_moneda": string,"p_orden": number,"p_proveedor": number,"p_remito"?: string,"p_tc"?: number }; Returns: number
                            },
+"registrar_devolucion":
+{ Args: { "p_devueltos": Json,"p_medio": string,"p_motivo": string,"p_nuevos"?: Json,"p_pedido": number }; Returns: number
+                           },
 "registrar_documento_proveedor":
 { Args: { "p_cuenta_pago"?: string,"p_fecha": string,"p_lineas": Json,"p_moneda": string,"p_notas"?: string,"p_numero": string,"p_proveedor": number,"p_serie": string,"p_tc"?: number,"p_tipo": string,"p_vencimiento"?: string }; Returns: number
+                           },
+"resumen_caja":
+{ Args: { "p_sesion": number }; Returns: {
+              "cantidad": number,"concepto": string,"entradas": number,"salidas": number
+            }[]
                            },
 "saldo_documento":
 { Args: { "p_documento": number }; Returns: number

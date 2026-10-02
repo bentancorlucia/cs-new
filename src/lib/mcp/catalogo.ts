@@ -54,7 +54,7 @@ export const CATALOGO: Record<string, TablaCatalogo> = {
   stock_movimientos: {
     modulos: ["tienda"],
     descripcion: "Historial de cambios de stock (venta, compra, ajuste, transferencia…) con stock anterior y nuevo.",
-    columnas: ["cantidad", "created_at", "deposito_id", "id", "motivo", "producto_id", "referencia_id", "referencia_tipo", "registrado_por", "stock_anterior", "stock_nuevo", "tipo", "variante_id"],
+    columnas: ["cantidad", "created_at", "id", "motivo", "producto_id", "referencia_id", "referencia_tipo", "registrado_por", "stock_anterior", "stock_nuevo", "tipo", "variante_id"],
   },
   proveedores: {
     modulos: ["tienda", "tesoreria"],

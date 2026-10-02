@@ -8,7 +8,6 @@ import {
   Package,
   ChevronLeft,
   ChevronRight,
-  ChevronRight as ChevronRightSmall,
   Clock,
   CreditCard,
   Truck,
@@ -17,10 +16,11 @@ import {
   ArrowRight,
   Eye,
   Building2,
+  Users,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -29,7 +29,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fadeInUp, staggerContainer, staggerContainerFast, springSmooth } from "@/lib/motion";
+import { fadeInUp, staggerContainerFast, springSmooth } from "@/lib/motion";
+import { mensajeError } from "@/lib/contabilidad/formato";
+import { pesos } from "@/components/pedidos/tipos";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useDocumentTitle } from "@/hooks/use-document-title";
@@ -39,8 +41,9 @@ type EstadoPedido = "pendiente" | "pendiente_verificacion" | "pagado" | "encarga
 interface Pedido {
   id: number;
   numero_pedido: string;
-  tipo: "online" | "pos";
+  tipo: "online" | "pos" | "disciplina";
   estado: EstadoPedido;
+  disciplina: string | null;
   total: number;
   nombre_cliente: string | null;
   created_at: string;
@@ -52,7 +55,7 @@ interface Pedido {
   } | null;
 }
 
-const tabs: { key: EstadoPedido | ""; label: string; icon: any; color: string }[] = [
+const tabs: { key: EstadoPedido | ""; label: string; icon: LucideIcon; color: string }[] = [
   { key: "", label: "Todos", icon: Package, color: "bg-muted text-foreground" },
   { key: "pendiente_verificacion", label: "Por conciliar", icon: Building2, color: "bg-orange-100 text-orange-700" },
   { key: "pagado", label: "Pagados", icon: CreditCard, color: "bg-emerald-100 text-emerald-700" },
@@ -100,6 +103,8 @@ export default function AdminPedidosPage() {
   const [total, setTotal] = useState(0);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [puedeOperar, setPuedeOperar] = useState(false);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
   const fetchPedidos = useCallback(async () => {
     setLoading(true);
@@ -112,14 +117,19 @@ export default function AdminPedidosPage() {
       if (search) params.set("search", search);
 
       const res = await fetch(`/api/admin/pedidos?${params.toString()}`);
-      if (!res.ok) throw new Error("Error al cargar pedidos");
-
       const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Error al cargar pedidos");
+
       setPedidos(json.data || []);
       setTotal(json.pagination?.total || 0);
       setTotalPages(json.pagination?.totalPages || 1);
       if (json.counts) setCounts(json.counts);
-    } catch {
+      setPuedeOperar(!!json.permisos?.puedeOperar);
+      setErrorCarga(null);
+    } catch (e) {
+      const msg = mensajeError({ message: (e as Error).message });
+      setErrorCarga(msg);
+      toast.error(msg);
       setPedidos([]);
       setTotal(0);
       setTotalPages(1);
@@ -139,6 +149,7 @@ export default function AdminPedidosPage() {
   }, [searchInput]);
 
   function getNombre(pedido: Pedido) {
+    if (pedido.tipo === "disciplina") return pedido.disciplina ?? "Disciplina";
     if (pedido.perfiles) return `${pedido.perfiles.nombre} ${pedido.perfiles.apellido}`;
     return pedido.nombre_cliente || "—";
   }
@@ -157,10 +168,15 @@ export default function AdminPedidosPage() {
         setPedidos((prev) =>
           prev.map((p) => (p.id === pedido.id ? { ...p, estado: next } : p))
         );
+        setCounts((prev) => ({
+          ...prev,
+          [pedido.estado]: Math.max(0, (prev[pedido.estado] ?? 1) - 1),
+          [next]: (prev[next] ?? 0) + 1,
+        }));
         toast.success(`${pedido.numero_pedido} → ${estadoBadge[next].label}`);
       } else {
         const json = await res.json().catch(() => null);
-        toast.error(json?.error || "Error al actualizar");
+        toast.error(mensajeError({ message: json?.error || "Error al actualizar" }));
       }
     } catch {
       toast.error("Error de conexión");
@@ -245,13 +261,14 @@ export default function AdminPedidosPage() {
           />
         </div>
         <Select value={tipo || "todos"} onValueChange={(v) => { setTipo(!v || v === "todos" ? "" : v); setPage(1); }}>
-          <SelectTrigger className="w-24 h-9 text-xs">
+          <SelectTrigger className="w-32 h-9 text-xs">
             <SelectValue placeholder="Tipo" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todos</SelectItem>
             <SelectItem value="online">Online</SelectItem>
             <SelectItem value="pos">POS</SelectItem>
+            <SelectItem value="disciplina">Disciplinas</SelectItem>
           </SelectContent>
         </Select>
       </motion.div>
@@ -281,7 +298,9 @@ export default function AdminPedidosPage() {
             className="rounded-xl border border-dashed border-linea py-16 text-center"
           >
             <Package className="mx-auto mb-3 size-12 opacity-15" />
-            <p className="text-sm text-muted-foreground">No se encontraron pedidos</p>
+            <p className="text-sm text-muted-foreground">
+              {errorCarga ?? "No se encontraron pedidos"}
+            </p>
           </motion.div>
         ) : (
           <AnimatePresence mode="popLayout">
@@ -327,12 +346,18 @@ export default function AdminPedidosPage() {
                             POS
                           </span>
                         )}
+                        {pedido.tipo === "disciplina" && (
+                          <span className="inline-flex items-center gap-0.5 rounded bg-bordo-50 px-1 py-0.5 text-[10px] font-medium text-bordo-800">
+                            <Users className="size-2.5" />
+                            Disciplina
+                          </span>
+                        )}
                         {pedido.donacion && pedido.donacion.estado !== "cancelada" && (
                           <span
                             className="inline-flex items-center rounded-full border border-pink-200 bg-pink-50 px-2 py-0.5 text-[10px] font-medium leading-none text-pink-700"
                             title={`Donación Olla del Hogar de Cristo · ${pedido.donacion.estado}`}
                           >
-                            Donación ${pedido.donacion.monto.toLocaleString("es-UY")}
+                            Donación {pesos(pedido.donacion.monto)}
                           </span>
                         )}
                       </div>
@@ -346,10 +371,16 @@ export default function AdminPedidosPage() {
                     {/* Right: total + action */}
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="text-sm font-semibold tabular-nums">
-                        ${pedido.total.toLocaleString("es-UY")}
+                        {pesos(pedido.total)}
                       </span>
 
-                      {pedido.estado === "pendiente_verificacion" ? (
+                      {!puedeOperar ? (
+                        <Link href={`/admin/pedidos/${pedido.id}`}>
+                          <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground">
+                            <Eye className="size-3.5" />
+                          </Button>
+                        </Link>
+                      ) : pedido.estado === "pendiente_verificacion" ? (
                         <Link href={`/admin/pedidos/${pedido.id}`}>
                           <Button
                             size="sm"

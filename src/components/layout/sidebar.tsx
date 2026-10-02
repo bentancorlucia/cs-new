@@ -28,9 +28,6 @@ import {
   ShoppingCart,
   ShieldCheck,
   LayoutDashboard,
-  Receipt,
-  Wallet,
-  ArrowLeftRight,
   FileSpreadsheet,
   TicketPercent,
   Heart,
@@ -57,6 +54,8 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<LucideProps>;
   exact?: boolean;
+  /** Si se indica, el ítem solo se muestra a estos roles (además de los de la sección). */
+  roles?: string[];
 }
 
 interface NavSection {
@@ -78,6 +77,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/admin/stock", label: "Stock", icon: BarChart3 },
       { href: "/admin/pos", label: "POS", icon: MonitorSmartphone },
       { href: "/admin/donaciones", label: "Donaciones", icon: Heart },
+      { href: "/pedidos-disciplinas", label: "Pedidos de disciplinas", icon: Dumbbell },
       { href: "/admin/reportes", label: "Reportes", icon: FileSpreadsheet },
     ],
   },
@@ -96,6 +96,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/admin/proveedores", label: "Proveedores", icon: Truck },
       { href: "/admin/compras", label: "Compras y pagos", icon: ShoppingCart },
+      { href: "/admin/stock", label: "Stock valorizado", icon: BarChart3, roles: ["tesorero"] },
     ],
   },
   {
@@ -108,6 +109,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/contabilidad/balance", label: "Balances", icon: Scale },
       { href: "/contabilidad/plan-de-cuentas", label: "Plan de cuentas", icon: ListTree },
       { href: "/contabilidad/ejercicios", label: "Ejercicios", icon: CalendarRange },
+      { href: "/pedidos-disciplinas", label: "Cuenta de disciplinas", icon: Dumbbell, roles: ["super_admin", "tesorero"] },
       { href: "/contabilidad/cotizaciones", label: "Cotizaciones", icon: DollarSign },
     ],
   },
@@ -215,9 +217,12 @@ function SidebarContent({
 }) {
   const { hasAnyRole } = useRoles();
 
-  const visibleSections = NAV_SECTIONS.filter((section) =>
-    hasAnyRole(section.requiredRoles)
-  );
+  const visibleSections = NAV_SECTIONS.filter((section) => hasAnyRole(section.requiredRoles))
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => !item.roles || hasAnyRole(item.roles)),
+    }))
+    .filter((section) => section.items.length > 0);
 
   return (
     <div className="flex flex-col h-full">
