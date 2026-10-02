@@ -486,6 +486,9 @@ isOneToOne: false
 "_usuario":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
+"actualizar_presupuesto":
+{ Args: { "p_nombre": string,"p_notas"?: string,"p_presupuesto": string }; Returns: undefined
+                           },
 "aprobar_presupuesto":
 { Args: { "p_presupuesto": string }; Returns: undefined
                            },
@@ -511,7 +514,7 @@ isOneToOne: false
 { Args: { "p_anio": number }; Returns: string
                            },
 "crear_presupuesto":
-{ Args: { "p_base"?: string,"p_ejercicio": string,"p_meses"?: number,"p_nombre"?: string }; Returns: string
+{ Args: { "p_base"?: string,"p_ejercicio": string,"p_hasta"?: string,"p_meses"?: number,"p_nombre"?: string }; Returns: string
                            },
 "cuenta_para":
 { Args: { "p_moneda"?: string,"p_proceso": string,"p_rol": string }; Returns: string

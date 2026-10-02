@@ -1,6 +1,6 @@
 -- Presupuesto: versiones, bloqueo del aprobado y ejecución contra lo real.
 BEGIN;
-SELECT plan(22);
+SELECT plan(24);
 
 CREATE FUNCTION pg_temp.cta(p text) RETURNS uuid LANGUAGE sql AS $$ SELECT id FROM contabilidad.cuentas WHERE codigo = p $$;
 CREATE FUNCTION pg_temp.cc(p text) RETURNS uuid LANGUAGE sql AS $$ SELECT id FROM contabilidad.centros_costo WHERE codigo = p $$;
@@ -44,7 +44,7 @@ SELECT throws_like($$ SELECT contabilidad.crear_presupuesto((SELECT id FROM ej))
 
 -- ---------- Base: promedio de los últimos 3 meses (oct–dic 2025)
 DO $$ BEGIN PERFORM contabilidad.eliminar_presupuesto((SELECT id FROM p1)); END $$;
-CREATE TEMP TABLE p2 AS SELECT contabilidad.crear_presupuesto((SELECT id FROM ej), 'promedio', 3) AS id;
+CREATE TEMP TABLE p2 AS SELECT contabilidad.crear_presupuesto((SELECT id FROM ej), 'promedio', 3, p_hasta => '2025-12-31') AS id;
 SELECT is((SELECT version FROM contabilidad.presupuestos WHERE id = (SELECT id FROM p2)), 1, 'un borrador eliminado no deja hueco en las versiones');
 SELECT is((SELECT importe FROM contabilidad.presupuesto_lineas WHERE presupuesto_id = (SELECT id FROM p2)
            AND cuenta_id = pg_temp.cta('4.1.01') AND mes = 7), 800.00::numeric, 'promedio mensual repetido en cada mes');
@@ -95,6 +95,13 @@ SELECT is((SELECT count(*) FROM contabilidad.presupuesto_lineas WHERE presupuest
 DO $$ BEGIN PERFORM contabilidad.aprobar_presupuesto((SELECT id FROM p3)); END $$;
 SELECT is((SELECT estado FROM contabilidad.presupuestos WHERE id = (SELECT id FROM p2)), 'reemplazado',
           'al aprobarla, la anterior queda reemplazada');
+
+-- ---------- Nombre y notas: solo en borrador
+CREATE TEMP TABLE p4 AS SELECT contabilidad.crear_presupuesto((SELECT id FROM ej), 'vigente') AS id;
+DO $$ BEGIN PERFORM contabilidad.actualizar_presupuesto((SELECT id FROM p4), 'Prueba renombrado', 'Notas'); END $$;
+SELECT is((SELECT nombre FROM contabilidad.presupuestos WHERE id = (SELECT id FROM p4)), 'Prueba renombrado', 'se renombra el borrador');
+SELECT throws_like($$ SELECT contabilidad.actualizar_presupuesto((SELECT id FROM p3), 'Otro') $$, '%no se modifica%',
+                   'un aprobado no se renombra');
 
 SELECT * FROM finish();
 ROLLBACK;
