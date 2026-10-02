@@ -130,3 +130,29 @@ export async function eliminarPresupuesto(presupuestoId: string): Promise<Result
   refrescar();
   return { ok: true };
 }
+
+const actualizarSchema = z
+  .object({
+    presupuestoId: uuid,
+    nombre: z.string().trim().min(1, "El nombre no puede quedar vacío").max(120, "El nombre es demasiado largo"),
+    notas: z.string().trim().max(2000, "Las notas son demasiado largas").optional(),
+  })
+  .strict();
+
+/** Renombra un borrador y edita sus notas (la base rechaza aprobados y reemplazados). */
+export async function actualizarPresupuesto(input: z.input<typeof actualizarSchema>): Promise<Resultado> {
+  const p = actualizarSchema.safeParse(input);
+  if (!p.success) return invalido(p.error);
+  const noAutorizado = await autorizar();
+  if (noAutorizado) return noAutorizado;
+
+  const db = await createContabilidadClient();
+  const { error } = await db.rpc("actualizar_presupuesto", {
+    p_presupuesto: p.data.presupuestoId,
+    p_nombre: p.data.nombre,
+    ...(p.data.notas ? { p_notas: p.data.notas } : {}),
+  });
+  if (error) return { ok: false, error: mensajeError(error) };
+  refrescar();
+  return { ok: true };
+}

@@ -100,7 +100,7 @@ export function CrearPresupuestoDialog({
       base: "promedio",
       titulo: "Promedio de los últimos meses",
       descripcion:
-        "Promedio mensual de lo real de los últimos meses antes de que empiece el ejercicio, repetido en los 12 meses.",
+        "Promedio mensual de lo real de los últimos meses cerrados (sin el mes en curso), aunque sean del mismo ejercicio, repetido en los 12 meses.",
       icono: Sigma,
     },
   ];

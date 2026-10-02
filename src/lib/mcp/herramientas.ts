@@ -4,7 +4,17 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { parseRango } from "@/lib/reportes/rango";
 import { generarReporteTienda } from "@/lib/reportes/tienda";
 import { obtenerDashboardTienda } from "@/lib/tienda/dashboard";
-import { estadosContables, mayorDeCuenta, panoramaContable } from "./contabilidad";
+import {
+  ejecucionDelPresupuesto,
+  estadoConciliaciones,
+  estadosContables,
+  flujoDeCaja,
+  importarExtracto,
+  mayorDeCuenta,
+  panoramaContable,
+  previsualizarExtracto,
+  proyeccionDeCaja,
+} from "./contabilidad";
 import { obtenerResumenSocios } from "@/lib/socios/resumen";
 import { uruguayNowParts } from "@/lib/timezone";
 import { tieneRol, usuarioDe, type UsuarioMcp } from "./auth";
@@ -20,6 +30,7 @@ import {
 // Ventas de la tienda: también tesorería y la comisión fiscal (solo lectura).
 const ROLES_REPORTES_TIENDA = ["tienda", "tesorero", "comision_fiscal"];
 const ROLES_CONTABILIDAD = ["tesorero", "comision_fiscal"];
+const ROLES_TESORERIA = ["tesorero"];
 const ROLES_SECRETARIA = ["secretaria"];
 const ROLES_CUALQUIER_MODULO = ["tienda", "tesorero", "secretaria"];
 
@@ -30,7 +41,8 @@ export const INSTRUCCIONES_MCP = `Servidor de datos internos de Club Seminario (
 Las herramientas devuelven los mismos números que los paneles del dashboard y son de solo lectura.
 - Fechas en formato YYYY-MM-DD, calendario de Uruguay (UTC-3).
 - Montos de tienda en pesos uruguayos (UYU). Las ventas de tienda NO incluyen donaciones (se transfieren a la Olla del Hogar).
-- La contabilidad es de partida doble, en pesos (UYU) con cuentas en dólares; el ejercicio es el año calendario. Los asientos, el plan de cuentas y los balances se consultan con panorama_finanzas, estados_contables y libro_mayor_cuenta (roles tesorero o comision_fiscal). Las cargas y correcciones se hacen en el panel /contabilidad, no desde acá.
+- La contabilidad es de partida doble, en pesos (UYU) con cuentas en dólares; el ejercicio es el año calendario. Se consulta con panorama_finanzas, estados_contables, libro_mayor_cuenta, ejecucion_presupuesto, flujo_caja, proyeccion_caja y estado_conciliacion (roles tesorero o comision_fiscal). Las cargas y correcciones se hacen en el panel /contabilidad.
+- Única escritura (rol tesorero): cargar un estado de cuenta del banco. Pasos: 1) estado_conciliacion para ver la cuenta (código) y desde qué fecha va el próximo extracto; 2) transcribí TODAS las líneas (fecha, concepto, importe positivo si entra y negativo si sale, saldo si figura) y los saldos inicial y final; 3) previsualizar_extracto: si no cierra, el error suele ser tuyo al leer el extracto, releé las filas indicadas; 4) mostrale al usuario el resumen y esperá su OK; 5) importar_extracto con los mismos datos. La conciliación contra los libros se hace después en el panel.
 - Cada herramienta requiere un rol (tienda, tesorero, comision_fiscal, secretaria; super_admin ve todo). Si no hay permiso, decíselo al usuario en vez de inventar datos.
 - Usá "quien_soy" si no sabés qué puede consultar el usuario.
 - Para preguntas generales preferí las herramientas de resumen (estado_tienda_hoy, reporte_tienda, panorama_finanzas, estados_contables, resumen_socios).
@@ -179,6 +191,122 @@ export function registrarHerramientas(server: McpServer) {
       conRol(ctx as Ctx, ROLES_CONTABILIDAD, "libro_mayor_cuenta", async (token) =>
         mayorDeCuenta(token, codigo, desde, hasta)
       )
+  );
+
+  server.registerTool(
+    "ejecucion_presupuesto",
+    {
+      title: "Presupuesto contra lo ejecutado",
+      description:
+        "Presupuestado, ejecutado y desvío por rubro y cuenta de ingresos y egresos, con totales y resultado, " +
+        "para el presupuesto aprobado del ejercicio (o la última versión). Por defecto: el ejercicio en curso de enero al mes actual. " +
+        "Requiere rol tesorero o comision_fiscal.",
+      inputSchema: z.object({
+        anio: z.number().int().min(2000).max(2100).optional().describe("Ejercicio (año). Por defecto el actual."),
+        mes_desde: z.number().int().min(1).max(12).optional(),
+        mes_hasta: z.number().int().min(1).max(12).optional(),
+        nivel: z.number().int().min(1).max(5).optional().describe("Profundidad (1 = capítulos, 4 = cuentas). Por defecto 3."),
+      }),
+      annotations: soloLectura,
+    },
+    async ({ anio, mes_desde, mes_hasta, nivel }, ctx) =>
+      conRol(ctx as Ctx, ROLES_CONTABILIDAD, "ejecucion_presupuesto", async (token) =>
+        ejecucionDelPresupuesto(token, anio, mes_desde, mes_hasta, nivel ?? 3)
+      )
+  );
+
+  server.registerTool(
+    "flujo_caja",
+    {
+      title: "Flujo de caja real",
+      description:
+        "Flujo de fondos por método directo: saldo inicial de cajas y bancos, ingresos y egresos por rubro y cuenta " +
+        "(contrapartida real, sin lo que no movió plata), por mes, y saldo final con control contra los libros. " +
+        "Por defecto: el ejercicio en curso hasta hoy. Requiere rol tesorero o comision_fiscal.",
+      inputSchema: z.object({
+        desde: fecha.describe("Inicio. Por defecto el inicio del ejercicio."),
+        hasta: fecha.describe("Fin. Por defecto hoy."),
+      }),
+      annotations: soloLectura,
+    },
+    async ({ desde, hasta }, ctx) =>
+      conRol(ctx as Ctx, ROLES_CONTABILIDAD, "flujo_caja", async (token) => flujoDeCaja(token, desde, hasta))
+  );
+
+  server.registerTool(
+    "proyeccion_caja",
+    {
+      title: "Proyección de caja",
+      description:
+        "Saldo de cajas y bancos proyectado mes a mes desde hoy con el presupuesto aprobado (o el promedio real si no hay), " +
+        "con los vencimientos a proveedores como dato informativo y alerta de saldo negativo. Requiere rol tesorero o comision_fiscal.",
+      inputSchema: z.object({
+        horizonte: z.enum(["ejercicio", "12"]).optional().describe("Hasta fin del ejercicio (por defecto) o 12 meses."),
+      }),
+      annotations: soloLectura,
+    },
+    async ({ horizonte }, ctx) =>
+      conRol(ctx as Ctx, ROLES_CONTABILIDAD, "proyeccion_caja", async (token) => proyeccionDeCaja(token, horizonte))
+  );
+
+  server.registerTool(
+    "estado_conciliacion",
+    {
+      title: "Estado de la conciliación bancaria",
+      description:
+        "Por cada caja y banco: hasta qué fecha está conciliado, el último extracto cargado (período, estado, movimientos " +
+        "conciliados) y desde qué fecha va el próximo. Requiere rol tesorero o comision_fiscal.",
+      annotations: soloLectura,
+    },
+    async (ctx) =>
+      conRol(ctx as Ctx, ROLES_CONTABILIDAD, "estado_conciliacion", async (token) => estadoConciliaciones(token))
+  );
+
+  const extracto = z.object({
+    cuenta: z.string().regex(/^1\.1\.01\.[0-9]{2}$/, "Código de la caja o banco, ej. 1.1.01.05"),
+    desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    saldo_inicial: z.number(),
+    saldo_final: z.number(),
+    movimientos: z
+      .array(
+        z.object({
+          fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          concepto: z.string().min(1),
+          referencia: z.string().optional(),
+          importe: z.number().describe("Positivo si entra a la cuenta, negativo si sale."),
+          saldo: z.number().optional().describe("Saldo que informa el banco después del movimiento, si figura."),
+        })
+      )
+      .max(2000),
+  });
+
+  server.registerTool(
+    "previsualizar_extracto",
+    {
+      title: "Verificar un estado de cuenta",
+      description:
+        "Verifica un estado de cuenta transcripto sin guardar nada: que cierre (saldo inicial + movimientos = saldo final), " +
+        "que los saldos por fila coincidan y que siga al extracto anterior. Requiere rol tesorero.",
+      inputSchema: extracto,
+      annotations: soloLectura,
+    },
+    async (args, ctx) =>
+      conRol(ctx as Ctx, ROLES_TESORERIA, "previsualizar_extracto", async (token) => previsualizarExtracto(token, args))
+  );
+
+  server.registerTool(
+    "importar_extracto",
+    {
+      title: "Cargar un estado de cuenta",
+      description:
+        "Guarda el estado de cuenta (todo o nada) para conciliarlo en el panel. Usar solo después de previsualizar_extracto " +
+        "sin problemas y con el OK del usuario. Requiere rol tesorero.",
+      inputSchema: extracto,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async (args, ctx) =>
+      conRol(ctx as Ctx, ROLES_TESORERIA, "importar_extracto", async (token) => importarExtracto(token, args))
   );
 
   server.registerTool(

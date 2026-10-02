@@ -18,6 +18,7 @@ import {
   Plus,
   Save,
   SplitSquareHorizontal,
+  Tag,
   Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -52,6 +53,8 @@ import {
   guardarLineasPresupuesto,
 } from "@/app/(dashboard)/contabilidad/presupuesto/actions";
 import { EstadoBadge } from "./estado-badge";
+import { EditarPresupuestoDialog } from "./editar-presupuesto-dialog";
+import { Notas } from "./presupuesto-lista";
 import { AgregarCuentaDialog, DialogoFila, type ModoFila } from "./dialogos-grilla";
 
 /** Importes por fila (cuenta + centro), 12 meses. */
@@ -128,6 +131,7 @@ export function GrillaPresupuesto({
   const [dialogoFila, setDialogoFila] = useState<{ clave: string; modo: ModoFila } | null>(null);
   const [agregar, setAgregar] = useState(false);
   const [confirmar, setConfirmar] = useState<"aprobar" | "eliminar" | null>(null);
+  const [editandoNombre, setEditandoNombre] = useState(false);
   /** Fila recién agregada: se enfoca su primera celda después del render. */
   const enfocar = useRef<string | null>(null);
   const tablaRef = useRef<HTMLDivElement>(null);
@@ -363,7 +367,22 @@ export function GrillaPresupuesto({
                 {presupuesto.estado === "borrador" ? "Solo lectura" : "Congelado: para cambiarlo, reformulalo"}
               </span>
             )}
+            {editable && (
+              <motion.button
+                type="button"
+                whileHover={{ y: -1 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setEditandoNombre(true)}
+                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-heading text-bordo-800 transition-colors hover:bg-bordo-50"
+              >
+                <Tag className="size-3" />
+                Nombre y notas
+              </motion.button>
+            )}
           </motion.div>
+          <AnimatePresence initial={false}>
+            {presupuesto.notas && <Notas key={presupuesto.notas} texto={presupuesto.notas} />}
+          </AnimatePresence>
         </div>
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -697,6 +716,7 @@ export function GrillaPresupuesto({
 
       {editable && (
         <>
+          <EditarPresupuestoDialog open={editandoNombre} onOpenChange={setEditandoNombre} presupuesto={presupuesto} />
           <AgregarCuentaDialog
             open={agregar}
             onOpenChange={setAgregar}

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { BarChart3, CheckCircle2, Eye, History, PencilLine, Plus, Target, Trash2 } from "lucide-react";
+import { BarChart3, CheckCircle2, Eye, History, NotebookText, PencilLine, Plus, Tag, Target, Trash2 } from "lucide-react";
 import { EmptyState } from "@/components/shared/empty-state";
 import { buttonVariants } from "@/components/ui/button";
 import { BotonAnimado } from "@/components/contabilidad/ejercicios/boton-animado";
@@ -16,6 +16,7 @@ import type { EjercicioResumen } from "@/lib/contabilidad/reportes";
 import type { PresupuestoResumen } from "@/lib/contabilidad/presupuesto";
 import { aprobarPresupuesto, eliminarPresupuesto } from "@/app/(dashboard)/contabilidad/presupuesto/actions";
 import { CrearPresupuestoDialog } from "./crear-presupuesto-dialog";
+import { EditarPresupuestoDialog } from "./editar-presupuesto-dialog";
 import { EstadoBadge } from "./estado-badge";
 import { SelectorEjercicio } from "./selector-ejercicio";
 
@@ -44,6 +45,7 @@ export function PresupuestoLista({
   const router = useRouter();
   const [crear, setCrear] = useState(false);
   const [confirmar, setConfirmar] = useState<Confirmacion>(null);
+  const [editando, setEditando] = useState<PresupuestoResumen | null>(null);
   const anio = Number(ejercicio.fecha_inicio.slice(0, 4));
   const vigente = versiones.find((v) => v.estado === "aprobado") ?? null;
   const borrador = versiones.find((v) => v.estado === "borrador") ?? null;
@@ -104,6 +106,7 @@ export function PresupuestoLista({
                 onAprobar={() => setConfirmar({ tipo: "aprobar", presupuesto: v })}
                 onEliminar={() => setConfirmar({ tipo: "eliminar", presupuesto: v })}
                 onReformular={() => setCrear(true)}
+                onEditar={() => setEditando(v)}
               />
             ))}
           </AnimatePresence>
@@ -120,6 +123,10 @@ export function PresupuestoLista({
           hayAnterior={hayAnterior}
           siguienteVersion={siguienteVersion}
         />
+      )}
+
+      {puedeEscribir && (
+        <EditarPresupuestoDialog open={!!editando} onOpenChange={(o) => !o && setEditando(null)} presupuesto={editando} />
       )}
 
       <ConfirmarDialog
@@ -176,6 +183,7 @@ function TarjetaVersion({
   onAprobar,
   onEliminar,
   onReformular,
+  onEditar,
 }: {
   version: PresupuestoResumen;
   ejercicioId: string;
@@ -184,6 +192,7 @@ function TarjetaVersion({
   onAprobar: () => void;
   onEliminar: () => void;
   onReformular: () => void;
+  onEditar: () => void;
 }) {
   const borrador = v.estado === "borrador";
   const superavit = v.resultado >= 0;
@@ -242,6 +251,9 @@ function TarjetaVersion({
             <p className="text-xs text-muted-foreground">
               {v.cuentas === 0 ? "Sin importes cargados" : `${v.cuentas} ${v.cuentas === 1 ? "cuenta" : "cuentas"}`}
             </p>
+            <AnimatePresence initial={false}>
+              {v.notas && <Notas key={v.notas} texto={v.notas} />}
+            </AnimatePresence>
           </div>
         </div>
 
@@ -286,6 +298,10 @@ function TarjetaVersion({
               <CheckCircle2 className="size-3.5" />
               Aprobar
             </BotonAnimado>
+            <BotonAnimado size="sm" variant="outline" onClick={onEditar}>
+              <Tag className="size-3.5" />
+              Nombre y notas
+            </BotonAnimado>
             <BotonAnimado
               size="sm"
               variant="ghost"
@@ -316,5 +332,24 @@ function Total({ titulo, valor, className }: { titulo: string; valor: number; cl
         <ImporteAnimado valor={Math.abs(valor)} />
       </dd>
     </div>
+  );
+}
+
+/** Notas de la versión (supuestos, criterios). */
+export function Notas({ texto, className }: { texto: string; className?: string }) {
+  return (
+    <motion.p
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: "auto" }}
+      exit={{ opacity: 0, height: 0 }}
+      transition={easeSmooth}
+      className={cn(
+        "mt-2 flex max-w-xl gap-1.5 overflow-hidden whitespace-pre-line rounded-lg bg-superficie/70 px-2.5 py-1.5 text-xs text-foreground/80",
+        className
+      )}
+    >
+      <NotebookText className="mt-0.5 size-3.5 shrink-0 text-bordo-700" />
+      <span className="min-w-0 break-words">{texto}</span>
+    </motion.p>
   );
 }
