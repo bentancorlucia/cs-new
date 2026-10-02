@@ -34,6 +34,12 @@ import {
   FileSpreadsheet,
   TicketPercent,
   Heart,
+  BookOpen,
+  ListTree,
+  NotebookPen,
+  Scale,
+  CalendarRange,
+  DollarSign,
 } from "lucide-react";
 import { useRoles } from "@/hooks/use-roles";
 import { RoleSwitcher } from "@/components/layout/role-switcher";
@@ -98,6 +104,19 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/tesoreria/transferencias", label: "Transferencias", icon: ArrowLeftRight },
       { href: "/tesoreria/presupuesto", label: "Presupuesto", icon: BarChart3 },
       { href: "/tesoreria/reportes", label: "Reportes", icon: FileSpreadsheet },
+    ],
+  },
+  {
+    title: "Contabilidad",
+    requiredRoles: ["super_admin", "tesorero", "comision_fiscal"],
+    items: [
+      { href: "/contabilidad", label: "Resumen", icon: LayoutDashboard, exact: true },
+      { href: "/contabilidad/asientos", label: "Libro diario", icon: NotebookPen },
+      { href: "/contabilidad/mayor", label: "Libro mayor", icon: BookOpen },
+      { href: "/contabilidad/balance", label: "Balances", icon: Scale },
+      { href: "/contabilidad/plan-de-cuentas", label: "Plan de cuentas", icon: ListTree },
+      { href: "/contabilidad/ejercicios", label: "Ejercicios", icon: CalendarRange },
+      { href: "/contabilidad/cotizaciones", label: "Cotizaciones", icon: DollarSign },
     ],
   },
   {

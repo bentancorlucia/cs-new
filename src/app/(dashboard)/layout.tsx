@@ -15,6 +15,7 @@ const STAFF_ROLES = [
   "eventos",
   "scanner",
   "tesorero",
+  "comision_fiscal",
 ];
 
 export default function DashboardLayout({

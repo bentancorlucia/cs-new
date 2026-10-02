@@ -38,6 +38,7 @@ const PROTECTED_ROUTES: Record<string, string[]> = {
   "/admin/pos": ["super_admin", "tienda"],
   "/admin": ["super_admin", "tienda"],
   "/secretaria": ["super_admin", "secretaria"],
+  "/contabilidad": ["super_admin", "tesorero", "comision_fiscal"],
   "/eventos/crear": ["super_admin", "eventos"],
   "/eventos/entradas": ["super_admin", "eventos"],
   "/eventos/scanner": ["super_admin", "eventos", "scanner"],
