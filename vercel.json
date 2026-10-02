@@ -11,6 +11,18 @@
     {
       "path": "/api/contabilidad/cotizaciones/bcu",
       "schedule": "15 11 * * *"
+    },
+    {
+      "path": "/api/comunicaciones/worker",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/comunicaciones/automatizaciones",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/socios",
+      "schedule": "5 6 * * *"
     }
   ]
 }

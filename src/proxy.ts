@@ -17,6 +17,7 @@ const PUBLIC_ROUTES = [
   "/cambiar-password",
   "/confirmar-email",
   "/auth", // cubre /auth/callback (intercambio de código de reset/signup)
+  "/baja", // baja de comunicaciones desde el enlace del mail
 ];
 
 // Sub-rutas de /tienda que SI requieren auth (checkout, pedido)
@@ -44,6 +45,7 @@ const PROTECTED_ROUTES: Record<string, string[]> = {
   "/pedidos-disciplinas": ["super_admin", "tienda", "tesorero"],
   "/admin": ["super_admin", "tienda"],
   "/secretaria": ["super_admin", "secretaria"],
+  "/cuotas": ["super_admin", "tesorero", "secretaria", "comision_fiscal"],
   "/contabilidad": ["super_admin", "tesorero", "comision_fiscal"],
   "/eventos/crear": ["super_admin", "eventos"],
   "/eventos/entradas": ["super_admin", "eventos"],
@@ -54,6 +56,8 @@ const PROTECTED_ROUTES: Record<string, string[]> = {
     "secretaria",
     "eventos",
     "scanner",
+    "tesorero",
+    "comision_fiscal",
     "socio",
     "no_socio",
   ],
