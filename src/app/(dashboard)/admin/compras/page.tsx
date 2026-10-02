@@ -1,13 +1,11 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
-import AdminComprasPage from "./compras-client";
+import { listarOrdenesCompra, permisosCompras } from "@/lib/comercial/compras";
+import { OrdenesLista } from "@/components/compras/ordenes-lista";
 
-export const metadata: Metadata = { title: "Compras" };
+export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Órdenes de compra" };
 
-export default function Page() {
-  return (
-    <Suspense>
-      <AdminComprasPage />
-    </Suspense>
-  );
+export default async function OrdenesCompraPage() {
+  const [permisos, ordenes] = await Promise.all([permisosCompras(), listarOrdenesCompra()]);
+  return <OrdenesLista ordenes={ordenes} puedeOperar={permisos.puedeOperar} />;
 }
