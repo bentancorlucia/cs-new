@@ -1,6 +1,6 @@
 -- Flujo de caja (método directo) y conciliación bancaria.
 BEGIN;
-SELECT plan(43);
+SELECT plan(45);
 
 CREATE FUNCTION pg_temp.cta(p text) RETURNS uuid LANGUAGE sql AS $$ SELECT id FROM contabilidad.cuentas WHERE codigo = p $$;
 CREATE FUNCTION pg_temp.l(p_cuenta text, p_lado text, p_importe numeric)
@@ -134,6 +134,11 @@ SELECT throws_like($$ SELECT contabilidad.cerrar_extracto((SELECT id FROM ext)) 
 SELECT lives_ok($$ SELECT contabilidad.contabilizar_movimiento_extracto(pg_temp.mov(5), pg_temp.cta('5.5.04')) $$,
                 'registra la comisión y la deja conciliada');
 SELECT is(pg_temp.flujo('5.5.04'), -55.00::numeric, 'la comisión del banco entra al flujo');
+DO $$ BEGIN PERFORM contabilidad.desconciliar((SELECT conciliacion_id FROM contabilidad.conciliacion_movimientos
+  WHERE movimiento_id = pg_temp.mov(5))); END $$;
+SELECT is(contabilidad.contabilizar_movimiento_extracto(pg_temp.mov(5), pg_temp.cta('5.5.04')),
+          (SELECT id FROM contabilidad.asientos WHERE origen_tipo = 'extracto' AND origen_id = pg_temp.mov(5)::text),
+          'registrarlo de nuevo reutiliza el asiento');
 
 CREATE TEMP TABLE res AS SELECT * FROM contabilidad.resumen_conciliacion((SELECT id FROM ext));
 SELECT is((SELECT saldo_libros FROM res), 11145.00::numeric, 'saldo según libros');
@@ -171,6 +176,12 @@ SELECT throws_like($$ SELECT contabilidad.eliminar_extracto((SELECT id FROM ext)
 DO $$ BEGIN PERFORM contabilidad.cerrar_extracto((SELECT id FROM feb)); END $$;
 SELECT throws_like($$ SELECT contabilidad.reabrir_extracto((SELECT id FROM ext)) $$, '%posterior cerrado%',
                    'se reabren del más nuevo al más viejo');
+
+-- Asiento y su reversión: se sugieren como par (suman cero)
+SELECT pg_temp.asiento('a_revertir', '2026-02-15', jsonb_build_array(pg_temp.l('1.1.01.05', 'debe', 77), pg_temp.l('4.7.01', 'haber', 77)));
+DO $$ BEGIN PERFORM contabilidad.revertir_asiento((SELECT id FROM a WHERE nombre = 'a_revertir'), 'Prueba', '2026-02-16'); END $$;
+SELECT is((SELECT count(*) FROM contabilidad.sugerir_reversiones((SELECT id FROM feb))), 1::bigint,
+          'sugiere conciliar el asiento con su reversión');
 
 SELECT * FROM finish();
 ROLLBACK;

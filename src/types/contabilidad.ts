@@ -619,6 +619,11 @@ isOneToOne: false
               "dias": number,"linea_id": number,"movimiento_id": number
             }[]
                            },
+"sugerir_reversiones":
+{ Args: { "p_extracto": string }; Returns: {
+              "linea_id": number,"linea_reversion_id": number
+            }[]
+                           },
 "tc_cierre":
 { Args: { "p_fecha": string,"p_moneda": string }; Returns: number
                            },
