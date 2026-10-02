@@ -150,6 +150,19 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"costos_previos": {
+                  Row: {
+                    "costo": number,"producto_id": number,"variante_id": number | null
+                  }
+                  Insert: {
+                    "costo": number,"producto_id": number,"variante_id"?: number | null
+                  }
+                  Update: {
+                    "costo"?: number,"producto_id"?: number,"variante_id"?: number | null
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"devolucion_items": {
                   Row: {
                     "cantidad": number,"costo": number,"devolucion_id": number,"es_nuevo": boolean,"id": number,"importe": number,"item_id": number,"pedido_item_id": number | null
@@ -374,13 +387,13 @@ isOneToOne: false
                   ]
                 },"recuento_items": {
                   Row: {
-                    "contado": number,"diferencia": number | null,"id": number,"item_id": number,"recuento_id": number,"stock_sistema": number | null,"valor": number | null
+                    "contado": number,"costo_unitario": number | null,"diferencia": number | null,"id": number,"item_id": number,"recuento_id": number,"stock_sistema": number | null,"valor": number | null
                   }
                   Insert: {
-                    "contado": number,"diferencia"?: number | null,"id"?: never,"item_id": number,"recuento_id": number,"stock_sistema"?: number | null,"valor"?: number | null
+                    "contado": number,"costo_unitario"?: number | null,"diferencia"?: number | null,"id"?: never,"item_id": number,"recuento_id": number,"stock_sistema"?: number | null,"valor"?: number | null
                   }
                   Update: {
-                    "contado"?: number,"diferencia"?: number | null,"id"?: never,"item_id"?: number,"recuento_id"?: number,"stock_sistema"?: number | null,"valor"?: number | null
+                    "contado"?: number,"costo_unitario"?: number | null,"diferencia"?: number | null,"id"?: never,"item_id"?: number,"recuento_id"?: number,"stock_sistema"?: number | null,"valor"?: number | null
                   }
                   Relationships: [
                     {
@@ -460,6 +473,22 @@ isOneToOne: false
 { Args: Record<PropertyKey, never>; Returns: undefined
                            },
 "_item":
+{ Args: { "p_producto": number,"p_variante": number }; Returns: {
+              "id": number,
+"metodo_costeo": string,
+"producto_id": number,
+"stock": number,
+"updated_at": string,
+"valor": number,
+"variante_id": number | null
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "items"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"_item_para_inventario":
 { Args: { "p_producto": number,"p_variante": number }; Returns: {
               "id": number,
 "metodo_costeo": string,
@@ -559,6 +588,9 @@ isOneToOne: false
                            },
 "puede_ver":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"quitar_de_recuento":
+{ Args: { "p_id": number,"p_producto": number,"p_variante"?: number }; Returns: undefined
                            },
 "recibir_mercaderia":
 { Args: { "p_fecha": string,"p_idempotency_key"?: string,"p_items": Json,"p_moneda": string,"p_orden": number,"p_proveedor": number,"p_remito"?: string,"p_tc"?: number }; Returns: number

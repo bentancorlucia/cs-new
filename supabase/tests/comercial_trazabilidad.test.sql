@@ -1,6 +1,6 @@
 -- Stock con trazabilidad plena (migración 20261003220000).
 BEGIN;
-SELECT plan(14);
+SELECT plan(18);
 
 DO $$ BEGIN PERFORM contabilidad.crear_ejercicio(extract(year FROM contabilidad._hoy())::int); END $$;
 CREATE FUNCTION pg_temp.item(p_prod int) RETURNS comercial.items LANGUAGE sql AS $$
@@ -49,6 +49,22 @@ SELECT is((comercial.confirmar_recuento((SELECT id FROM r)) ->> 'faltante')::num
 SELECT is((pg_temp.item(9601)).stock, 5, 'el stock queda en lo contado');
 SELECT throws_like($$ SELECT comercial.guardar_recuento((SELECT id FROM r), '[{"producto_id": 9601, "contado": 9}]') $$,
                    '%borrador%', 'un recuento confirmado no se edita');
+
+-- Producto con stock anterior al motor (sin ítem) y sobrante sin costo
+INSERT INTO public.productos (id, nombre, slug, precio) VALUES (9602, 'Termo', 'termo-traz-test', 900);
+SET LOCAL comercial.sincronizando = 'on';
+UPDATE public.productos SET stock_actual = 7 WHERE id = 9602;
+RESET comercial.sincronizando;
+SELECT throws_like($$ SELECT comercial.guardar_recuento(NULL, '[{"producto_id": 9602, "contado": 7}]') $$,
+                   '%stock sin registrar%', 'el stock viejo no entra solo al kardex');
+SELECT is(comercial.cargar_inventario_inicial('[{"producto_id": 9602, "cantidad": 5, "costo_unitario": 300}]'), 1,
+          'el inventario inicial del corte lo carga con cantidad y costo reales');
+SELECT is((SELECT stock_actual FROM public.productos WHERE id = 9602), 5, 'y reemplaza al stock viejo');
+
+INSERT INTO public.productos (id, nombre, slug, precio) VALUES (9603, 'Pin', 'pin-traz-test', 100);
+CREATE TEMP TABLE r2 AS SELECT comercial.guardar_recuento(NULL, '[{"producto_id": 9603, "contado": 3}]') AS id;
+SELECT throws_like($$ SELECT comercial.confirmar_recuento((SELECT id FROM r2)) $$,
+                   '%No hay costo%', 'un sobrante sin costo conocido no entra a $0');
 
 -- Todo el kardex queda explicado por documentos
 SELECT is((SELECT count(*) FROM comercial.movimientos m WHERE m.item_id = (pg_temp.item(9601)).id

@@ -7,8 +7,8 @@
 --    con cualquier estado o total, y cualquiera (anónimo incluido)
 --    insertar ítems en cualquier pedido.
 -- 2. El costo deja de estar en productos/variantes (legible por
---    anónimos): vive en comercial.items. Antes de borrarlo, el stock
---    existente entra al motor con ese costo.
+--    anónimos): vive en comercial.items. El último costo conocido se
+--    guarda como sugerencia para el inventario inicial del corte.
 -- 3. Listas de precio mayoristas, depósitos y promocodes vigentes dejan
 --    de ser públicos.
 -- 4. Bucket productos: escriben solo tienda y super_admin.
@@ -24,25 +24,22 @@ REVOKE INSERT, UPDATE, DELETE ON public.pedidos, public.pedido_items FROM anon;
 REVOKE INSERT, UPDATE, DELETE ON public.pedido_items FROM authenticated;
 
 -- 2. Costo fuera del catálogo público --------------------------
--- El stock anterior al motor entra como inventario inicial al costo
--- conocido (lo hace comercial._item al crear el ítem).
-DO $$
-DECLARE
-  r record;
-BEGIN
-  FOR r IN SELECT v.producto_id, v.id AS variante_id FROM public.producto_variantes v
-           WHERE v.stock_actual > 0
-             AND NOT EXISTS (SELECT 1 FROM comercial.items i WHERE i.variante_id = v.id) LOOP
-    PERFORM comercial._item(r.producto_id, r.variante_id);
-  END LOOP;
-  FOR r IN SELECT p.id FROM public.productos p
-           WHERE p.stock_actual > 0
-             AND NOT EXISTS (SELECT 1 FROM public.producto_variantes v WHERE v.producto_id = p.id)
-             AND NOT EXISTS (SELECT 1 FROM comercial.items i WHERE i.producto_id = p.id AND i.variante_id IS NULL) LOOP
-    PERFORM comercial._item(r.id, NULL);
-  END LOOP;
-END;
-$$;
+-- El último costo conocido queda como sugerencia para cargar el
+-- inventario inicial del corte (lo hace el tesorero con cantidad y costo
+-- reales; el stock viejo no entra solo al kardex).
+CREATE TABLE IF NOT EXISTS comercial.costos_previos (
+  producto_id integer NOT NULL REFERENCES public.productos (id) ON DELETE CASCADE,
+  variante_id integer REFERENCES public.producto_variantes (id) ON DELETE CASCADE,
+  costo numeric(18, 6) NOT NULL CHECK (costo >= 0)
+);
+INSERT INTO comercial.costos_previos (producto_id, variante_id, costo)
+SELECT v.producto_id, v.id, coalesce(v.costo_promedio, p.costo_promedio)
+FROM public.producto_variantes v JOIN public.productos p ON p.id = v.producto_id
+WHERE coalesce(v.costo_promedio, p.costo_promedio) IS NOT NULL
+UNION ALL
+SELECT p.id, NULL, p.costo_promedio FROM public.productos p
+WHERE p.costo_promedio IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM public.producto_variantes v WHERE v.producto_id = p.id);
 
 UPDATE public.productos SET costo_promedio = NULL WHERE costo_promedio IS NOT NULL;
 UPDATE public.producto_variantes SET costo_promedio = NULL WHERE costo_promedio IS NOT NULL;
