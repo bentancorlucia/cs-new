@@ -109,10 +109,43 @@ Costo de lo vendido: PPP → costo promedio vigente del ítem al momento de la s
 3. **Storefront y APIs**: checkout, POS, aprobación, cron de reservas; RLS nuevas.
 4. **Corte**: inventario inicial valorizado (costo a definir para los productos sin costo real), pedidos abiertos, saldos de disciplinas y proveedores, donaciones pendientes ($2.000), ventas cobradas desde que se quitó la tesorería vieja (backfill idempotente), apertura de caja y banco desde el arqueo y el extracto.
 
+## Trazabilidad del stock
+
+El stock no se edita: solo se mueve por estos caminos, cada uno con documento, responsable, kardex y asiento.
+
+| Camino | Documento | Función |
+|---|---|---|
+| Compra | Recepción | `comercial.recibir_mercaderia` |
+| Devolución a proveedor | Nota de crédito | `comercial.registrar_documento_proveedor` (línea `devolucion`) |
+| Venta, cancelación | Pedido | `descontar_stock_pedido`, `confirmar_reserva_pedido`, `cancelar_pedido` |
+| Devolución o cambio de cliente | Devolución | `comercial.registrar_devolucion` |
+| Faltantes y sobrantes | Recuento físico | `comercial.guardar_recuento` → `confirmar_recuento` |
+| Baja | Baja tipificada | `comercial.registrar_baja` |
+| Stock de arranque | Inventario inicial | `comercial.cargar_inventario_inicial` (una vez por ítem; tesorero) |
+
+Un trigger impide que un ítem cambie de stock o valor sin un movimiento que lo explique. Kardex y asientos guardan quién operó (`contabilidad._usuario()`: `auth.uid()` o `app.usuario` cuando la ruta usa service role).
+
 ## Estado
 
-- **Fase 1 — ventas y stock: hecha** (`supabase/migrations/20261003120000_comercial_stock_ventas.sql`, tests `supabase/tests/comercial_ventas.test.sql`). Las funciones que ya usan el checkout, el POS, la aprobación, los pedidos de disciplina, la cancelación y la transferencia de donaciones mantienen su nombre y firma, pero mueven stock por el motor nuevo y asientan en la misma transacción. Requiere un ejercicio contable abierto para la fecha del día.
-  - Desde esta migración `stock_actual` no se escribe a mano: las pantallas viejas de ajuste de stock, alta con stock inicial y recepción de compras dan error hasta que se reescriban (fase 2).
-- **Fase 1 — compras y proveedores: hecha** (`supabase/migrations/20261003140000_comercial_compras.sql`, tests `supabase/tests/comercial_compras.test.sql`): órdenes de compra con aprobación, recepciones (tope por lo pendiente, idempotentes), facturas/notas de crédito/débito con líneas de recepción, gasto o devolución, contado o a crédito con vencimiento, órdenes de pago con aplicación a facturas y anticipos, diferencia de cambio realizada, anulaciones con reversión y control documentos = mayor por proveedor.
-- **Fase 1 — caja y devoluciones: hecha** (`supabase/migrations/20261003160000_comercial_caja_devoluciones.sql`, tests `comercial_caja.test.sql`): sesiones de caja con arqueo al abrir y cerrar contra el saldo contable (faltante/sobrante), depósitos al banco, retiros, ingresos y gastos menores con asiento; las ventas en efectivo exigen caja abierta. Devoluciones y cambios en una operación (mercadería al costo de salida, reintegro o cobro neto por caja o banco).
-- Pendiente: pantallas (fase 2), storefront y RLS (fase 3).
+Hecho en la rama `rediseno` (tests: `supabase test db`, 170):
+
+- Base: ventas y stock valorizado, compras y proveedores, caja del POS, devoluciones y cambios, seguridad, trazabilidad de stock, recuentos y bajas.
+- Pantallas: pedidos (con contabilidad, devoluciones y cambios), pedidos de disciplinas con cuenta corriente contable, donaciones, productos y stock (kardex, bajas, recuentos, inventario inicial), POS con caja, proveedores y compras (órdenes, recepciones, documentos, pagos, vencimientos), dashboard y reportes cuadrados con la contabilidad.
+- MCP con herramientas de contabilidad; tesorería vieja eliminada.
+
+Pendiente:
+- "Cargar a la cuota" de socios (módulo de socios).
+- Datos del banco de cobro (Itaú 9500100) todavía escritos en el código del checkout y del POS: pasarlos a configuración.
+- `comprobantes.url` guarda URLs firmadas por un año.
+- Reemplazar `xlsx` 0.18.5 (CVEs) para leer archivos subidos.
+
+## Corte a producción
+
+1. Respaldo completo de la base. Exportar las tablas de la tesorería vieja (`cuentas_financieras`, `movimientos_financieros`, …) como referencia: la migración `20261003200000` las borra.
+2. Marcar la migración base como aplicada en producción (`supabase migration repair --status applied 20261002000000`) y reactivar "Deploy to production" solo después, o aplicar las migraciones a mano en orden.
+3. Exponer los schemas `contabilidad` y `comercial` en la API (Settings → API → Exposed schemas).
+4. Contabilidad: crear el ejercicio del año, cargar el plan de cuentas (viene en la migración), la cotización BCU (cron) y el asiento de apertura con los saldos reales (banco desde el extracto, caja desde un arqueo, donaciones pendientes de transferir, cuenta corriente de disciplinas, mercadería = valor del inventario inicial).
+5. Tienda cerrada unos minutos: cargar el inventario inicial con cantidad contada y costo real (sugerido desde `comercial.costos_previos`). Hasta cargarlo, los productos con stock viejo no se pueden vender.
+6. Contabilizar las ventas cobradas desde que se quitó la tesorería vieja de la rama y hasta el corte (si las hubo en producción con el código viejo): asiento resumen o backfill desde `pedidos`.
+7. Abrir la caja del POS contando el efectivo.
+8. Variables en Vercel: `CRON_SECRET` (cron de cotizaciones BCU).
