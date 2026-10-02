@@ -39,6 +39,7 @@ import {
   pageTransition,
 } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { CUENTA_COBRO_TIENDA } from "@/lib/tienda/cuenta-cobro";
 
 interface UserProfile {
   nombre: string;
@@ -555,20 +556,20 @@ export function CheckoutClient() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-heading text-[10px] uppercase tracking-editorial text-bordo-800/50">Banco</p>
-                        <p className="text-sm font-medium text-bordo-950">ITAU</p>
+                        <p className="text-sm font-medium text-bordo-950">{CUENTA_COBRO_TIENDA.bancoCorto}</p>
                       </div>
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-heading text-[10px] uppercase tracking-editorial text-bordo-800/50">Cuenta</p>
-                        <p className="font-mono font-bold text-bordo-950">9500100</p>
+                        <p className="font-mono font-bold text-bordo-950">{CUENTA_COBRO_TIENDA.cuenta}</p>
                       </div>
-                      <CopyButton text="9500100" />
+                      <CopyButton text={CUENTA_COBRO_TIENDA.cuenta} />
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-heading text-[10px] uppercase tracking-editorial text-bordo-800/50">Titular</p>
-                        <p className="text-sm font-medium text-bordo-950">Club Seminario</p>
+                        <p className="text-sm font-medium text-bordo-950">{CUENTA_COBRO_TIENDA.titular}</p>
                       </div>
                     </div>
                     <div className="flex items-center justify-between">
@@ -833,7 +834,7 @@ export function CheckoutClient() {
             <div className="flex flex-col gap-3 font-heading text-[10px] uppercase tracking-editorial text-bordo-800/50">
               <div className="flex items-center gap-2">
                 <Building2 className="size-4 text-bordo-800" />
-                Transferencia a ITAU · Cuenta 9500100
+                Transferencia a {CUENTA_COBRO_TIENDA.bancoCorto} · Cuenta {CUENTA_COBRO_TIENDA.cuenta}
               </div>
               <div className="flex items-center gap-2">
                 <MapPin className="size-4 text-bordo-800" />

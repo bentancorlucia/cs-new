@@ -32,9 +32,9 @@ import { parseMonto, pesos } from "./formato";
 import { CampoMonto } from "./campo-monto";
 import { PrecioAnimado } from "./precio-animado";
 import { ContenidoTicket, TicketImprimible, imprimirTicket } from "./ticket";
+import { CUENTA_COBRO_TIENDA } from "@/lib/tienda/cuenta-cobro";
 
-// Cuenta de cobro de la tienda (Itaú, solo tienda: 1.1.01.07 en el plan).
-const BANCO = { nombre: "Itaú", cuenta: "9500100", titular: "Club Seminario" };
+const BANCO = { nombre: CUENTA_COBRO_TIENDA.banco, cuenta: CUENTA_COBRO_TIENDA.cuenta, titular: CUENTA_COBRO_TIENDA.titular };
 const TIPOS_COMPROBANTE = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 
 export type ConfirmacionCobro = {

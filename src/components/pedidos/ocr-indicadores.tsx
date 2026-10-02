@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { AlertTriangle, Banknote, Calendar, CheckCircle, Hash, Landmark, ScanSearch, User, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CUENTA_COBRO_TIENDA, esBancoDeCobro } from "@/lib/tienda/cuenta-cobro";
 import type { DatosOcr } from "./tipos";
 
 export function OcrIndicadores({
@@ -28,11 +29,9 @@ export function OcrIndicadores({
     );
   }
 
-  const isItau =
-    datos.banco_destino &&
-    /itau|itaú/i.test(datos.banco_destino);
+  const isItau = datos.banco_destino && esBancoDeCobro(datos.banco_destino);
   const isCuentaCorrecta =
-    datos.cuenta_destino && datos.cuenta_destino.includes("9500100");
+    datos.cuenta_destino && datos.cuenta_destino.includes(CUENTA_COBRO_TIENDA.cuenta);
   const isBeneficiarioCorrecto =
     datos.beneficiario &&
     /seminario|bordo/i.test(datos.beneficiario);
@@ -47,7 +46,7 @@ export function OcrIndicadores({
       icon: Landmark,
       ok: isItau,
       label: isItau
-        ? "Banco destino ITAU"
+        ? `Banco destino ${CUENTA_COBRO_TIENDA.bancoCorto}`
         : datos.banco_destino
           ? `Banco destino: ${datos.banco_destino}`
           : "Banco destino no detectado",
@@ -58,7 +57,7 @@ export function OcrIndicadores({
       icon: Hash,
       ok: isCuentaCorrecta,
       label: isCuentaCorrecta
-        ? "Cuenta correcta (9500100)"
+        ? `Cuenta correcta (${CUENTA_COBRO_TIENDA.cuenta})`
         : datos.cuenta_destino
           ? `Cuenta: ${datos.cuenta_destino}`
           : "Cuenta destino no detectada",

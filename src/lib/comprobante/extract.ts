@@ -1,3 +1,5 @@
+import { CUENTA_COBRO_TIENDA } from "@/lib/tienda/cuenta-cobro";
+
 export interface ComprobanteExtractionResult {
   monto: number | null;
   moneda: string | null;
@@ -135,9 +137,8 @@ function extractCuentaDestino(text: string): string | null {
     }
   }
 
-  // Look for "9500100" anywhere
-  const cuentaMatch = text.match(/9500100/);
-  if (cuentaMatch) return "9500100";
+  // La cuenta de cobro de la tienda en cualquier parte del texto
+  if (text.includes(CUENTA_COBRO_TIENDA.cuenta)) return CUENTA_COBRO_TIENDA.cuenta;
 
   return null;
 }
