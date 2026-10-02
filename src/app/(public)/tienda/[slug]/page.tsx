@@ -87,12 +87,11 @@ export default async function ProductoDetallePage({ params }: Props) {
     // sin sesión / fallo silencioso → esSocio queda en false
   }
 
-  // Stock reservado (pedidos pendientes de verificación)
-  const { data: reservados } = await supabase
-    .from("pedido_items")
-    .select("producto_id, variante_id, cantidad, pedidos!inner(estado)")
-    .eq("producto_id", producto.id)
-    .eq("pedidos.estado", "pendiente_verificacion");
+  // Stock reservado por pedidos pendientes de verificación (agregado, sin
+  // datos de los pedidos: un visitante no puede leer pedidos ajenos)
+  const { data: reservados } = await supabase.rpc("stock_reservado", {
+    p_productos: [producto.id],
+  });
 
   // Build reserved map: { productoTotal, variantes: { [varianteId]: cantidad } }
   let stockReservadoProducto = 0;

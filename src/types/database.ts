@@ -1213,6 +1213,11 @@ isOneToOne: false
 "reservar_stock_pedido":
 { Args: { "p_items": Json,"p_pedido_id": number }; Returns: Json
                            },
+"stock_reservado":
+{ Args: { "p_productos": (number)[] }; Returns: {
+              "cantidad": number,"producto_id": number,"variante_id": number
+            }[]
+                           },
 "tiene_algun_rol":
 { Args: { "roles_nombres": (string)[] }; Returns: boolean
                            },

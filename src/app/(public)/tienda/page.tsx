@@ -40,11 +40,10 @@ export default async function TiendaPage() {
   const stockReservadoVariantes: Record<number, number> = {};
 
   if (productoIds.length > 0) {
-    const { data: reservados } = await supabase
-      .from("pedido_items")
-      .select("producto_id, variante_id, cantidad, pedidos!inner(estado)")
-      .in("producto_id", productoIds)
-      .eq("pedidos.estado", "pendiente_verificacion");
+    // Reservas vigentes de todos los pedidos (agregadas, sin datos de nadie)
+    const { data: reservados } = await supabase.rpc("stock_reservado", {
+      p_productos: productoIds,
+    });
 
     if (reservados) {
       for (const item of reservados as {
