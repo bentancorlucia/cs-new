@@ -10,7 +10,11 @@
     },
     "supabase-prod": {
       "type": "http",
-      "url": "https://mcp.supabase.com/mcp?project_ref=nalvxuywlbtdmnpgjgwf"
+      "url": "https://mcp.supabase.com/mcp?project_ref=nalvxuywlbtdmnpgjgwf&read_only=true&features=database,docs,debugging"
+    },
+    "supabase-branching": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=nalvxuywlbtdmnpgjgwf&features=branching"
     }
   }
 }

@@ -10,45 +10,25 @@ INSERT INTO roles (nombre, descripcion) VALUES
   ('eventos', 'Gestión de eventos y entradas'),
   ('scanner', 'Escaneo de QR en eventos'),
   ('socio', 'Socio activo del club'),
-  ('no_socio', 'Usuario registrado sin membresía');
+  ('no_socio', 'Usuario registrado sin membresía'),
+  ('tesorero', 'Tesorería y contabilidad');
 
--- Disciplinas deportivas
-INSERT INTO disciplinas (nombre, slug, descripcion) VALUES
-  ('Básquetbol', 'basquetbol', 'Papi Basket y Mami Basket del club'),
-  ('Corredores', 'corredores', 'Grupo de running y participación en carreras'),
-  ('Handball', 'handball', 'Handball femenino, masculino y mami handball'),
-  ('Hockey', 'hockey', 'Hockey femenino y masculino'),
-  ('Fútbol', 'futbol', 'Fútbol masculino en varias categorías'),
-  ('Rugby', 'rugby', 'Rugby masculino y femenino'),
-  ('Vóleibol', 'voley', 'Vóleibol femenino y masculino');
-
--- Directivos — Comisión Directiva
-INSERT INTO directivos (nombre, cargo, tipo, orden, periodo) VALUES
-  ('Bernardo Danero', 'Presidente', 'directiva', 1, '2024-2026'),
-  ('María Virginia Staricco', 'Vicepresidente', 'directiva', 2, '2024-2026'),
-  ('Juan Martin Rodriguez', 'Secretario', 'directiva', 3, '2024-2026'),
-  ('Santiago Perez del Castillo', 'Tesorero', 'directiva', 4, '2024-2026'),
-  ('Santiago Cardozo', 'Vocal', 'directiva', 5, '2024-2026'),
-  ('Javier Pereira', 'Vocal', 'directiva', 6, '2024-2026'),
-  ('Josefina Acosta y Lara', 'Vocal', 'directiva', 7, '2024-2026'),
-  ('Facundo Brown', 'Vocal', 'directiva', 8, '2024-2026'),
-  ('Victoria Otero', 'Vocal', 'directiva', 9, '2024-2026');
-
--- Directivos — Suplentes
-INSERT INTO directivos (nombre, cargo, tipo, orden, periodo) VALUES
-  ('Inés Aguerre', 'Suplente 1', 'suplente', 10, '2024-2026'),
-  ('Juan Pedro Ravenna', 'Suplente 2', 'suplente', 11, '2024-2026'),
-  ('María Clara Cámara', 'Suplente 3', 'suplente', 12, '2024-2026'),
-  ('Juan Ignacio Pérez del Castillo', 'Suplente 4', 'suplente', 13, '2024-2026'),
-  ('Leandro Franchi', 'Suplente 5', 'suplente', 14, '2024-2026');
-
--- Directivos — Comisión Fiscal
-INSERT INTO directivos (nombre, cargo, tipo, orden, periodo) VALUES
-  ('Martín Vallejo', 'Titular 1', 'fiscal', 15, '2024-2026'),
-  ('Ma. Eugenia Vargas', 'Titular 2', 'fiscal', 16, '2024-2026'),
-  ('José Luis Romero', 'Titular 3', 'fiscal', 17, '2024-2026'),
-  ('Mariana Martin', 'Suplente 1', 'fiscal', 18, '2024-2026'),
-  ('Gonzalo Abreu', 'Suplente 2', 'fiscal', 19, '2024-2026');
+-- Disciplinas deportivas (las de producción al 2026-10-02)
+INSERT INTO disciplinas (nombre, slug) VALUES
+  ('Básquetbol', 'basquetbol'),
+  ('Corredores', 'corredores'),
+  ('Fútbol Femenino', 'futbol-femenino'),
+  ('Fútbol Masculino', 'futbol-masculino'),
+  ('Handball Femenino', 'handball-femenino'),
+  ('Handball Masculino', 'handball-masculino'),
+  ('Hockey Femenino', 'hockey-femenino'),
+  ('Mami Fútbol', 'mami-futbol'),
+  ('Mami handball', 'mami-handball'),
+  ('Mami Hockey', 'mami-hockey'),
+  ('Mami Volley', 'mami-volley'),
+  ('Papi Basquet', 'papi-basquet'),
+  ('Rugby', 'rugby'),
+  ('Social', 'social');
 
 -- Memorias anuales (2014-2024)
 INSERT INTO memorias (anio, titulo, archivo_url) VALUES
