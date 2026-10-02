@@ -16,6 +16,10 @@ Fuentes: inventario funcional de la tienda actual (41 bugs relevados), auditorí
 | Ventas a crédito | A **disciplinas** (pedidos mayoristas) contra "Fondos en poder de disciplinas". A **socios** ("cargar a la cuota") queda para el módulo de socios, que crea la cuenta corriente del socio. |
 | Donaciones | No son ingreso: pasivo "Donaciones Olla del Hogar a transferir" hasta que se transfieren. |
 | Proveedores | Es la cuenta corriente de **todo el club**, no solo de la tienda: una factura puede ser de mercadería o de cualquier gasto (con centro de costo). |
+| Encargues | Lo cobrado queda como **seña** y se reconoce la venta al **retirarlo**. |
+| Devoluciones | Poco frecuentes. Se admiten las dos: devolución de dinero y cambio por otro producto (una sola operación que netea). |
+| Banco de cobro | La cuenta Itaú 9500100 es **solo de la tienda**: cuenta propia en el plan (1.1.01.07). |
+| Depósitos | Un solo lugar físico: el stock es por ítem, sin depósitos. Se quitan depósitos y transferencias entre depósitos (hoy rotos). |
 
 ## Qué se conserva
 
@@ -28,8 +32,7 @@ Fuentes: inventario funcional de la tienda actual (41 bugs relevados), auditorí
 
 | Tabla | Para qué |
 |---|---|
-| `depositos` | lugares de stock (hoy "Principal") |
-| `stock` | existencia por ítem (producto o variante) y depósito; `productos.stock_actual` / `producto_variantes.stock_actual` quedan como suma, mantenida por la base, para el storefront |
+| `items` | existencia y valor por ítem vendible (producto sin variantes o variante); `productos.stock_actual` / `producto_variantes.stock_actual` quedan como espejo, mantenido por la base, para el storefront |
 | `movimientos_stock` | kardex inmutable: tipo, cantidad, **costo unitario y valor**, documento de origen, asiento |
 | `capas_costo` | FIFO: lotes con cantidad restante y costo; PPP: costo promedio vigente por ítem |
 | `reservas` | stock comprometido por pedido, con vencimiento (reemplaza el cálculo por estado del pedido) |
@@ -76,7 +79,7 @@ Costo de lo vendido: PPP → costo promedio vigente del ítem al momento de la s
 
 ## Reglas de integridad (en la base)
 
-- Stock nunca negativo por depósito; reserva ≤ disponible (stock − reservas vigentes de otros pedidos). Las reservas vencen (online y POS) y lo hace un cron.
+- Stock nunca negativo; reserva ≤ disponible (stock − reservas vigentes de otros pedidos). Las reservas vencen (online y POS) y lo hace un cron.
 - Kardex inmutable; `Σ movimientos = stock` por ítem y depósito; `Σ valor del kardex = saldo de Mercadería` (control diario, como el de proveedores).
 - Recepción: no supera lo pendiente de la orden; idempotente.
 - Documento de proveedor: serie + número únicos por proveedor; total = Σ líneas; moneda coherente con la cuenta (Proveedores UYU o USD).
@@ -95,7 +98,7 @@ Costo de lo vendido: PPP → costo promedio vigente del ítem al momento de la s
 
 ## Pantallas
 
-- **Admin tienda** (`/admin`): productos (sin pisar stock), stock por depósito con kardex valorizado, ajustes, transferencias, pedidos (aprobación con OCR, estados, cancelación y devoluciones), POS con caja (apertura, ventas, retiros, arqueo, ticket), pedidos de disciplina con su cuenta corriente, donaciones, reportes (ventas, costo y margen salen del kardex y de la contabilidad: un solo número).
+- **Admin tienda** (`/admin`): productos (sin pisar stock), stock con kardex valorizado, ajustes, pedidos (aprobación con OCR, estados, cancelación y devoluciones), POS con caja (apertura, ventas, retiros, arqueo, ticket), pedidos de disciplina con su cuenta corriente, donaciones, reportes (ventas, costo y margen salen del kardex y de la contabilidad: un solo número).
 - **Proveedores y compras** (rol `tienda` y `tesorero`): proveedores con estado de cuenta y antigüedad de deuda, órdenes de compra, recepciones, facturas y notas de crédito, anticipos, órdenes de pago con selección de facturas por vencimiento.
 - **Storefront**: mismo recorrido; checkout y POS llaman a las funciones nuevas; el stock disponible se calcula bien (hoy un anónimo ve stock reservado como disponible).
 
@@ -105,3 +108,9 @@ Costo de lo vendido: PPP → costo promedio vigente del ítem al momento de la s
 2. **Admin**: proveedores y compras, stock, pedidos, POS con caja, disciplinas, donaciones, reportes.
 3. **Storefront y APIs**: checkout, POS, aprobación, cron de reservas; RLS nuevas.
 4. **Corte**: inventario inicial valorizado (costo a definir para los productos sin costo real), pedidos abiertos, saldos de disciplinas y proveedores, donaciones pendientes ($2.000), ventas cobradas desde que se quitó la tesorería vieja (backfill idempotente), apertura de caja y banco desde el arqueo y el extracto.
+
+## Estado
+
+- **Fase 1 — ventas y stock: hecha** (`supabase/migrations/20261003120000_comercial_stock_ventas.sql`, tests `supabase/tests/comercial_ventas.test.sql`). Las funciones que ya usan el checkout, el POS, la aprobación, los pedidos de disciplina, la cancelación y la transferencia de donaciones mantienen su nombre y firma, pero mueven stock por el motor nuevo y asientan en la misma transacción. Requiere un ejercicio contable abierto para la fecha del día.
+  - Desde esta migración `stock_actual` no se escribe a mano: las pantallas viejas de ajuste de stock, alta con stock inicial y recepción de compras dan error hasta que se reescriban (fase 2).
+- Fase 1 — compras y proveedores: pendiente.
