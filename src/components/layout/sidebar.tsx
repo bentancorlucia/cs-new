@@ -77,8 +77,6 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/admin/promocodes", label: "Promocodes", icon: TicketPercent },
       { href: "/admin/stock", label: "Stock", icon: BarChart3 },
       { href: "/admin/pos", label: "POS", icon: MonitorSmartphone },
-      { href: "/admin/proveedores", label: "Proveedores", icon: Truck },
-      { href: "/admin/compras", label: "Compras", icon: ShoppingCart },
       { href: "/admin/donaciones", label: "Donaciones", icon: Heart },
       { href: "/admin/reportes", label: "Reportes", icon: FileSpreadsheet },
     ],
@@ -90,6 +88,14 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/eventos/admin", label: "Eventos", icon: Calendar },
       { href: "/eventos/crear", label: "Crear evento", icon: Plus },
       { href: "/eventos/scanner", label: "Scanner", icon: QrCode },
+    ],
+  },
+  {
+    title: "Compras y proveedores",
+    requiredRoles: ["super_admin", "tienda", "tesorero"],
+    items: [
+      { href: "/admin/proveedores", label: "Proveedores", icon: Truck },
+      { href: "/admin/compras", label: "Compras y pagos", icon: ShoppingCart },
     ],
   },
   {
