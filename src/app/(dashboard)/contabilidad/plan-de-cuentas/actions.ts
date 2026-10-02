@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createContabilidadClient, type ContabilidadClient } from "@/lib/contabilidad/server";
 import { exigirEscritura } from "@/lib/contabilidad/permisos";
 import { mensajeError } from "@/lib/contabilidad/formato";
-import { admiteMonedaExtranjera } from "@/lib/contabilidad/plan-cuentas";
+import { admiteAfectaCaja, admiteMonedaExtranjera } from "@/lib/contabilidad/plan-cuentas";
 import type { Database } from "@/types/contabilidad";
 
 type CuentaUpdate = Database["contabilidad"]["Tables"]["cuentas"]["Update"];
@@ -100,6 +100,8 @@ const flagsCuenta = {
   /** Solo cuenta si la moneda es USD: partida monetaria que se ajusta al cierre. */
   revalua: z.boolean(),
   es_disponibilidad: z.boolean(),
+  /** Solo ingresos y egresos: falso si el resultado no mueve fondos (amortizaciones, mermas…). */
+  afecta_caja: z.boolean().default(true),
   requiere_auxiliar: z.enum(["ninguno", "proveedor", "disciplina"]),
   requiere_centro_costo: z.boolean(),
 };
@@ -132,6 +134,7 @@ function normalizarFlags(f: Flags, clase: Database["contabilidad"]["Enums"]["cla
       moneda: null,
       es_disponibilidad: false,
       revalua: false,
+      afecta_caja: true,
       requiere_auxiliar: null,
       requiere_centro_costo: false,
     } satisfies CuentaUpdate;
@@ -143,6 +146,8 @@ function normalizarFlags(f: Flags, clase: Database["contabilidad"]["Enums"]["cla
     // Las partidas no monetarias en USD (ej. anticipos) no se revalúan.
     revalua: moneda !== null && f.revalua,
     es_disponibilidad: clase === "activo" ? f.es_disponibilidad : false,
+    // La base solo admite "no mueve fondos" en resultados (cuentas_afecta_caja_resultado).
+    afecta_caja: admiteAfectaCaja(clase) ? f.afecta_caja : true,
     requiere_auxiliar: f.requiere_auxiliar === "ninguno" ? null : f.requiere_auxiliar,
     requiere_centro_costo: f.requiere_centro_costo,
   } satisfies CuentaUpdate;
@@ -284,6 +289,7 @@ export async function convertirEnAgrupadora(id: string): Promise<ResultadoAccion
       moneda: null,
       es_disponibilidad: false,
       revalua: false,
+      afecta_caja: true,
       requiere_auxiliar: null,
       requiere_centro_costo: false,
     })

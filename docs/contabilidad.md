@@ -101,6 +101,57 @@ Lectura (super_admin, tesorero, comision_fiscal):
 | `tc_vigente(moneda, fecha)` / `tc_cierre(moneda, fecha)` | TC para documentos (día anterior) / para valuar saldos (mismo día) |
 | `puede_leer()` / `puede_escribir()` | |
 
+## Presupuesto
+
+Migración `20261004100000_contabilidad_presupuesto.sql`. Un presupuesto por ejercicio con versiones:
+
+- `borrador` (uno solo por ejercicio) se edita; `aprobado` (uno vigente) queda congelado por trigger; reformular crea una versión nueva y, al aprobarla, la anterior pasa a `reemplazado`.
+- Líneas por cuenta imputable de ingreso o egreso, centro de costo (opcional) y mes; importes en pesos, positivos para ingresos y egresos.
+- Ejecutado: asientos confirmados sin apertura, cierre ni refundición, con signo de presentación (ContaSystem incluía el cierre y "aprobado" no bloqueaba).
+
+| Función | Qué hace |
+|---|---|
+| `crear_presupuesto(p_ejercicio, p_base = 'vacio', p_meses = 3, p_nombre)` | base `vacio`, `ejercicio_anterior` (real mes a mes), `promedio` (de los últimos `p_meses`), `vigente` (reformulación) |
+| `guardar_presupuesto_lineas(p_presupuesto, p_lineas)` | `[{cuenta_id, centro_costo_id?, mes, importe}]`; importe 0 borra la celda |
+| `aprobar_presupuesto` / `eliminar_presupuesto` | eliminar solo borradores |
+| `ejecucion_presupuesto(p_presupuesto, p_mes_desde, p_mes_hasta, p_por_centro)` | presupuestado, ejecutado y desvío (ejecutado − presupuestado) por cuenta |
+| `resultado_real(p_desde, p_hasta)` | real por cuenta, centro y mes |
+
+## Flujo de caja
+
+Migración `20261004110000_contabilidad_flujo_conciliacion.sql`. Método directo: por asiento, la variación de las disponibilidades (`cuentas.es_disponibilidad`, o una sola cuenta) se atribuye a las contrapartidas. Fuera: apertura, cierre y refundición; la revaluación sale en una fila aparte. En asientos mixtos se neutraliza lo que no movió fondos, en este orden:
+
+1. resultados del mismo lado que la caja contra patrimoniales del lado opuesto (costo de venta contra mercadería; diferencia de cambio contra la deuda pagada);
+2. patrimoniales contra patrimoniales (deuda contra mercadería en una compra pagada en parte);
+3. patrimoniales contra resultados (seña aplicada a una venta);
+4. lo que queda de resultados se muestra bruto (comisión descontada de un cobro: ingreso bruto y comisión como egreso).
+
+El centavo de prorrateo va a la contrapartida mayor; la suma por asiento es exactamente la variación de caja.
+
+| Función | Qué devuelve |
+|---|---|
+| `saldo_disponibilidades(p_fecha, p_disponibilidad?)` | saldo al empezar el día (cuenta la apertura; arrastra el ejercicio anterior si todavía no se cerró) |
+| `flujo_caja(p_desde, p_hasta, p_disponibilidad?)` | `anio, mes, cuenta_id, centro_costo_id, importe, revaluacion`. Saldo inicial + suma = `saldo_disponibilidades(p_hasta + 1)` |
+
+`cuentas.afecta_caja = false` marca resultados que no mueven fondos (amortizaciones, revaluación, mermas, incobrables) para proyectar el flujo desde el presupuesto.
+
+## Conciliación bancaria
+
+- Extractos por cuenta de disponibilidad, **encadenados**: cada uno empieza el día siguiente al anterior y su saldo inicial es el final de aquel. Saldos declarados por el banco, en la moneda de la cuenta; al importar, saldo inicial + movimientos = saldo final y cada saldo por fila coincide con el acumulado (todo o nada).
+- Conciliación en grupos N:M de movimientos del banco y líneas de libros de la cuenta que suman lo mismo; cada movimiento y cada línea, una sola vez. Apertura, cierre, refundición y revaluación no se concilian.
+- Extracto cerrado: no cambia nada (ni vínculos ni movimientos); se cierra en orden y con todos los movimientos del banco conciliados; se reabre del más nuevo al más viejo; solo se borra el último y abierto.
+- Un asiento con líneas conciliadas no se revierte (trigger): primero se desconcilia.
+- `resumen_conciliacion`: saldo según libros = saldo según banco + partidas pendientes + diferencia inicial; `diferencia` es lo que queda sin explicar (0).
+
+| Función | Qué hace |
+|---|---|
+| `importar_extracto(p_cuenta, p_desde, p_hasta, p_saldo_inicial, p_saldo_final, p_movimientos, p_archivo?)` | `[{fecha, concepto, referencia?, importe (+ entra / − sale), saldo?}]` |
+| `conciliar(p_extracto, p_movimientos[], p_lineas[])` / `desconciliar(p_conciliacion)` | |
+| `sugerir_conciliacion(p_extracto, p_dias = 7)` | pares 1 a 1 por importe exacto y fecha cercana |
+| `contabilizar_movimiento_extracto(p_movimiento, p_contrapartida, p_descripcion?, p_extra?)` | registra en libros un movimiento que no estaba (comisión, interés) y lo concilia |
+| `resumen_conciliacion(p_extracto)` | saldos, pendientes, diferencia inicial y diferencia |
+| `cerrar_extracto` / `reabrir_extracto` / `eliminar_extracto` | |
+
 ## Reportes
 
 - **Signo de presentación por clase**: activo y egreso `debe − haber`; pasivo, patrimonio e ingreso `haber − debe` (`saldoPresentacion` en `src/lib/contabilidad/formato.ts`).

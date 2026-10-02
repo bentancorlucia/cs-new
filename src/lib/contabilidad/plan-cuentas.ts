@@ -18,6 +18,7 @@ export type CuentaPlan = Pick<
   | "imputable"
   | "moneda"
   | "es_disponibilidad"
+  | "afecta_caja"
   | "revalua"
   | "requiere_auxiliar"
   | "requiere_centro_costo"
@@ -48,6 +49,11 @@ export const NOMBRE_ROL_SISTEMA: Record<string, string> = {
 /** Activo y egreso son deudoras; pasivo, patrimonio e ingreso, acreedoras. */
 export function naturalezaPorDefecto(clase: ClaseCuenta): Naturaleza {
   return clase === "activo" || clase === "egreso" ? "deudora" : "acreedora";
+}
+
+/** Solo las cuentas de ingresos y egresos pueden marcarse como "no mueve fondos". */
+export function admiteAfectaCaja(clase: ClaseCuenta): boolean {
+  return clase === "ingreso" || clase === "egreso";
 }
 
 /** Solo activo y pasivo pueden llevar moneda extranjera. */

@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { NOMBRE_CLASE } from "@/lib/contabilidad/formato";
 import {
+  admiteAfectaCaja,
   admiteMonedaExtranjera,
   naturalezaPorDefecto,
   type CuentaPlan,
@@ -88,6 +89,7 @@ export function CuentaDialog({
   // Por defecto las cuentas en USD son monetarias (se revalúan).
   const [revalua, setRevalua] = useState(base?.moneda === "USD" ? base.revalua : true);
   const [disponibilidad, setDisponibilidad] = useState(base?.es_disponibilidad ?? false);
+  const [afectaCaja, setAfectaCaja] = useState(base?.afecta_caja ?? true);
   const [auxiliar, setAuxiliar] = useState<Auxiliar>(base?.requiere_auxiliar ?? "ninguno");
   const [centroCosto, setCentroCosto] = useState(base?.requiere_centro_costo ?? false);
   const [activa, setActiva] = useState(base?.activa ?? true);
@@ -109,6 +111,7 @@ export function CuentaDialog({
       moneda,
       revalua: moneda === "USD" && revalua,
       es_disponibilidad: disponibilidad,
+      afecta_caja: !admiteAfectaCaja(clase) || afectaCaja,
       requiere_auxiliar: auxiliar,
       requiere_centro_costo: centroCosto,
     };
@@ -310,6 +313,14 @@ export function CuentaDialog({
                         ayuda="Disponibilidad: entra en el flujo de efectivo."
                         checked={disponibilidad}
                         onChange={setDisponibilidad}
+                      />
+                    )}
+                    {admiteAfectaCaja(clase) && (
+                      <FilaSwitch
+                        titulo="Mueve fondos"
+                        ayuda="Entra en la proyección del flujo de caja. Desmarcalo en amortizaciones, revaluaciones, mermas e incobrables: son resultados que no entran ni salen de caja."
+                        checked={afectaCaja}
+                        onChange={setAfectaCaja}
                       />
                     )}
                     <FilaSwitch

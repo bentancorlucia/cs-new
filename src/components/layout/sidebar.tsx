@@ -38,6 +38,16 @@ import {
   Scale,
   CalendarRange,
   DollarSign,
+  Target,
+  Waves,
+  Landmark,
+  Receipt,
+  CreditCard,
+  HandCoins,
+  FileMinus,
+  AlertTriangle,
+  Layers,
+  Tags,
 } from "lucide-react";
 import { useRoles } from "@/hooks/use-roles";
 import { RoleSwitcher } from "@/components/layout/role-switcher";
@@ -107,6 +117,9 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/contabilidad/asientos", label: "Libro diario", icon: NotebookPen },
       { href: "/contabilidad/mayor", label: "Libro mayor", icon: BookOpen },
       { href: "/contabilidad/balance", label: "Balances", icon: Scale },
+      { href: "/contabilidad/presupuesto", label: "Presupuesto", icon: Target },
+      { href: "/contabilidad/flujo-de-caja", label: "Flujo de caja", icon: Waves },
+      { href: "/contabilidad/conciliacion", label: "Conciliación bancaria", icon: Landmark },
       { href: "/contabilidad/plan-de-cuentas", label: "Plan de cuentas", icon: ListTree },
       { href: "/contabilidad/ejercicios", label: "Ejercicios", icon: CalendarRange },
       { href: "/contabilidad/cotizaciones", label: "Cotizaciones", icon: DollarSign },
@@ -119,9 +132,23 @@ const NAV_SECTIONS: NavSection[] = [
     requiredRoles: ["super_admin", "secretaria"],
     items: [
       { href: "/secretaria/socios", label: "Socios", icon: Users },
+      { href: "/secretaria/planes", label: "Planes y cuotas", icon: Tags },
       { href: "/secretaria/disciplinas", label: "Disciplinas", icon: Dumbbell },
       { href: "/secretaria/staff", label: "Staff", icon: UserCog },
       { href: "/secretaria/popups", label: "Popups", icon: Megaphone },
+    ],
+  },
+  {
+    title: "Cuotas de socios",
+    requiredRoles: ["super_admin", "tesorero", "secretaria", "comision_fiscal"],
+    items: [
+      { href: "/cuotas", label: "Resumen", icon: LayoutDashboard, exact: true },
+      { href: "/cuotas/cobros", label: "Cobros", icon: HandCoins },
+      { href: "/cuotas/lotes", label: "Emisión de cuotas", icon: Layers, roles: ["super_admin", "tesorero", "comision_fiscal"] },
+      { href: "/cuotas/visa", label: "Débito Visa", icon: CreditCard, roles: ["super_admin", "tesorero", "comision_fiscal"] },
+      { href: "/cuotas/notas-credito", label: "Notas de crédito", icon: FileMinus, roles: ["super_admin", "tesorero", "comision_fiscal"] },
+      { href: "/cuotas/disciplinas", label: "Liquidación a disciplinas", icon: Receipt, roles: ["super_admin", "tesorero", "comision_fiscal"] },
+      { href: "/cuotas/morosidad", label: "Morosidad", icon: AlertTriangle },
     ],
   },
   {

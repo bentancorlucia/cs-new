@@ -602,6 +602,7 @@ function BadgesCuenta({ cuenta }: { cuenta: CuentaPlan }) {
   if (cuenta.requiere_auxiliar === "disciplina")
     badges.push({ k: "disc", tono: "bordo", t: "Disciplina" });
   if (cuenta.requiere_centro_costo) badges.push({ k: "cc", tono: "neutro", t: "Centro de costo" });
+  if (cuenta.imputable && !cuenta.afecta_caja) badges.push({ k: "caja", tono: "apagado", t: "No mueve fondos" });
   if (cuenta.imputable && cuenta.naturaleza !== naturalezaPorDefecto(cuenta.clase))
     badges.push({ k: "reg", tono: "neutro", t: "Regularizadora" });
   if (!cuenta.activa) badges.push({ k: "inac", tono: "apagado", t: "Inactiva" });

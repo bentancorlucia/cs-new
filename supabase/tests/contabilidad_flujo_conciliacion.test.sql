@@ -1,6 +1,6 @@
 -- Flujo de caja (método directo) y conciliación bancaria.
 BEGIN;
-SELECT plan(39);
+SELECT plan(43);
 
 CREATE FUNCTION pg_temp.cta(p text) RETURNS uuid LANGUAGE sql AS $$ SELECT id FROM contabilidad.cuentas WHERE codigo = p $$;
 CREATE FUNCTION pg_temp.l(p_cuenta text, p_lado text, p_importe numeric)
@@ -70,6 +70,19 @@ SELECT is(contabilidad.saldo_disponibilidades('2026-01-01')
           contabilidad.saldo_disponibilidades('2026-02-01'), 'saldo inicial + flujo = saldo final');
 SELECT is(contabilidad.saldo_disponibilidades('2026-01-11', pg_temp.cta('1.1.01.05')), 11970.00::numeric,
           'saldo de una cuenta al empezar un día');
+
+-- Diferencia de cambio realizada: va con el pago, ganada o perdida
+SELECT pg_temp.asiento('perdida', '2026-02-10', jsonb_build_array(
+  pg_temp.l('2.1.04.03', 'debe', 1000), pg_temp.l('5.7.02.01', 'debe', 50), pg_temp.l('1.1.01.03', 'haber', 1050)));
+SELECT pg_temp.asiento('ganancia', '2026-02-11', jsonb_build_array(
+  pg_temp.l('2.1.04.03', 'debe', 1000), pg_temp.l('4.6.02.01', 'haber', 50), pg_temp.l('1.1.01.03', 'haber', 950)));
+SELECT is((SELECT importe FROM contabilidad._flujo_asiento((SELECT id FROM a WHERE nombre = 'perdida'))
+           WHERE cuenta_id = pg_temp.cta('2.1.04.03')), -1050.00::numeric, 'la pérdida de cambio va con el pago');
+SELECT is((SELECT importe FROM contabilidad._flujo_asiento((SELECT id FROM a WHERE nombre = 'ganancia'))
+           WHERE cuenta_id = pg_temp.cta('2.1.04.03')), -950.00::numeric, 'y la ganancia también');
+SELECT isnt(contabilidad.saldo_disponibilidades('2027-01-01'), 0::numeric, 'después del último ejercicio no da cero');
+SELECT is(contabilidad.saldo_disponibilidades('2027-01-01'), contabilidad.saldo_disponibilidades('2026-12-31'),
+          'es el saldo de su cierre');
 
 -- ============================================================
 -- Conciliación bancaria

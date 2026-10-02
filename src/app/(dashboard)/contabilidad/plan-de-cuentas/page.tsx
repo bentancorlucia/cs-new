@@ -23,7 +23,7 @@ export default async function PlanDeCuentasPage() {
     contabilidad
       .from("cuentas")
       .select(
-        "id, codigo, nombre, padre_id, nivel, clase, naturaleza, imputable, moneda, es_disponibilidad, revalua, requiere_auxiliar, requiere_centro_costo, activa, descripcion, lineas(count)"
+        "id, codigo, nombre, padre_id, nivel, clase, naturaleza, imputable, moneda, es_disponibilidad, afecta_caja, revalua, requiere_auxiliar, requiere_centro_costo, activa, descripcion, lineas(count)"
       ),
     contabilidad.from("cuentas_sistema").select("rol, cuenta_id"),
     contabilidad.from("parametros_cuentas").select("cuenta_id"),
