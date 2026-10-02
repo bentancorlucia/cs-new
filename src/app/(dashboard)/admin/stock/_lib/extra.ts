@@ -1,16 +1,6 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { createComercialClient, permisosComercial } from "@/lib/comercial/server";
 import { createContabilidadClient } from "@/lib/contabilidad/server";
 import { createServerClient } from "@/lib/supabase/server";
-
-/**
- * Cliente de `comercial` sin tipos para lo nuevo de la migración de
- * trazabilidad (bajas, recuentos) hasta que se regeneren los tipos.
- * Las filas se tipan a mano en cada lectura.
- */
-export async function comercialSinTipos(): Promise<SupabaseClient> {
-  return (await createComercialClient()) as unknown as SupabaseClient;
-}
 
 export interface FilaBaja {
   id: number;
@@ -35,7 +25,7 @@ export interface FilaBajaItem {
 export interface FilaRecuento {
   id: number;
   numero: string;
-  estado: "borrador" | "confirmado" | "descartado";
+  estado: string;
   notas: string | null;
   creado_por: string | null;
   created_at: string;
@@ -52,6 +42,7 @@ export interface FilaRecuentoItem {
   stock_sistema: number | null;
   diferencia: number | null;
   valor: number | null;
+  costo_unitario: number | null;
 }
 
 /** Permisos de las pantallas de stock. */

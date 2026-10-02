@@ -45,6 +45,8 @@ export interface ItemInventario {
   activo: boolean;
   /** Stock previo al motor, sin kardex: se sugiere como cantidad. */
   heredado: number;
+  /** Último costo conocido antes del motor (comercial.costos_previos). */
+  costoSugerido: number | null;
 }
 
 type Valores = Record<string, { cantidad: string; costo: string }>;
@@ -109,7 +111,8 @@ export function InventarioInicialCliente({
         const costoTxt = v?.costo.trim() ?? "";
         const cantidad = cantidadTxt ? parseEnteroUY(cantidadTxt) : null;
         const costo = costoTxt ? parseNumeroUY(costoTxt) : null;
-        const tocado = !!cantidadTxt || !!costoTxt;
+        // Una fila cuenta cuando tiene cantidad (un costo solo, p. ej. sugerido, se ignora)
+        const tocado = !!cantidadTxt;
         let problema: string | null = null;
         if (tocado) {
           if (cantidad === null || cantidad <= 0) problema = "Cantidad entera mayor que 0";
@@ -121,6 +124,18 @@ export function InventarioInicialCliente({
   );
 
   const listas = filas.filter((f) => f.ok);
+  // Ítems con costo previo sugerido y sin costo cargado todavía
+  const conSugerencia = items.filter((i) => i.costoSugerido !== null && !(valores[i.clave]?.costo ?? "").trim());
+  function usarSugeridos() {
+    setValores((prev) => {
+      const n = { ...prev };
+      for (const i of conSugerencia) {
+        n[i.clave] = { cantidad: prev[i.clave]?.cantidad ?? "", costo: String(i.costoSugerido).replace(".", ",") };
+      }
+      return n;
+    });
+    toast.success(`Costo sugerido en ${conSugerencia.length} ítem${conSugerencia.length === 1 ? "" : "s"}: revisalos antes de cargar`);
+  }
   const conProblema = filas.filter((f) => f.problema);
   const unidades = listas.reduce((s, f) => s + (f.cantidad ?? 0), 0);
   const valorTotal = listas.reduce((s, f) => s + Math.round((f.cantidad ?? 0) * (f.costo ?? 0) * 100) / 100, 0);
@@ -322,7 +337,7 @@ export function InventarioInicialCliente({
             <p className="text-sky-800/80">
               {conMovimientos > 0 && `${conMovimientos} ítem${conMovimientos === 1 ? " ya tiene" : "s ya tienen"} movimientos y no aparece${conMovimientos === 1 ? "" : "n"} acá. `}
               {heredados > 0 &&
-                `${heredados} ítem${heredados === 1 ? " tiene" : "s tienen"} stock de antes del kardex: la cantidad viene sugerida, falta el costo.`}
+                `${heredados} ítem${heredados === 1 ? " tiene" : "s tienen"} stock de antes del kardex: la cantidad viene sugerida y la que cargues reemplaza a la vieja.`}
             </p>
           )}
         </div>
@@ -383,6 +398,13 @@ export function InventarioInicialCliente({
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar producto, variante o SKU…" className="pl-9" />
             </div>
+            {conSugerencia.length > 0 && (
+              <motion.div whileTap={{ scale: 0.97 }}>
+                <Button variant="outline" size="sm" className="rounded-full" onClick={usarSugeridos}>
+                  Usar costos sugeridos ({conSugerencia.length})
+                </Button>
+              </motion.div>
+            )}
             <div className="flex gap-1.5">
               {[
                 { v: false, l: `Todos (${items.length})` },
@@ -460,7 +482,7 @@ export function InventarioInicialCliente({
                         inputMode="decimal"
                         value={v?.costo ?? ""}
                         onChange={(e) => fijar(f.it.clave, "costo", e.target.value)}
-                        placeholder="$ c/u"
+                        placeholder={f.it.costoSugerido !== null ? `sug. ${formatImporte(f.it.costoSugerido)}` : "$ c/u"}
                         className="h-8 text-right tabular-nums"
                       />
                       <span className="col-span-2 text-right text-xs tabular-nums text-muted-foreground sm:col-span-1 sm:text-sm">

@@ -1,15 +1,16 @@
+import { createComercialClient } from "@/lib/comercial/server";
 import type { Metadata } from "next";
 import { RecuentosLista, type RecuentoResumen } from "@/components/stock/recuentos-lista";
-import { nombreUsuario } from "@/lib/comercial/stock";
+import { nombreUsuario, type EstadoRecuento } from "@/lib/comercial/stock";
 import { leerPaginado } from "@/lib/contabilidad/reportes";
-import { comercialSinTipos, nombresUsuarios, permisosStock, type FilaRecuento, type FilaRecuentoItem } from "../_lib/extra";
+import { nombresUsuarios, permisosStock, type FilaRecuento, type FilaRecuentoItem } from "../_lib/extra";
 
 export const metadata: Metadata = { title: "Recuentos" };
 export const dynamic = "force-dynamic";
 
 export default async function RecuentosPage() {
   const { puedeOperar } = await permisosStock();
-  const com = await comercialSinTipos();
+  const com = await createComercialClient();
   const [rec, items] = await Promise.all([
     leerPaginado<FilaRecuento>((a, b) =>
       com.from("recuentos").select("*").order("created_at", { ascending: false }).range(a, b)
@@ -34,7 +35,7 @@ export default async function RecuentosPage() {
   const recuentos: RecuentoResumen[] = rec.filas.map((r) => ({
     id: r.id,
     numero: r.numero,
-    estado: r.estado,
+    estado: r.estado as EstadoRecuento,
     notas: r.notas,
     creado: r.created_at,
     creadoPor: nombreUsuario(r.creado_por, nombres),

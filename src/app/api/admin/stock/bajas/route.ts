@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { exigirOperador } from "@/lib/comercial/server";
+import { createComercialClient, exigirOperador } from "@/lib/comercial/server";
 import { TIPOS_BAJA } from "@/lib/comercial/stock";
-import { comercialSinTipos } from "@/app/(dashboard)/admin/stock/_lib/extra";
 import { respuestaError } from "../_respuesta";
 
 const schema = z.object({
@@ -34,12 +33,12 @@ export async function POST(request: NextRequest) {
   try {
     await exigirOperador();
     const b = schema.parse(await request.json());
-    const com = await comercialSinTipos();
+    const com = await createComercialClient();
     const { data, error } = await com.rpc("registrar_baja", {
       p_tipo: b.tipo,
       p_descripcion: b.descripcion,
       p_items: b.items.map((i) => ({ producto_id: i.producto_id, variante_id: i.variante_id ?? null, cantidad: i.cantidad })),
-      p_centro_costo: b.centro_costo_id ?? null,
+      p_centro_costo: b.centro_costo_id ?? undefined,
     });
     if (error) throw error;
     return NextResponse.json({ id: data as number });

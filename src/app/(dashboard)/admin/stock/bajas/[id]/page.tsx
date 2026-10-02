@@ -1,10 +1,10 @@
+import { createComercialClient } from "@/lib/comercial/server";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { BajaDetalle } from "@/components/stock/bajas";
 import { nombreUsuario } from "@/lib/comercial/stock";
 import {
   centrosCosto,
-  comercialSinTipos,
   nombresItems,
   nombresUsuarios,
   permisosStock,
@@ -19,7 +19,7 @@ export default async function BajaPage({ params }: { params: Promise<{ id: strin
   const id = Number((await params).id);
   if (!Number.isInteger(id) || id <= 0) notFound();
   const { puedeOperar } = await permisosStock();
-  const com = await comercialSinTipos();
+  const com = await createComercialClient();
   const [{ data: b }, { data: its }, centros] = await Promise.all([
     com.from("bajas").select("*").eq("id", id).maybeSingle(),
     com.from("baja_items").select("*").eq("baja_id", id).order("id"),

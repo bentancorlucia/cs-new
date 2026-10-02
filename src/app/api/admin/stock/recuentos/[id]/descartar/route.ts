@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { exigirOperador } from "@/lib/comercial/server";
-import { comercialSinTipos } from "@/app/(dashboard)/admin/stock/_lib/extra";
+import { createComercialClient, exigirOperador } from "@/lib/comercial/server";
 import { respuestaError } from "../../../_respuesta";
 
 /** POST /api/admin/stock/recuentos/[id]/descartar — descarta un borrador (no toca el stock). */
@@ -9,7 +8,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     await exigirOperador();
     const id = Number((await params).id);
     if (!Number.isInteger(id) || id <= 0) return NextResponse.json({ error: "Recuento inválido" }, { status: 400 });
-    const com = await comercialSinTipos();
+    const com = await createComercialClient();
     const { error } = await com.rpc("descartar_recuento", { p_id: id });
     if (error) throw error;
     return NextResponse.json({ ok: true });

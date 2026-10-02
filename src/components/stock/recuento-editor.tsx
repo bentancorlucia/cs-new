@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { formatImporte } from "@/lib/contabilidad/formato";
-import { costoPromedio } from "@/lib/comercial/stock";
+import { parseNumeroUY } from "@/lib/comercial/stock";
 import { easeSmooth, springSmooth } from "@/lib/motion";
 import type { ItemVista, ProductoVista } from "./tipos";
 import type { CabeceraRecuento } from "./recuento-detalle";
@@ -48,11 +48,14 @@ export function RecuentoEditor({
   recuento,
   guardados,
   productos,
+  costoRef,
   error,
 }: {
   recuento: CabeceraRecuento | null;
-  guardados: Record<string, number>;
+  guardados: Record<string, { contado: number; costo: number | null }>;
   productos: ProductoVista[];
+  /** Costo con que se valuaría un sobrante; null = hay que indicarlo. */
+  costoRef: Record<string, number | null>;
   error: string | null;
 }) {
   const router = useRouter();
@@ -71,10 +74,18 @@ export function RecuentoEditor({
   );
   const porClave = useMemo(() => new Map(opciones.map((o) => [o.item.clave, o])), [opciones]);
 
-  const [base, setBase] = useState<Record<string, number>>(guardados);
+  const [base, setBase] = useState<Record<string, { contado: number; costo: number | null }>>(guardados);
   const [valores, setValores] = useState<Record<string, string>>(() =>
-    Object.fromEntries(Object.entries(guardados).map(([k, v]) => [k, String(v)]))
+    Object.fromEntries(Object.entries(guardados).map(([k, v]) => [k, String(v.contado)]))
   );
+  const [costos, setCostos] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      Object.entries(guardados)
+        .filter(([, v]) => v.costo !== null)
+        .map(([k, v]) => [k, String(v.costo).replace(".", ",")])
+    )
+  );
+  const [quitando, setQuitando] = useState<string | null>(null);
   const [orden, setOrden] = useState<string[]>(() => Object.keys(guardados).filter((k) => porClave.has(k)));
   const [notas, setNotas] = useState(recuento?.notas ?? "");
   const [busqueda, setBusqueda] = useState("");
@@ -99,10 +110,31 @@ export function RecuentoEditor({
       const txt = valores[clave] ?? "";
       const contado = txt === "" ? null : Number(txt);
       const dif = contado === null ? null : contado - o.item.stock;
-      const prom = costoPromedio(o.item.stock, o.item.valor);
+      const ref = costoRef[clave] ?? null;
+      // Sobrante sin costo conocido: se pide el costo unitario en la fila
+      const pideCosto = ref === null && (dif ?? 0) > 0;
+      const costoTxt = (costos[clave] ?? "").trim();
+      const costoIndicado = costoTxt ? parseNumeroUY(costoTxt) : null;
+      const costoInvalido = costoTxt !== "" && (costoIndicado === null || costoIndicado < 0);
+      const faltaCosto = pideCosto && (costoIndicado === null || costoInvalido);
+      const costo = ref ?? (pideCosto ? costoIndicado : null);
       const guardado = clave in base;
-      const sucio = contado !== null && (!guardado || base[clave] !== contado);
-      return { clave, o, contado, dif, valor: dif !== null && prom !== null ? dif * prom : null, guardado, sucio };
+      const sucio =
+        contado !== null &&
+        (!guardado || base[clave].contado !== contado || (pideCosto && costoIndicado !== base[clave].costo && !costoInvalido));
+      return {
+        clave,
+        o,
+        contado,
+        dif,
+        valor: dif !== null && costo !== null ? dif * costo : null,
+        guardado,
+        sucio,
+        pideCosto,
+        costoIndicado: costoInvalido ? null : costoIndicado,
+        costoInvalido,
+        faltaCosto,
+      };
     })
     .filter((f): f is NonNullable<typeof f> => f !== null);
 
@@ -115,6 +147,7 @@ export function RecuentoEditor({
   const valorFaltante = faltantes.reduce((s, f) => s - (f.valor ?? 0), 0);
   const valorSobrante = sobrantes.reduce((s, f) => s + (f.valor ?? 0), 0);
   const visibles = soloDif ? filas.filter((f) => f.dif !== 0) : filas;
+  const sinCosto = filas.filter((f) => f.faltaCosto);
 
   function agregar(clave: string, sumarUno: boolean) {
     setOrden((o) => (o.includes(clave) ? o : [clave, ...o]));
@@ -141,6 +174,40 @@ export function RecuentoEditor({
     if (resultados.length === 0) toast.error("No se encontró ese producto");
   }
 
+  async function quitar(clave: string) {
+    const o = porClave.get(clave);
+    if (!o) return;
+    const sacarLocal = () => {
+      setOrden((xs) => xs.filter((k) => k !== clave));
+      setValores((v) => {
+        const n = { ...v };
+        delete n[clave];
+        return n;
+      });
+      setBase((b) => {
+        const n = { ...b };
+        delete n[clave];
+        return n;
+      });
+    };
+    if (!(clave in base) || !recuento) return sacarLocal();
+    setQuitando(clave);
+    try {
+      const res = await fetch(`/api/admin/stock/recuentos/${recuento.id}/quitar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ producto_id: o.item.productoId, variante_id: o.item.varianteId }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "No se pudo quitar");
+      sacarLocal();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo quitar");
+    } finally {
+      setQuitando(null);
+    }
+  }
+
   function cambiar(clave: string, txt: string) {
     setValores((v) => ({ ...v, [clave]: txt.replace(/[^\d]/g, "") }));
   }
@@ -162,12 +229,21 @@ export function RecuentoEditor({
             producto_id: f.o.item.productoId,
             variante_id: f.o.item.varianteId,
             contado: f.contado,
+            costo_unitario: f.pideCosto ? f.costoIndicado : null,
           })),
         }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || "No se pudo guardar el recuento");
-      setBase((b) => ({ ...b, ...Object.fromEntries(pendientesGuardar.map((f) => [f.clave, f.contado as number])) }));
+      setBase((b) => ({
+        ...b,
+        ...Object.fromEntries(
+          pendientesGuardar.map((f) => [
+            f.clave,
+            { contado: f.contado as number, costo: f.pideCosto ? f.costoIndicado : b[f.clave]?.costo ?? null },
+          ])
+        ),
+      }));
       // Aviso en la barra (un toast taparía los botones en el celular)
       setGuardadoAt(Date.now());
       if (!recuento) router.replace(`/admin/stock/recuentos/${json.id}`);
@@ -365,23 +441,15 @@ export function RecuentoEditor({
                         {f.sucio && <span className="text-amber-600"> · sin guardar</span>}
                       </p>
                     </div>
-                    {!f.guardado && (
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`Quitar ${f.o.etiqueta}`}
-                        onClick={() => {
-                          setOrden((o) => o.filter((k) => k !== f.clave));
-                          setValores((v) => {
-                            const n = { ...v };
-                            delete n[f.clave];
-                            return n;
-                          });
-                        }}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Quitar ${f.o.etiqueta}`}
+                      disabled={quitando === f.clave}
+                      onClick={() => void quitar(f.clave)}
+                    >
+                      {quitando === f.clave ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                    </Button>
                   </div>
                   <div className="mt-2 flex items-center gap-2">
                     <Button variant="outline" size="icon-lg" aria-label="Restar uno" onClick={() => sumar(f.clave, -1)}>
@@ -432,21 +500,40 @@ export function RecuentoEditor({
                         </motion.span>
                       </AnimatePresence>
                       {f.dif !== null && f.dif !== 0 && (
-                        <span className="text-[10px] text-muted-foreground">
-                          {f.valor !== null ? `≈ $ ${formatImporte(Math.abs(f.valor))}` : "a último costo"}
+                        <span className={cn("text-[10px]", f.faltaCosto ? "text-amber-700" : "text-muted-foreground")}>
+                          {f.valor !== null ? `≈ $ ${formatImporte(Math.abs(f.valor))}` : f.faltaCosto ? "falta el costo" : "a costo vigente"}
                         </span>
                       )}
                     </div>
                   </div>
+                  <AnimatePresence initial={false}>
+                    {f.pideCosto && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={springSmooth}
+                        className="overflow-hidden"
+                      >
+                        <div className="mt-2 flex items-center gap-2 rounded-xl bg-amber-50 p-2 text-xs text-amber-900">
+                          <span className="min-w-0 flex-1">Sobrante sin costo conocido: indicá el costo unitario</span>
+                          <Input
+                            aria-label={`Costo unitario de ${f.o.etiqueta}`}
+                            inputMode="decimal"
+                            value={costos[f.clave] ?? ""}
+                            onChange={(e) => setCostos((c) => ({ ...c, [f.clave]: e.target.value }))}
+                            placeholder="$ c/u"
+                            className={cn("h-8 w-24 bg-white text-right tabular-nums", f.costoInvalido && "border-red-400")}
+                          />
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </motion.li>
               ))}
             </AnimatePresence>
           </ul>
-          {filas.some((f) => f.guardado) && (
-            <p className="text-[11px] text-muted-foreground">
-              Lo ya guardado no se puede sacar del borrador: corregí la cantidad o descartá el recuento.
-            </p>
-          )}
+
         </>
       )}
 
@@ -472,16 +559,18 @@ export function RecuentoEditor({
         className="fixed inset-x-3 bottom-3 z-30 mx-auto max-w-3xl rounded-2xl border border-linea bg-white/95 p-3 shadow-xl backdrop-blur sm:inset-x-6"
       >
         <AnimatePresence>
-          {(sucio || guardadoAt) && (
+          {(sucio || guardadoAt || sinCosto.length > 0) && (
             <motion.p
-              key={sucio ? "sucio" : `ok-${guardadoAt}`}
+              key={sinCosto.length && !sucio ? "costo" : sucio ? "sucio" : `ok-${guardadoAt}`}
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className={cn("mb-1 text-center text-[11px]", sucio ? "text-amber-600" : "text-emerald-700")}
+              className={cn("mb-1 text-center text-[11px]", sucio || sinCosto.length ? "text-amber-600" : "text-emerald-700")}
               role="status"
             >
-              {sucio
+              {sinCosto.length > 0 && !sucio
+                ? `Falta el costo de ${sinCosto.length} sobrante${sinCosto.length === 1 ? "" : "s"}`
+                : sucio
                 ? pendientesGuardar.length ? `${pendientesGuardar.length} cambio${pendientesGuardar.length === 1 ? "" : "s"} sin guardar` : "Notas sin guardar"
                 : `Borrador guardado · ${cargadas.length} ítem${cargadas.length === 1 ? "" : "s"}`}
             </motion.p>
@@ -531,7 +620,8 @@ export function RecuentoEditor({
           </Button>
           <Button
             className="rounded-full"
-            disabled={cargadas.length === 0 || guardando}
+            title={sinCosto.length ? "Indicá el costo de los sobrantes sin costo" : undefined}
+            disabled={cargadas.length === 0 || guardando || sinCosto.length > 0}
             onClick={() => {
               setErrorAccion(null);
               setDialogo("confirmar");

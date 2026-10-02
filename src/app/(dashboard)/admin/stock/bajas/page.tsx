@@ -1,15 +1,16 @@
+import { createComercialClient } from "@/lib/comercial/server";
 import type { Metadata } from "next";
 import { BajasLista, type BajaResumen } from "@/components/stock/bajas";
 import { nombreUsuario } from "@/lib/comercial/stock";
 import { leerPaginado } from "@/lib/contabilidad/reportes";
-import { comercialSinTipos, nombresUsuarios, permisosStock, type FilaBaja, type FilaBajaItem } from "../_lib/extra";
+import { nombresUsuarios, permisosStock, type FilaBaja, type FilaBajaItem } from "../_lib/extra";
 
 export const metadata: Metadata = { title: "Bajas de mercadería" };
 export const dynamic = "force-dynamic";
 
 export default async function BajasPage() {
   const { puedeOperar } = await permisosStock();
-  const com = await comercialSinTipos();
+  const com = await createComercialClient();
   const [bajas, items] = await Promise.all([
     leerPaginado<FilaBaja>((a, b) => com.from("bajas").select("*").order("id", { ascending: false }).range(a, b)),
     leerPaginado<Pick<FilaBajaItem, "baja_id" | "cantidad" | "valor">>((a, b) =>

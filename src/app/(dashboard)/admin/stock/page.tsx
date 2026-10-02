@@ -1,7 +1,8 @@
+import { createComercialClient } from "@/lib/comercial/server";
 import type { Metadata } from "next";
 import { StockCliente } from "@/components/stock/stock-cliente";
 import { cargarStock, controlMercaderia } from "./_lib/datos";
-import { centrosCosto, comercialSinTipos, permisosStock } from "./_lib/extra";
+import { centrosCosto, permisosStock } from "./_lib/extra";
 
 export const metadata: Metadata = { title: "Stock" };
 export const dynamic = "force-dynamic";
@@ -14,7 +15,7 @@ export default async function AdminStockPage({
   const [{ baja }, { puedeOperar, puedeInventario }] = await Promise.all([searchParams, permisosStock()]);
   // Costo y valor: solo operadores (tienda, tesorero, super_admin).
   const verCostos = puedeOperar;
-  const com = await comercialSinTipos();
+  const com = await createComercialClient();
   const [{ productos, error }, control, centros, borradores] = await Promise.all([
     cargarStock({ verCostos }),
     verCostos ? controlMercaderia() : Promise.resolve(null),

@@ -6,7 +6,7 @@ import { leerPaginado } from "@/lib/contabilidad/reportes";
 import { nombreUsuario, origenMovimiento } from "@/lib/comercial/stock";
 import { KardexCliente, type FilaKardex } from "@/components/stock/kardex-cliente";
 import { cargarStock } from "../../_lib/datos";
-import { centrosCosto, comercialSinTipos, nombresUsuarios, permisosStock } from "../../_lib/extra";
+import { centrosCosto, nombresUsuarios, permisosStock } from "../../_lib/extra";
 
 export const metadata: Metadata = { title: "Kardex" };
 export const dynamic = "force-dynamic";
@@ -71,14 +71,13 @@ export default async function KardexPage({
   const movs = movsRes.filas;
 
   // Datos para mostrar el origen: número de pedido, pedido de cada
-  // devolución y número de bajas y recuentos (tablas aún sin tipos generados).
-  const sinTipos = await comercialSinTipos();
+  // devolución y número de bajas y recuentos.
   const idsDe = (tipo: string) => [...new Set(movs.filter((m) => m.origen_tipo === tipo).map((m) => Number(m.origen_id)))];
   const [devIds, bajaIds, recIds] = [idsDe("devolucion_venta"), idsDe("baja"), idsDe("recuento")];
   const [devs, bajas, recs, centros] = await Promise.all([
-    devIds.length ? sinTipos.from("devoluciones").select("id, pedido_id").in("id", devIds) : Promise.resolve({ data: [] }),
-    bajaIds.length ? sinTipos.from("bajas").select("id, numero").in("id", bajaIds) : Promise.resolve({ data: [] }),
-    recIds.length ? sinTipos.from("recuentos").select("id, numero").in("id", recIds) : Promise.resolve({ data: [] }),
+    devIds.length ? com.from("devoluciones").select("id, pedido_id").in("id", devIds) : Promise.resolve({ data: [] }),
+    bajaIds.length ? com.from("bajas").select("id, numero").in("id", bajaIds) : Promise.resolve({ data: [] }),
+    recIds.length ? com.from("recuentos").select("id, numero").in("id", recIds) : Promise.resolve({ data: [] }),
     puedeOperar ? centrosCosto() : Promise.resolve([]),
   ]);
   const pedidoDeDevolucion = new Map(
