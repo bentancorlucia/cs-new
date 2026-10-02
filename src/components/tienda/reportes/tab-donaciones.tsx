@@ -15,7 +15,7 @@ import {
   YAxis,
 } from "recharts";
 import { springSmooth } from "@/lib/motion";
-import { formatearMoneda, formatearMonedaCompacta } from "@/lib/tesoreria/conversion";
+import { formatearMoneda, formatearMonedaCompacta } from "@/lib/moneda";
 import { KpiCard } from "./kpi-card";
 import type { ReporteDonaciones } from "@/types/reportes";
 

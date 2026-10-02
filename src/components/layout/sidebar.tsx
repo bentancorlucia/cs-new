@@ -94,19 +94,6 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: "Tesorería",
-    requiredRoles: ["super_admin", "tesorero"],
-    items: [
-      { href: "/tesoreria", label: "Dashboard", icon: LayoutDashboard, exact: true },
-      { href: "/tesoreria/cuentas", label: "Cuentas", icon: Wallet },
-      { href: "/tesoreria/movimientos", label: "Movimientos", icon: Receipt },
-      { href: "/tesoreria/categorias", label: "Categorías", icon: Tag },
-      { href: "/tesoreria/transferencias", label: "Transferencias", icon: ArrowLeftRight },
-      { href: "/tesoreria/presupuesto", label: "Presupuesto", icon: BarChart3 },
-      { href: "/tesoreria/reportes", label: "Reportes", icon: FileSpreadsheet },
-    ],
-  },
-  {
     title: "Contabilidad",
     requiredRoles: ["super_admin", "tesorero", "comision_fiscal"],
     items: [

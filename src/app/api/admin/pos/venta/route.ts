@@ -365,28 +365,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 6. Registrar movimiento financiero por lo cobrado en efectivo. La parte
-    // por transferencia se registra al verificar el comprobante.
-    if (parsed.metodo_pago === "efectivo" || esMixto) {
-      try {
-        const { registrarMovimientoVentaPedido } = await import(
-          "@/lib/tienda/registrar-movimiento"
-        );
-        await registrarMovimientoVentaPedido(db, {
-          pedidoId: pedido.id,
-          numeroPedido: pedido.numero_pedido,
-          tipoPedido: "pos",
-          total,
-          metodoPago: "efectivo",
-          registradoPor: user?.id ?? null,
-          montoOverride: esMixto ? montoEfectivoMixto : undefined,
-          pagoParcial: esMixto,
-        });
-      } catch (movError) {
-        console.error("Error al registrar movimiento financiero:", movError);
-      }
-    }
-
     // 7. Encargue cobrado en efectivo: confirmar por mail al cliente. Con
     // transferencia / mixto el mail sale al verificar el comprobante.
     if (!requiereVerificacion && hayEncargues) {

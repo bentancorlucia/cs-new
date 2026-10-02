@@ -298,25 +298,6 @@ async function handlePedidoPayment(
       donacionMonto = Number(donacion.monto);
     }
 
-    // 3. Ingreso en tesorería
-    try {
-      const { registrarMovimientoVentaPedido } = await import(
-        "@/lib/tienda/registrar-movimiento"
-      );
-      await registrarMovimientoVentaPedido(supabaseAdmin as any, {
-        pedidoId: pedido.id,
-        numeroPedido: pedido.numero_pedido || numeroPedido,
-        tipoPedido: pedido.tipo === "pos" ? "pos" : "online",
-        total: Number(pedido.total),
-        metodoPago: "mercadopago",
-        registradoPor: null,
-        montoOverride:
-          donacionMonto > 0 ? Number(pedido.total) - donacionMonto : undefined,
-      });
-    } catch (movError) {
-      console.error("Error al registrar movimiento financiero:", movError);
-    }
-
     // 4. Registro del pago (una fila por payment_id)
     const { data: pagoExistente } = await supabaseAdmin
       .from("pagos_mercadopago")

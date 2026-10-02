@@ -149,34 +149,6 @@ export async function POST(
         console.error("Error al marcar donación cobrada:", donError);
       }
 
-      try {
-        const { registrarMovimientoVentaPedido } = await import(
-          "@/lib/tienda/registrar-movimiento"
-        );
-        // Pago mixto: el efectivo ya se registró al vender; acá solo entra
-        // la parte transferida.
-        const esMixto = pedido.metodo_pago === "mixto";
-        const montoTransferido = esMixto
-          ? Number(pedido.monto_transferencia)
-          : Number(pedido.total);
-        await registrarMovimientoVentaPedido(db, {
-          pedidoId,
-          numeroPedido: pedido.numero_pedido,
-          tipoPedido: pedido.tipo === "pos" ? "pos" : "online",
-          total: pedido.total,
-          metodoPago: "transferencia",
-          registradoPor: user?.id ?? null,
-          // La donación NO se cuenta como ingreso de tienda
-          montoOverride:
-            esMixto || donacionMonto > 0
-              ? montoTransferido - donacionMonto
-              : undefined,
-          pagoParcial: esMixto,
-        });
-      } catch (movError) {
-        console.error("Error al registrar movimiento financiero:", movError);
-      }
-
       // 7a. Send confirmation email (cuenta o email_cliente del POS)
       try {
         const { email, tieneCuenta } = await resolverEmailPedido(db, pedido);
