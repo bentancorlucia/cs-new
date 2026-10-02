@@ -94,7 +94,7 @@ const NAV_SECTIONS: NavSection[] = [
   },
   {
     title: "Compras y proveedores",
-    requiredRoles: ["super_admin", "tienda", "tesorero"],
+    requiredRoles: ["super_admin", "tienda", "tesorero", "comision_fiscal"],
     items: [
       { href: "/admin/proveedores", label: "Proveedores", icon: Truck },
       { href: "/admin/compras", label: "Compras y pagos", icon: ShoppingCart },

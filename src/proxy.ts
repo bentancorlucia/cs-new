@@ -34,8 +34,8 @@ const EVENTOS_PROTECTED_PREFIXES = [
 
 // Mapeo de rutas protegidas a roles requeridos
 const PROTECTED_ROUTES: Record<string, string[]> = {
-  "/admin/proveedores": ["super_admin", "tienda", "tesorero"],
-  "/admin/compras": ["super_admin", "tienda", "tesorero"],
+  "/admin/proveedores": ["super_admin", "tienda", "tesorero", "comision_fiscal"],
+  "/admin/compras": ["super_admin", "tienda", "tesorero", "comision_fiscal"],
   "/admin/pos": ["super_admin", "tienda", "tesorero"],
   "/admin/pedidos": ["super_admin", "tienda", "tesorero"],
   "/admin/donaciones": ["super_admin", "tienda", "tesorero"],

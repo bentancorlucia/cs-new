@@ -18,62 +18,6 @@ export type Database = {
                   Relationships: [
                     
                   ]
-                },"compra_items": {
-                  Row: {
-                    "cantidad": number,"cantidad_recibida": number | null,"compra_id": number,"costo_unitario": number,"created_at": string | null,"id": number,"producto_id": number,"subtotal": number,"variante_id": number | null
-                  }
-                  Insert: {
-                    "cantidad": number,"cantidad_recibida"?: number | null,"compra_id": number,"costo_unitario": number,"created_at"?: string | null,"id"?: number,"producto_id": number,"subtotal": number,"variante_id"?: number | null
-                  }
-                  Update: {
-                    "cantidad"?: number,"cantidad_recibida"?: number | null,"compra_id"?: number,"costo_unitario"?: number,"created_at"?: string | null,"id"?: number,"producto_id"?: number,"subtotal"?: number,"variante_id"?: number | null
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "compra_items_compra_id_fkey"
-      columns: ["compra_id"]
-isOneToOne: false
-      referencedRelation: "compras_proveedor"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "compra_items_producto_id_fkey"
-      columns: ["producto_id"]
-isOneToOne: false
-      referencedRelation: "productos"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "compra_items_variante_id_fkey"
-      columns: ["variante_id"]
-isOneToOne: false
-      referencedRelation: "producto_variantes"
-      referencedColumns: ["id"]
-    }
-                  ]
-                },"compras_proveedor": {
-                  Row: {
-                    "created_at": string | null,"estado": string,"fecha_compra": string | null,"fecha_recepcion": string | null,"id": number,"impuestos": number | null,"moneda": string | null,"notas": string | null,"numero_compra": string,"proveedor_id": number,"registrado_por": string | null,"subtotal": number,"total": number,"updated_at": string | null
-                  }
-                  Insert: {
-                    "created_at"?: string | null,"estado"?: string,"fecha_compra"?: string | null,"fecha_recepcion"?: string | null,"id"?: number,"impuestos"?: number | null,"moneda"?: string | null,"notas"?: string | null,"numero_compra": string,"proveedor_id": number,"registrado_por"?: string | null,"subtotal"?: number,"total"?: number,"updated_at"?: string | null
-                  }
-                  Update: {
-                    "created_at"?: string | null,"estado"?: string,"fecha_compra"?: string | null,"fecha_recepcion"?: string | null,"id"?: number,"impuestos"?: number | null,"moneda"?: string | null,"notas"?: string | null,"numero_compra"?: string,"proveedor_id"?: number,"registrado_por"?: string | null,"subtotal"?: number,"total"?: number,"updated_at"?: string | null
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "compras_proveedor_proveedor_id_fkey"
-      columns: ["proveedor_id"]
-isOneToOne: false
-      referencedRelation: "proveedores"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "compras_proveedor_registrado_por_fkey"
-      columns: ["registrado_por"]
-isOneToOne: false
-      referencedRelation: "perfiles"
-      referencedColumns: ["id"]
-    }
-                  ]
                 },"comprobantes": {
                   Row: {
                     "created_at": string | null,"datos_extraidos": Json | null,"estado": string,"id": number,"motivo_rechazo": string | null,"nombre_archivo": string,"pedido_id": number,"tamano_bytes": number | null,"tipo": string,"updated_at": string | null,"url": string,"verificado_at": string | null,"verificado_por": string | null
@@ -451,37 +395,6 @@ isOneToOne: true
                   Relationships: [
                     
                   ]
-                },"pagos_proveedor": {
-                  Row: {
-                    "compra_id": number | null,"created_at": string | null,"id": number,"metodo_pago": string,"moneda": string | null,"monto": number,"notas": string | null,"proveedor_id": number,"referencia": string | null,"registrado_por": string | null
-                  }
-                  Insert: {
-                    "compra_id"?: number | null,"created_at"?: string | null,"id"?: number,"metodo_pago": string,"moneda"?: string | null,"monto": number,"notas"?: string | null,"proveedor_id": number,"referencia"?: string | null,"registrado_por"?: string | null
-                  }
-                  Update: {
-                    "compra_id"?: number | null,"created_at"?: string | null,"id"?: number,"metodo_pago"?: string,"moneda"?: string | null,"monto"?: number,"notas"?: string | null,"proveedor_id"?: number,"referencia"?: string | null,"registrado_por"?: string | null
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "pagos_proveedor_compra_id_fkey"
-      columns: ["compra_id"]
-isOneToOne: false
-      referencedRelation: "compras_proveedor"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "pagos_proveedor_proveedor_id_fkey"
-      columns: ["proveedor_id"]
-isOneToOne: false
-      referencedRelation: "proveedores"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "pagos_proveedor_registrado_por_fkey"
-      columns: ["registrado_por"]
-isOneToOne: false
-      referencedRelation: "perfiles"
-      referencedColumns: ["id"]
-    }
-                  ]
                 },"pagos_socios": {
                   Row: {
                     "created_at": string | null,"id": number,"metodo_pago": string,"moneda": string | null,"monto": number,"notas": string | null,"perfil_id": string,"periodo_anio": number,"periodo_mes": number,"referencia_pago": string | null,"registrado_por": string | null
@@ -741,13 +654,13 @@ isOneToOne: false
                   ]
                 },"proveedores": {
                   Row: {
-                    "activo": boolean | null,"contacto_email": string | null,"contacto_nombre": string | null,"contacto_telefono": string | null,"created_at": string | null,"direccion": string | null,"id": number,"nombre": string,"notas": string | null,"razon_social": string | null,"rut": string | null,"saldo_cuenta_corriente": number | null,"updated_at": string | null
+                    "activo": boolean | null,"contacto_email": string | null,"contacto_nombre": string | null,"contacto_telefono": string | null,"created_at": string | null,"direccion": string | null,"id": number,"nombre": string,"notas": string | null,"razon_social": string | null,"rut": string | null,"updated_at": string | null
                   }
                   Insert: {
-                    "activo"?: boolean | null,"contacto_email"?: string | null,"contacto_nombre"?: string | null,"contacto_telefono"?: string | null,"created_at"?: string | null,"direccion"?: string | null,"id"?: number,"nombre": string,"notas"?: string | null,"razon_social"?: string | null,"rut"?: string | null,"saldo_cuenta_corriente"?: number | null,"updated_at"?: string | null
+                    "activo"?: boolean | null,"contacto_email"?: string | null,"contacto_nombre"?: string | null,"contacto_telefono"?: string | null,"created_at"?: string | null,"direccion"?: string | null,"id"?: number,"nombre": string,"notas"?: string | null,"razon_social"?: string | null,"rut"?: string | null,"updated_at"?: string | null
                   }
                   Update: {
-                    "activo"?: boolean | null,"contacto_email"?: string | null,"contacto_nombre"?: string | null,"contacto_telefono"?: string | null,"created_at"?: string | null,"direccion"?: string | null,"id"?: number,"nombre"?: string,"notas"?: string | null,"razon_social"?: string | null,"rut"?: string | null,"saldo_cuenta_corriente"?: number | null,"updated_at"?: string | null
+                    "activo"?: boolean | null,"contacto_email"?: string | null,"contacto_nombre"?: string | null,"contacto_telefono"?: string | null,"created_at"?: string | null,"direccion"?: string | null,"id"?: number,"nombre"?: string,"notas"?: string | null,"razon_social"?: string | null,"rut"?: string | null,"updated_at"?: string | null
                   }
                   Relationships: [
                     
@@ -877,9 +790,6 @@ isOneToOne: false
                            },
 "motivo_venta_pedido":
 { Args: { "p_id": number,"p_numero": string,"p_tipo": string }; Returns: string
-                           },
-"recalcular_costo_promedio":
-{ Args: { "p_producto_id": number,"p_variante_id"?: number }; Returns: undefined
                            },
 "recalcular_stock_producto":
 { Args: { "p_producto_id": number }; Returns: undefined

@@ -58,8 +58,8 @@ export const CATALOGO: Record<string, TablaCatalogo> = {
   },
   proveedores: {
     modulos: ["tienda", "tesoreria"],
-    descripcion: "Proveedores; saldo_cuenta_corriente = deuda con el proveedor.",
-    columnas: ["activo", "contacto_email", "contacto_nombre", "contacto_telefono", "created_at", "direccion", "id", "nombre", "notas", "razon_social", "rut", "saldo_cuenta_corriente", "updated_at"],
+    descripcion: "Proveedores (datos de contacto). La deuda no está acá: sale de los documentos y del mayor contable (panorama_finanzas).",
+    columnas: ["activo", "contacto_email", "contacto_nombre", "contacto_telefono", "created_at", "direccion", "id", "nombre", "notas", "razon_social", "rut", "updated_at"],
   },
   promocodes: {
     modulos: ["tienda"],
