@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/expirar-reservas",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/contabilidad/cotizaciones/bcu",
+      "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/contabilidad/cotizaciones/bcu",
+      "schedule": "15 11 * * *"
     }
   ]
 }

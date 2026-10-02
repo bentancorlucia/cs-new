@@ -341,6 +341,11 @@ isOneToOne: false
 "moneda_funcional":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
+"nombres_usuarios":
+{ Args: { "p_ids": (string)[] }; Returns: {
+              "id": string,"nombre": string
+            }[]
+                           },
 "puede_escribir":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
