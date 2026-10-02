@@ -5,26 +5,7 @@ export type Database = {
   
   "public": {
           Tables: {
-            "categorias_financieras": {
-                  Row: {
-                    "activa": boolean | null,"color": string | null,"created_at": string | null,"icono": string | null,"id": number,"nombre": string,"orden": number | null,"padre_id": number | null,"presupuesto_mensual": number | null,"slug": string,"tipo": string
-                  }
-                  Insert: {
-                    "activa"?: boolean | null,"color"?: string | null,"created_at"?: string | null,"icono"?: string | null,"id"?: number,"nombre": string,"orden"?: number | null,"padre_id"?: number | null,"presupuesto_mensual"?: number | null,"slug": string,"tipo": string
-                  }
-                  Update: {
-                    "activa"?: boolean | null,"color"?: string | null,"created_at"?: string | null,"icono"?: string | null,"id"?: number,"nombre"?: string,"orden"?: number | null,"padre_id"?: number | null,"presupuesto_mensual"?: number | null,"slug"?: string,"tipo"?: string
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "categorias_financieras_padre_id_fkey"
-      columns: ["padre_id"]
-isOneToOne: false
-      referencedRelation: "categorias_financieras"
-      referencedColumns: ["id"]
-    }
-                  ]
-                },"categorias_producto": {
+            "categorias_producto": {
                   Row: {
                     "activa": boolean | null,"created_at": string | null,"descripcion": string | null,"id": number,"imagen_url": string | null,"nombre": string,"orden": number | null,"slug": string
                   }
@@ -136,32 +117,6 @@ isOneToOne: false
       referencedRelation: "perfiles"
       referencedColumns: ["id"]
     }
-                  ]
-                },"cotizaciones_bcu": {
-                  Row: {
-                    "compra": number,"created_at": string,"fecha": string,"fuente": string,"id": number,"moneda": string,"venta": number
-                  }
-                  Insert: {
-                    "compra": number,"created_at"?: string,"fecha": string,"fuente"?: string,"id"?: number,"moneda"?: string,"venta": number
-                  }
-                  Update: {
-                    "compra"?: number,"created_at"?: string,"fecha"?: string,"fuente"?: string,"id"?: number,"moneda"?: string,"venta"?: number
-                  }
-                  Relationships: [
-                    
-                  ]
-                },"cuentas_financieras": {
-                  Row: {
-                    "activa": boolean | null,"banco": string | null,"color": string | null,"created_at": string | null,"descripcion": string | null,"id": number,"incluir_en_tesoreria": boolean,"modulo": string | null,"moneda": string,"nombre": string,"numero_cuenta": string | null,"saldo_actual": number,"saldo_inicial": number,"tipo": string,"titular": string | null,"updated_at": string | null
-                  }
-                  Insert: {
-                    "activa"?: boolean | null,"banco"?: string | null,"color"?: string | null,"created_at"?: string | null,"descripcion"?: string | null,"id"?: number,"incluir_en_tesoreria"?: boolean,"modulo"?: string | null,"moneda": string,"nombre": string,"numero_cuenta"?: string | null,"saldo_actual"?: number,"saldo_inicial"?: number,"tipo": string,"titular"?: string | null,"updated_at"?: string | null
-                  }
-                  Update: {
-                    "activa"?: boolean | null,"banco"?: string | null,"color"?: string | null,"created_at"?: string | null,"descripcion"?: string | null,"id"?: number,"incluir_en_tesoreria"?: boolean,"modulo"?: string | null,"moneda"?: string,"nombre"?: string,"numero_cuenta"?: string | null,"saldo_actual"?: number,"saldo_inicial"?: number,"tipo"?: string,"titular"?: string | null,"updated_at"?: string | null
-                  }
-                  Relationships: [
-                    
                   ]
                 },"depositos": {
                   Row: {
@@ -345,31 +300,6 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"extractos_importados": {
-                  Row: {
-                    "ajuste_donaciones": number,"archivo_hash": string,"archivo_nombre": string,"created_at": string,"cuenta_id": number,"fecha_desde": string | null,"fecha_hasta": string | null,"formato": string,"id": number,"importado_por": string | null,"movimientos_creados": number,"movimientos_duplicados": number,"saldo_final_extracto": number | null,"saldo_inicial_extracto": number | null,"total_movimientos": number
-                  }
-                  Insert: {
-                    "ajuste_donaciones"?: number,"archivo_hash": string,"archivo_nombre": string,"created_at"?: string,"cuenta_id": number,"fecha_desde"?: string | null,"fecha_hasta"?: string | null,"formato"?: string,"id"?: number,"importado_por"?: string | null,"movimientos_creados"?: number,"movimientos_duplicados"?: number,"saldo_final_extracto"?: number | null,"saldo_inicial_extracto"?: number | null,"total_movimientos"?: number
-                  }
-                  Update: {
-                    "ajuste_donaciones"?: number,"archivo_hash"?: string,"archivo_nombre"?: string,"created_at"?: string,"cuenta_id"?: number,"fecha_desde"?: string | null,"fecha_hasta"?: string | null,"formato"?: string,"id"?: number,"importado_por"?: string | null,"movimientos_creados"?: number,"movimientos_duplicados"?: number,"saldo_final_extracto"?: number | null,"saldo_inicial_extracto"?: number | null,"total_movimientos"?: number
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "extractos_importados_cuenta_id_fkey"
-      columns: ["cuenta_id"]
-isOneToOne: false
-      referencedRelation: "cuentas_financieras"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "extractos_importados_importado_por_fkey"
-      columns: ["importado_por"]
-isOneToOne: false
-      referencedRelation: "perfiles"
-      referencedColumns: ["id"]
-    }
-                  ]
                 },"lista_precio_disciplinas": {
                   Row: {
                     "disciplina_id": number,"id": number,"lista_precio_id": number
@@ -470,49 +400,6 @@ isOneToOne: false
                   }
                   Relationships: [
                     
-                  ]
-                },"movimientos_financieros": {
-                  Row: {
-                    "categoria_id": number | null,"clasificado": boolean,"comprobante_url": string | null,"created_at": string | null,"cuenta_id": number,"descripcion": string,"extracto_id": number | null,"fecha": string,"hash_dedupe": string | null,"id": number,"moneda": string,"monto": number,"nombre": string | null,"notas": string | null,"origen_id": number | null,"origen_tipo": string | null,"referencia": string | null,"registrado_por": string | null,"subcategoria_id": number | null,"tags": (string)[] | null,"tipo": string,"transferencia_id": number | null,"updated_at": string | null
-                  }
-                  Insert: {
-                    "categoria_id"?: number | null,"clasificado"?: boolean,"comprobante_url"?: string | null,"created_at"?: string | null,"cuenta_id": number,"descripcion": string,"extracto_id"?: number | null,"fecha": string,"hash_dedupe"?: string | null,"id"?: number,"moneda": string,"monto": number,"nombre"?: string | null,"notas"?: string | null,"origen_id"?: number | null,"origen_tipo"?: string | null,"referencia"?: string | null,"registrado_por"?: string | null,"subcategoria_id"?: number | null,"tags"?: (string)[] | null,"tipo": string,"transferencia_id"?: number | null,"updated_at"?: string | null
-                  }
-                  Update: {
-                    "categoria_id"?: number | null,"clasificado"?: boolean,"comprobante_url"?: string | null,"created_at"?: string | null,"cuenta_id"?: number,"descripcion"?: string,"extracto_id"?: number | null,"fecha"?: string,"hash_dedupe"?: string | null,"id"?: number,"moneda"?: string,"monto"?: number,"nombre"?: string | null,"notas"?: string | null,"origen_id"?: number | null,"origen_tipo"?: string | null,"referencia"?: string | null,"registrado_por"?: string | null,"subcategoria_id"?: number | null,"tags"?: (string)[] | null,"tipo"?: string,"transferencia_id"?: number | null,"updated_at"?: string | null
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "fk_movimientos_extracto"
-      columns: ["extracto_id"]
-isOneToOne: false
-      referencedRelation: "extractos_importados"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "movimientos_financieros_categoria_id_fkey"
-      columns: ["categoria_id"]
-isOneToOne: false
-      referencedRelation: "categorias_financieras"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "movimientos_financieros_cuenta_id_fkey"
-      columns: ["cuenta_id"]
-isOneToOne: false
-      referencedRelation: "cuentas_financieras"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "movimientos_financieros_registrado_por_fkey"
-      columns: ["registrado_por"]
-isOneToOne: false
-      referencedRelation: "perfiles"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "movimientos_financieros_subcategoria_id_fkey"
-      columns: ["subcategoria_id"]
-isOneToOne: false
-      referencedRelation: "categorias_financieras"
-      referencedColumns: ["id"]
-    }
                   ]
                 },"padron_disciplinas": {
                   Row: {
@@ -764,31 +651,6 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
-                },"presupuestos": {
-                  Row: {
-                    "anio": number,"categoria_id": number,"creado_por": string | null,"created_at": string,"fecha_desde": string,"fecha_hasta": string,"id": number,"moneda": string,"monto": number,"notas": string | null,"periodo_numero": number,"tipo_periodo": string,"updated_at": string
-                  }
-                  Insert: {
-                    "anio": number,"categoria_id": number,"creado_por"?: string | null,"created_at"?: string,"fecha_desde": string,"fecha_hasta": string,"id"?: number,"moneda"?: string,"monto": number,"notas"?: string | null,"periodo_numero": number,"tipo_periodo": string,"updated_at"?: string
-                  }
-                  Update: {
-                    "anio"?: number,"categoria_id"?: number,"creado_por"?: string | null,"created_at"?: string,"fecha_desde"?: string,"fecha_hasta"?: string,"id"?: number,"moneda"?: string,"monto"?: number,"notas"?: string | null,"periodo_numero"?: number,"tipo_periodo"?: string,"updated_at"?: string
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "presupuestos_categoria_id_fkey"
-      columns: ["categoria_id"]
-isOneToOne: false
-      referencedRelation: "categorias_financieras"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "presupuestos_creado_por_fkey"
-      columns: ["creado_por"]
-isOneToOne: false
-      referencedRelation: "perfiles"
-      referencedColumns: ["id"]
-    }
-                  ]
                 },"producto_imagenes": {
                   Row: {
                     "alt_text": string | null,"created_at": string | null,"es_principal": boolean | null,"focal_point": string | null,"id": number,"orden": number | null,"producto_id": number,"url": string
@@ -1009,25 +871,6 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"tesoreria_historial": {
-                  Row: {
-                    "accion": string,"antes": Json | null,"created_at": string,"despues": Json | null,"entidad": string,"entidad_id": number,"id": number,"motivo": string | null,"origen": string,"usuario_id": string | null
-                  }
-                  Insert: {
-                    "accion": string,"antes"?: Json | null,"created_at"?: string,"despues"?: Json | null,"entidad": string,"entidad_id": number,"id"?: number,"motivo"?: string | null,"origen"?: string,"usuario_id"?: string | null
-                  }
-                  Update: {
-                    "accion"?: string,"antes"?: Json | null,"created_at"?: string,"despues"?: Json | null,"entidad"?: string,"entidad_id"?: number,"id"?: number,"motivo"?: string | null,"origen"?: string,"usuario_id"?: string | null
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "tesoreria_historial_usuario_id_fkey"
-      columns: ["usuario_id"]
-isOneToOne: false
-      referencedRelation: "perfiles"
-      referencedColumns: ["id"]
-    }
-                  ]
                 },"tipo_entradas": {
                   Row: {
                     "activo": boolean | null,"capacidad": number | null,"created_at": string | null,"descripcion": string | null,"evento_id": number,"id": number,"moneda": string | null,"nombre": string,"orden": number | null,"precio": number,"solo_socios": boolean | null
@@ -1109,62 +952,13 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"transferencias_internas": {
-                  Row: {
-                    "created_at": string,"cuenta_destino_id": number,"cuenta_origen_id": number,"descripcion": string | null,"fecha": string,"id": number,"moneda_destino": string,"moneda_origen": string,"monto_destino": number,"monto_origen": number,"movimiento_egreso_id": number | null,"movimiento_ingreso_id": number | null,"registrado_por": string | null,"tipo_cambio": number | null
-                  }
-                  Insert: {
-                    "created_at"?: string,"cuenta_destino_id": number,"cuenta_origen_id": number,"descripcion"?: string | null,"fecha": string,"id"?: number,"moneda_destino": string,"moneda_origen": string,"monto_destino": number,"monto_origen": number,"movimiento_egreso_id"?: number | null,"movimiento_ingreso_id"?: number | null,"registrado_por"?: string | null,"tipo_cambio"?: number | null
-                  }
-                  Update: {
-                    "created_at"?: string,"cuenta_destino_id"?: number,"cuenta_origen_id"?: number,"descripcion"?: string | null,"fecha"?: string,"id"?: number,"moneda_destino"?: string,"moneda_origen"?: string,"monto_destino"?: number,"monto_origen"?: number,"movimiento_egreso_id"?: number | null,"movimiento_ingreso_id"?: number | null,"registrado_por"?: string | null,"tipo_cambio"?: number | null
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "transferencias_internas_cuenta_destino_id_fkey"
-      columns: ["cuenta_destino_id"]
-isOneToOne: false
-      referencedRelation: "cuentas_financieras"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "transferencias_internas_cuenta_origen_id_fkey"
-      columns: ["cuenta_origen_id"]
-isOneToOne: false
-      referencedRelation: "cuentas_financieras"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "transferencias_internas_movimiento_egreso_id_fkey"
-      columns: ["movimiento_egreso_id"]
-isOneToOne: false
-      referencedRelation: "movimientos_financieros"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "transferencias_internas_movimiento_ingreso_id_fkey"
-      columns: ["movimiento_ingreso_id"]
-isOneToOne: false
-      referencedRelation: "movimientos_financieros"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "transferencias_internas_registrado_por_fkey"
-      columns: ["registrado_por"]
-isOneToOne: false
-      referencedRelation: "perfiles"
-      referencedColumns: ["id"]
-    }
-                  ]
                 }
           }
           Views: {
             [_ in never]: never
           }
           Functions: {
-            "actualizar_saldo_cuenta_rpc":
-{ Args: { "p_cuenta_id": number,"p_delta": number }; Returns: undefined
-                           },
-"aplicar_cambios_tesoreria":
-{ Args: { "p_payload": Json }; Returns: Json
-                           },
-"cancelar_pedido":
+            "cancelar_pedido":
 { Args: { "p_motivo"?: string,"p_pedido_id": number,"p_registrado_por"?: string }; Returns: Json
                            },
 "confirmar_reserva_pedido":
@@ -1181,9 +975,6 @@ isOneToOne: false
                            },
 "es_staff":
 { Args: Record<PropertyKey, never>; Returns: boolean
-                           },
-"estado_conciliacion_cuenta":
-{ Args: { "p_cuenta_id": number }; Returns: Json
                            },
 "expirar_reservas_pendientes":
 { Args: { "p_horas"?: number }; Returns: {

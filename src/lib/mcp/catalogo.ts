@@ -13,13 +13,13 @@ export type TablaCatalogo = {
 export const CATALOGO: Record<string, TablaCatalogo> = {
   productos: {
     modulos: ["tienda"],
-    descripcion: "Catálogo. precio = precio público, precio_socio = precio para socios, costo_promedio = costo promedio ponderado, stock_actual/stock_minimo en unidades. mto_* = productos a pedido (made to order).",
-    columnas: ["activo", "activo_pos", "categoria_id", "costo_promedio", "created_at", "descripcion", "descripcion_corta", "destacado", "id", "moneda", "mto_campos", "mto_disponible", "mto_solo", "mto_tiempo_fabricacion_dias", "nombre", "peso", "precio", "precio_socio", "sku", "slug", "stock_actual", "stock_minimo", "unidad", "updated_at"],
+    descripcion: "Catálogo. precio = precio público, precio_socio = precio para socios, stock_actual/stock_minimo en unidades. mto_* = productos a pedido (made to order).",
+    columnas: ["activo", "activo_pos", "categoria_id", "created_at", "descripcion", "descripcion_corta", "destacado", "id", "moneda", "mto_campos", "mto_disponible", "mto_solo", "mto_tiempo_fabricacion_dias", "nombre", "peso", "precio", "precio_socio", "sku", "slug", "stock_actual", "stock_minimo", "unidad", "updated_at"],
   },
   producto_variantes: {
     modulos: ["tienda"],
     descripcion: "Variantes (talle, color…) de un producto; stock y costo propios. El stock del producto padre es la suma de variantes activas.",
-    columnas: ["activo", "atributos", "costo_promedio", "created_at", "id", "nombre", "precio_override", "producto_id", "sku", "stock_actual"],
+    columnas: ["activo", "atributos", "created_at", "id", "nombre", "precio_override", "producto_id", "sku", "stock_actual"],
   },
   producto_imagenes: {
     modulos: ["tienda"],
@@ -56,45 +56,10 @@ export const CATALOGO: Record<string, TablaCatalogo> = {
     descripcion: "Historial de cambios de stock (venta, compra, ajuste, transferencia…) con stock anterior y nuevo.",
     columnas: ["cantidad", "created_at", "deposito_id", "id", "motivo", "producto_id", "referencia_id", "referencia_tipo", "registrado_por", "stock_anterior", "stock_nuevo", "tipo", "variante_id"],
   },
-  stock_deposito: {
-    modulos: ["tienda"],
-    descripcion: "Stock por depósito.",
-    columnas: ["cantidad", "deposito_id", "id", "producto_id", "updated_at", "variante_id"],
-  },
-  depositos: {
-    modulos: ["tienda"],
-    descripcion: "Depósitos físicos de mercadería.",
-    columnas: ["activo", "created_at", "descripcion", "id", "nombre", "ubicacion"],
-  },
-  transferencias_deposito: {
-    modulos: ["tienda"],
-    descripcion: "Movimientos de mercadería entre depósitos.",
-    columnas: ["completada_at", "created_at", "deposito_destino_id", "deposito_origen_id", "estado", "id", "notas", "registrado_por"],
-  },
-  transferencia_items: {
-    modulos: ["tienda"],
-    descripcion: "Items de cada transferencia entre depósitos.",
-    columnas: ["cantidad", "id", "producto_id", "transferencia_id", "variante_id"],
-  },
   proveedores: {
     modulos: ["tienda", "tesoreria"],
     descripcion: "Proveedores; saldo_cuenta_corriente = deuda con el proveedor.",
     columnas: ["activo", "contacto_email", "contacto_nombre", "contacto_telefono", "created_at", "direccion", "id", "nombre", "notas", "razon_social", "rut", "saldo_cuenta_corriente", "updated_at"],
-  },
-  compras_proveedor: {
-    modulos: ["tienda", "tesoreria"],
-    descripcion: "Compras a proveedores (órdenes de compra).",
-    columnas: ["created_at", "estado", "fecha_compra", "fecha_recepcion", "id", "impuestos", "moneda", "notas", "numero_compra", "proveedor_id", "registrado_por", "subtotal", "total", "updated_at"],
-  },
-  compra_items: {
-    modulos: ["tienda"],
-    descripcion: "Items de cada compra a proveedor.",
-    columnas: ["cantidad", "cantidad_recibida", "compra_id", "costo_unitario", "created_at", "id", "producto_id", "subtotal", "variante_id"],
-  },
-  pagos_proveedor: {
-    modulos: ["tienda", "tesoreria"],
-    descripcion: "Pagos realizados a proveedores.",
-    columnas: ["compra_id", "created_at", "id", "metodo_pago", "moneda", "monto", "notas", "proveedor_id", "referencia", "registrado_por"],
   },
   promocodes: {
     modulos: ["tienda"],
@@ -135,46 +100,6 @@ export const CATALOGO: Record<string, TablaCatalogo> = {
     modulos: ["tienda", "tesoreria"],
     descripcion: "Pagos recibidos por MercadoPago (tipo_origen = pedido o entrada).",
     columnas: ["created_at", "id", "mercadopago_payment_id", "mercadopago_status", "mercadopago_status_detail", "metodo", "moneda", "monto", "origen_id", "raw_data", "tipo_origen", "updated_at"],
-  },
-  cuentas_financieras: {
-    modulos: ["tesoreria"],
-    descripcion: "Cuentas del club (bancos, MercadoPago, caja chica) con saldo_actual. moneda UYU o USD.",
-    columnas: ["activa", "banco", "color", "created_at", "descripcion", "id", "incluir_en_tesoreria", "modulo", "moneda", "nombre", "numero_cuenta", "saldo_actual", "saldo_inicial", "tipo", "titular", "updated_at"],
-  },
-  movimientos_financieros: {
-    modulos: ["tesoreria"],
-    descripcion: "Ingresos y egresos de cada cuenta. tipo = ingreso|egreso, monto siempre positivo, fecha YYYY-MM-DD.",
-    columnas: ["categoria_id", "clasificado", "comprobante_url", "created_at", "cuenta_id", "descripcion", "extracto_id", "fecha", "hash_dedupe", "id", "moneda", "monto", "nombre", "notas", "origen_id", "origen_tipo", "referencia", "registrado_por", "subcategoria_id", "tags", "tipo", "transferencia_id", "updated_at"],
-  },
-  categorias_financieras: {
-    modulos: ["tesoreria"],
-    descripcion: "Categorías de ingreso/egreso (árbol con padre_id).",
-    columnas: ["activa", "color", "created_at", "icono", "id", "nombre", "orden", "padre_id", "presupuesto_mensual", "slug", "tipo"],
-  },
-  presupuestos: {
-    modulos: ["tesoreria"],
-    descripcion: "Montos presupuestados por categoría y mes (tipo_periodo='mensual', periodo_numero = mes).",
-    columnas: ["anio", "categoria_id", "creado_por", "created_at", "fecha_desde", "fecha_hasta", "id", "moneda", "monto", "notas", "periodo_numero", "tipo_periodo", "updated_at"],
-  },
-  transferencias_internas: {
-    modulos: ["tesoreria"],
-    descripcion: "Transferencias entre cuentas propias (con tipo de cambio si cambian de moneda).",
-    columnas: ["created_at", "cuenta_destino_id", "cuenta_origen_id", "descripcion", "fecha", "id", "moneda_destino", "moneda_origen", "monto_destino", "monto_origen", "movimiento_egreso_id", "movimiento_ingreso_id", "registrado_por", "tipo_cambio"],
-  },
-  tesoreria_historial: {
-    modulos: ["tesoreria"],
-    descripcion: "Historial de ediciones y borrados de movimientos (y del saldo inicial de cuentas): antes/después, motivo, origen (panel|mcp) y usuario.",
-    columnas: ["accion", "antes", "created_at", "despues", "entidad", "entidad_id", "id", "motivo", "origen", "usuario_id"],
-  },
-  extractos_importados: {
-    modulos: ["tesoreria"],
-    descripcion: "Extractos bancarios importados (panel o Claude). ajuste_donaciones = efecto neto de donaciones cobradas/transferidas a la Olla en el período (el banco las ve, el sistema no).",
-    columnas: ["ajuste_donaciones", "archivo_hash", "archivo_nombre", "created_at", "cuenta_id", "fecha_desde", "fecha_hasta", "formato", "id", "importado_por", "movimientos_creados", "movimientos_duplicados", "saldo_final_extracto", "saldo_inicial_extracto", "total_movimientos"],
-  },
-  cotizaciones_bcu: {
-    modulos: ["tesoreria"],
-    descripcion: "Cotizaciones del dólar del BCU por fecha.",
-    columnas: ["compra", "created_at", "fecha", "fuente", "id", "moneda", "venta"],
   },
   padron_socios: {
     modulos: ["secretaria"],

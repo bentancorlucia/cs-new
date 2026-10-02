@@ -1,25 +1,11 @@
-import { createClient } from "@supabase/supabase-js";
 import type { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import type { Database } from "@/types/database";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseRango } from "@/lib/reportes/rango";
 import { generarReporteTienda } from "@/lib/reportes/tienda";
 import { obtenerDashboardTienda } from "@/lib/tienda/dashboard";
-import { obtenerPanoramaTesoreria } from "@/lib/tesoreria/panorama";
-import { calcularEjecucionPresupuesto } from "@/lib/tesoreria/ejecucion";
-import { periodoActual } from "@/lib/tesoreria/presupuesto";
+import { estadosContables, mayorDeCuenta, panoramaContable } from "./contabilidad";
 import { obtenerResumenSocios } from "@/lib/socios/resumen";
-import {
-  ErrorConciliacion,
-  aplicarExtracto,
-  aplicarExtractoSchema,
-  editarMovimientos,
-  editarMovimientosSchema,
-  estadoConciliacionCuentas,
-  extractoSchema,
-  previsualizarExtracto,
-} from "@/lib/tesoreria/conciliacion-extracto";
 import { uruguayNowParts } from "@/lib/timezone";
 import { tieneRol, usuarioDe, type UsuarioMcp } from "./auth";
 import {
@@ -32,7 +18,7 @@ import {
 } from "./consultas";
 
 const ROLES_TIENDA = ["tienda"];
-const ROLES_TESORERIA = ["tesorero"];
+const ROLES_CONTABILIDAD = ["tesorero", "comision_fiscal"];
 const ROLES_SECRETARIA = ["secretaria"];
 const ROLES_CUALQUIER_MODULO = ["tienda", "tesorero", "secretaria"];
 
@@ -40,24 +26,15 @@ const ROLES_CUALQUIER_MODULO = ["tienda", "tesorero", "secretaria"];
 const MAX_CARACTERES = 120_000;
 
 export const INSTRUCCIONES_MCP = `Servidor de datos internos de Club Seminario (Montevideo, Uruguay).
-Las herramientas de consulta devuelven los mismos números que los paneles del dashboard. Solo tesorería puede escribir (ver abajo).
+Las herramientas devuelven los mismos números que los paneles del dashboard y son de solo lectura.
 - Fechas en formato YYYY-MM-DD, calendario de Uruguay (UTC-3).
 - Montos de tienda en pesos uruguayos (UYU). Las ventas de tienda NO incluyen donaciones (se transfieren a la Olla del Hogar).
-- Tesorería maneja UYU y USD; los totales consolidados usan la cotización BCU vigente (promedio compra/venta).
-- Cada herramienta requiere un rol (tienda, tesorero, secretaria; super_admin ve todo). Si no hay permiso, decíselo al usuario en vez de inventar datos.
+- La contabilidad es de partida doble, en pesos (UYU) con cuentas en dólares; el ejercicio es el año calendario. Los asientos, el plan de cuentas y los balances se consultan con panorama_finanzas, estados_contables y libro_mayor_cuenta (roles tesorero o comision_fiscal). Las cargas y correcciones se hacen en el panel /contabilidad, no desde acá.
+- Cada herramienta requiere un rol (tienda, tesorero, comision_fiscal, secretaria; super_admin ve todo). Si no hay permiso, decíselo al usuario en vez de inventar datos.
 - Usá "quien_soy" si no sabés qué puede consultar el usuario.
-- Para preguntas generales preferí las herramientas de resumen (estado_tienda_hoy, reporte_tienda, panorama_finanzas, ejecucion_presupuesto, resumen_socios).
-- Para cualquier otro dato: listar_tablas → consultar_tabla (filas) o agregar_tabla (sumas, conteos, promedios agrupados). Son de solo lectura y solo muestran las tablas del área del usuario.
+- Para preguntas generales preferí las herramientas de resumen (estado_tienda_hoy, reporte_tienda, panorama_finanzas, estados_contables, resumen_socios).
+- Para otros datos de tienda o socios: listar_tablas → consultar_tabla (filas) o agregar_tabla (sumas, conteos, promedios agrupados). Solo muestran las tablas del área del usuario.
 - Los datos pueden incluir información personal (nombres, cédulas, teléfonos): usala solo para responder lo que te preguntan.
-- Conciliación bancaria (rol tesorero), cuando el usuario sube un estado de cuenta:
-  1. Identificá la cuenta (consultar_tabla cuentas_financieras) y mirá estado_conciliacion para saber qué meses ya están.
-  2. Transcribí TODAS las líneas del extracto (fecha, concepto, monto positivo, ingreso/egreso, saldo si figura) y los saldos inicial y final.
-  3. previsualizar_extracto: si la lectura no cierra, el error es tuyo leyendo el extracto; releé las líneas indicadas antes de seguir.
-  4. Mostrale al usuario el resumen y las correcciones que proponés (movimientos a corregir, duplicados a eliminar, saldo inicial, categorías) y esperá su OK.
-  5. aplicar_extracto con el mismo preview_id. Todo se aplica junto o nada. Lo que sale del extracto queda conciliado.
-  - Para cargar meses pasados, subí los extractos del más viejo al más nuevo: el primero fija el saldo inicial de la cuenta.
-  - Nunca inventes un ajuste para que cierre: cada corrección tiene que apuntar a una línea del banco o a un movimiento concreto. El ajuste de conciliación es solo si el usuario lo pide.
-  - Los movimientos generados por tienda, transferencias o pagos a proveedores ("protegido") no se editan ni borran desde acá: decile al usuario que los corrija en su panel.
 Respondé en español rioplatense.`;
 
 const fecha = z
@@ -66,12 +43,6 @@ const fecha = z
   .optional();
 
 const soloLectura = { readOnlyHint: true, openWorldHint: false } as const;
-const escritura = {
-  readOnlyHint: false,
-  destructiveHint: true,
-  idempotentHint: false,
-  openWorldHint: false,
-} as const;
 
 type Ctx = { http?: { authInfo?: Parameters<typeof usuarioDe>[0] } };
 
@@ -93,16 +64,13 @@ export function registrarHerramientas(server: McpServer) {
         herramientasDisponibles: {
           estado_tienda_hoy: tieneRol(usuario, ROLES_TIENDA),
           reporte_tienda: tieneRol(usuario, ROLES_TIENDA),
-          panorama_finanzas: tieneRol(usuario, ROLES_TESORERIA),
-          ejecucion_presupuesto: tieneRol(usuario, ROLES_TESORERIA),
+          panorama_finanzas: tieneRol(usuario, ROLES_CONTABILIDAD),
+          estados_contables: tieneRol(usuario, ROLES_CONTABILIDAD),
+          libro_mayor_cuenta: tieneRol(usuario, ROLES_CONTABILIDAD),
           resumen_socios: tieneRol(usuario, ROLES_SECRETARIA),
           listar_tablas: tieneRol(usuario, ROLES_CUALQUIER_MODULO),
           consultar_tabla: tieneRol(usuario, ROLES_CUALQUIER_MODULO),
           agregar_tabla: tieneRol(usuario, ROLES_CUALQUIER_MODULO),
-          estado_conciliacion: tieneRol(usuario, ROLES_TESORERIA),
-          previsualizar_extracto: tieneRol(usuario, ROLES_TESORERIA),
-          aplicar_extracto: tieneRol(usuario, ROLES_TESORERIA),
-          editar_movimientos: tieneRol(usuario, ROLES_TESORERIA),
         },
         modulosConAccesoCompleto: modulosDe(usuario),
       });
@@ -155,51 +123,55 @@ export function registrarHerramientas(server: McpServer) {
     {
       title: "Panorama financiero",
       description:
-        "Saldos actuales de cada cuenta de tesorería, total consolidado en UYU y USD, cotización BCU usada, " +
-        "ingresos/egresos por mes de los últimos 12 meses y top 5 categorías de ingreso y egreso del mes en curso. Requiere rol tesorero.",
+        "Foto contable del ejercicio en curso: saldos de cajas y bancos (en pesos y en dólares), activo, pasivo, patrimonio y " +
+        "superávit (déficit) del ejercicio a la fecha, ingresos y egresos por mes, deuda con proveedores según documentos, " +
+        "fondos en poder de cada disciplina y última cotización BCU. Requiere rol tesorero o comision_fiscal.",
       annotations: soloLectura,
     },
     async (ctx) =>
-      conRol(ctx as Ctx, ROLES_TESORERIA, "panorama_finanzas", async (token) =>
-        obtenerPanoramaTesoreria(clienteComoUsuario(token))
+      conRol(ctx as Ctx, ROLES_CONTABILIDAD, "panorama_finanzas", async (token) => panoramaContable(token))
+  );
+
+  server.registerTool(
+    "estados_contables",
+    {
+      title: "Estados contables",
+      description:
+        "Estado de situación patrimonial (a la fecha 'hasta') y estado de resultados (de 'desde' a 'hasta') por rubros, " +
+        "con terminología de asociación civil (Fondo social, superávit/déficit). Por defecto: el ejercicio en curso hasta hoy. " +
+        "Requiere rol tesorero o comision_fiscal.",
+      inputSchema: z.object({
+        desde: fecha.describe("Inicio del estado de resultados. Por defecto el inicio del ejercicio."),
+        hasta: fecha.describe("Fecha del estado de situación y fin del de resultados. Por defecto hoy."),
+        nivel: z.number().int().min(1).max(5).optional().describe("Profundidad del detalle (1 = capítulos, 4 = cuentas). Por defecto 3."),
+      }),
+      annotations: soloLectura,
+    },
+    async ({ desde, hasta, nivel }, ctx) =>
+      conRol(ctx as Ctx, ROLES_CONTABILIDAD, "estados_contables", async (token) =>
+        estadosContables(token, desde, hasta, nivel ?? 3)
       )
   );
 
   server.registerTool(
-    "ejecucion_presupuesto",
+    "libro_mayor_cuenta",
     {
-      title: "Presupuesto vs. ejecutado",
+      title: "Libro mayor de una cuenta",
       description:
-        "Compara lo presupuestado con lo ejecutado por categoría (árbol padre/hijo, campo 'nivel') y por mes, en la moneda pedida. " +
-        "Por defecto: el año en curso en UYU. Requiere rol tesorero.",
+        "Movimientos de una cuenta imputable del plan (por código, ej. 1.1.01.07 Banco Itaú tienda) con saldo acumulado; " +
+        "en cuentas en dólares también el importe y saldo en dólares y el TC. Por defecto: el ejercicio en curso hasta hoy. " +
+        "Devuelve hasta los últimos 300 movimientos. Requiere rol tesorero o comision_fiscal.",
       inputSchema: z.object({
-        tipo_periodo: z
-          .enum(["anual", "semestral", "cuatrimestral", "trimestral", "mensual"])
-          .optional()
-          .describe("Por defecto anual."),
-        anio: z.number().int().min(2000).max(2100).optional().describe("Por defecto el año actual."),
-        periodo_numero: z
-          .number()
-          .int()
-          .min(1)
-          .max(12)
-          .optional()
-          .describe("Número de período dentro del año (ej. 2 = 2do semestre, 9 = septiembre). Por defecto el período actual."),
-        moneda: z.enum(["UYU", "USD"]).optional().describe("Moneda de visualización. Por defecto UYU."),
+        codigo: z.string().regex(/^[1-5](\.[0-9]{1,3})*$/, "Código de cuenta, ej. 1.1.01.05"),
+        desde: fecha.describe("Inicio. Por defecto el inicio del ejercicio."),
+        hasta: fecha.describe("Fin. Por defecto hoy."),
       }),
       annotations: soloLectura,
     },
-    async ({ tipo_periodo, anio, periodo_numero, moneda }, ctx) =>
-      conRol(ctx as Ctx, ROLES_TESORERIA, "ejecucion_presupuesto", async (token) => {
-        const tipo = tipo_periodo ?? "anual";
-        const actual = periodoActual(tipo);
-        return calcularEjecucionPresupuesto(clienteComoUsuario(token), {
-          tipo,
-          anio: anio ?? actual.anio,
-          numero: periodo_numero ?? actual.numero,
-          moneda: moneda ?? "UYU",
-        });
-      })
+    async ({ codigo, desde, hasta }, ctx) =>
+      conRol(ctx as Ctx, ROLES_CONTABILIDAD, "libro_mayor_cuenta", async (token) =>
+        mayorDeCuenta(token, codigo, desde, hasta)
+      )
   );
 
   server.registerTool(
@@ -275,93 +247,6 @@ export function registrarHerramientas(server: McpServer) {
         agregarTabla(usuario, input)
       )
   );
-
-  server.registerTool(
-    "estado_conciliacion",
-    {
-      title: "Estado de conciliación bancaria",
-      description:
-        "Por cuenta de tesorería: extractos cargados (período, saldos del banco, si cierra y por cuánto no), " +
-        "si hay huecos entre extractos, desde/hasta cuándo está conciliada y cuántos movimientos quedan sin conciliar. " +
-        "Usala antes de cargar un extracto y para ver qué meses faltan. Requiere rol tesorero.",
-      inputSchema: z.object({
-        cuenta_id: z.number().int().positive().optional().describe("Por defecto todas las cuentas de tesorería"),
-      }),
-      annotations: soloLectura,
-    },
-    async ({ cuenta_id }, ctx) =>
-      conRol(ctx as Ctx, ROLES_TESORERIA, "estado_conciliacion", async (token) =>
-        estadoConciliacionCuentas(clienteComoUsuario(token), cuenta_id)
-      )
-  );
-
-  server.registerTool(
-    "previsualizar_extracto",
-    {
-      title: "Previsualizar estado de cuenta",
-      description:
-        "Compara un estado de cuenta del banco (líneas transcriptas por vos) contra los movimientos del sistema, SIN escribir nada. " +
-        "Verifica que las líneas sumen el saldo final (error de lectura), propone para cada línea conciliar con un movimiento existente, " +
-        "crearla o marcarla como transferencia de donaciones a la Olla; detecta posibles errores de carga (fecha, monto o tipo distintos), " +
-        "movimientos del sistema que el banco no muestra, y si el saldo de apertura coincide (sugiere saldo inicial en el primer extracto). " +
-        "Devuelve preview_id para aplicar_extracto. Requiere rol tesorero.",
-      inputSchema: extractoSchema,
-      annotations: soloLectura,
-    },
-    async (input, ctx) =>
-      conRol(ctx as Ctx, ROLES_TESORERIA, "previsualizar_extracto", async (token) =>
-        recortarLineas(await previsualizarExtracto(clienteComoUsuario(token), input))
-      )
-  );
-
-  server.registerTool(
-    "aplicar_extracto",
-    {
-      title: "Aplicar estado de cuenta",
-      description:
-        "ESCRIBE en tesorería. Aplica un estado de cuenta ya previsualizado, en una sola transacción: correcciones a movimientos existentes " +
-        "(con motivo, quedan en el historial), ajuste del saldo inicial de la cuenta (ajustar_saldo_inicial, solo con el extracto más antiguo), conciliación de movimientos existentes y " +
-        "creación de los nuevos. Todo lo que sale del extracto queda conciliado. Mandá las mismas líneas y saldos que en la previsualización " +
-        "y solo las decisiones que cambian la propuesta. Confirmá con el usuario antes de usarla. Requiere rol tesorero.",
-      inputSchema: aplicarExtractoSchema,
-      annotations: escritura,
-    },
-    async (input, ctx) =>
-      conRol(ctx as Ctx, ROLES_TESORERIA, "aplicar_extracto", async (token) =>
-        aplicarExtracto(clienteComoUsuario(token), input)
-      )
-  );
-
-  server.registerTool(
-    "editar_movimientos",
-    {
-      title: "Corregir movimientos de tesorería",
-      description:
-        "ESCRIBE en tesorería. Edita (monto, tipo, fecha, descripción, nombre, notas, categoría) o elimina movimientos de una cuenta, " +
-        "todo junto o nada, con un motivo por cambio que queda en el historial. Sirve para clasificar movimientos o corregir los que " +
-        "hacen que un extracto no cierre. Cambiar monto o tipo de un movimiento conciliado lo desconcilia. " +
-        "Los movimientos de tienda, transferencias o pagos a proveedores solo admiten cambio de categoría, nombre y notas. " +
-        "Confirmá con el usuario antes de usarla. Requiere rol tesorero.",
-      inputSchema: editarMovimientosSchema,
-      annotations: escritura,
-    },
-    async (input, ctx) =>
-      conRol(ctx as Ctx, ROLES_TESORERIA, "editar_movimientos", async (token) =>
-        editarMovimientos(clienteComoUsuario(token), input)
-      )
-  );
-}
-
-/** Previsualizaciones largas: si no entra, se resumen las líneas que ya casan sin dudas. */
-function recortarLineas<T extends { lineas: Array<{ propuesta: string; alternativas?: unknown; posibles_errores?: unknown }> }>(r: T) {
-  if (JSON.stringify(r).length <= MAX_CARACTERES) return r;
-  const simples = r.lineas.filter((l) => l.propuesta === "conciliar" && !l.alternativas);
-  return {
-    ...r,
-    lineas: r.lineas.filter((l) => !(l.propuesta === "conciliar" && !l.alternativas)),
-    lineas_conciliadas_sin_dudas: simples.length,
-    aviso: "Respuesta resumida por tamaño: se omitieron las líneas que casan con un único movimiento (quedan con esa propuesta).",
-  };
 }
 
 /** Si la respuesta es enorme, recorta filas y avisa cómo paginar. */
@@ -400,29 +285,10 @@ async function conRol(
   try {
     return ok(await fn(authInfo.token, usuario));
   } catch (e) {
-    if (e instanceof ErrorConciliacion) {
-      log(usuario, herramienta, "rechazado");
-      return error(e.message);
-    }
     const msg = e instanceof Error ? e.message : (e as { message?: string })?.message ?? "Error";
     console.error(`[mcp] ${herramienta} falló:`, e);
     return error(`No se pudo completar: ${msg}`);
   }
-}
-
-/**
- * Cliente que actúa como el usuario (RLS aplicada), igual que las rutas de
- * tesorería que usan createServerClient() con la cookie de sesión.
- */
-function clienteComoUsuario(token: string) {
-  return createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-      auth: { persistSession: false, autoRefreshToken: false },
-    }
-  );
 }
 
 function paramsRango(desde?: string, hasta?: string) {
