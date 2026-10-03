@@ -52,6 +52,7 @@ import { EmailAvisos } from "@/components/pedidos/email-avisos";
 import { OcrIndicadores } from "@/components/pedidos/ocr-indicadores";
 import { ContabilidadPedidoSeccion } from "@/components/pedidos/contabilidad-pedido";
 import { DevolucionDialog } from "@/components/pedidos/devolucion-dialog";
+import { WhatsAppPedido } from "@/components/pedidos/whatsapp-pedido";
 import { NOMBRE_ESTADO, pesos, type EstadoPedido, type PedidoDetalle } from "@/components/pedidos/tipos";
 
 type Paso = { estado: EstadoPedido; label: string; icon: LucideIcon };
@@ -573,6 +574,14 @@ export default function DetallePedidoPage() {
                     <Phone className="size-3" />
                     {pedido.perfil?.telefono || pedido.telefono_cliente}
                   </p>
+                )}
+                {!esDisciplina && puedeOperar && (
+                  <WhatsAppPedido
+                    telefono={pedido.perfil?.telefono || pedido.telefono_cliente}
+                    nombre={pedido.perfil?.nombre ?? pedido.nombre_cliente}
+                    numero={pedido.numero_pedido}
+                    listo={pedido.estado === "listo_retiro"}
+                  />
                 )}
                 {!pedido.perfil_id && !esDisciplina && puedeOperar && (
                   <EmailAvisos

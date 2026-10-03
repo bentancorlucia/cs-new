@@ -1,7 +1,7 @@
 -- Comunicaciones: cola, omisiones, tope por hora, reintentos, bajas y
 -- automatizaciones.
 BEGIN;
-SELECT plan(24);
+SELECT plan(27);
 
 CREATE FUNCTION pg_temp.estado(p_envio uuid, p_email text) RETURNS text LANGUAGE sql AS $$
   SELECT estado FROM comunicaciones.mensajes WHERE envio_id = p_envio AND email = p_email
@@ -82,6 +82,14 @@ UPDATE comunicaciones.automatizaciones SET activa = true WHERE clave = 'bienveni
 SELECT isnt(comunicaciones.correr_automatizacion('bienvenida', '2026-01-01', '{}', 'bienvenida'), NULL, 'corre la bienvenida');
 SELECT is(comunicaciones.correr_automatizacion('bienvenida', '2026-01-01', '{}', 'bienvenida'), NULL,
           'el mismo período no corre dos veces');
+
+-- Correcciones: formato de la deuda, corrida sin destinatarios, cancelado
+SELECT is((SELECT variables ->> 'deuda_vencida' FROM comunicaciones.audiencia_socios('{"vigentes": false}') LIMIT 1),
+          '$ 0,00', 'importes con formato uruguayo');
+UPDATE comunicaciones.automatizaciones SET activa = true WHERE clave = 'cumpleanos';
+SELECT is(comunicaciones.correr_automatizacion('cumpleanos', '2026-01-01', '{"cumple_hoy": true, "vigentes": false, "alta_desde": "2099-01-01"}', 'c'),
+          NULL, 'sin destinatarios no corre');
+SELECT is((SELECT count(*) FROM comunicaciones.corridas WHERE clave = 'cumpleanos'), 0::bigint, 'y no queda registrada');
 
 SELECT * FROM finish();
 ROLLBACK;
