@@ -526,7 +526,16 @@ isOneToOne: false
               "concepto": string,"disciplina_id": number,"excluida": string,"importe": number,"periodicidad": string,"periodo_desde": string,"periodo_hasta": string,"persona_id": number,"plan_id": number,"precio_id": number,"suscripcion_id": number,"tipo": string
             }[]
                            },
+"puede_catalogo":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"puede_gestionar":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
 "puede_leer":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"puede_tesoreria":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "registrar_cobro":

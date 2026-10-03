@@ -49,6 +49,7 @@ import {
   scaleIn,
 } from "@/lib/motion";
 import { VerificarSocio } from "@/components/shared/verificar-socio";
+import { MisCuotas } from "@/components/socios/mis-cuotas";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 
 // ── Types ──────────────────────────────────────────────
@@ -529,6 +530,9 @@ export default function MiCuentaPage() {
                       )}
                     </CardContent>
                   </Card>
+
+                  {/* Mis cuotas — solo si la cuenta está vinculada al padrón */}
+                  <MisCuotas />
                 </div>
 
                 {/* Sidebar */}

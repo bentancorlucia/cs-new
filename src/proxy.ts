@@ -45,6 +45,7 @@ const PROTECTED_ROUTES: Record<string, string[]> = {
   "/pedidos-disciplinas": ["super_admin", "tienda", "tesorero"],
   "/admin": ["super_admin", "tienda"],
   "/secretaria": ["super_admin", "secretaria"],
+  "/secretaria/planes": ["super_admin", "secretaria", "tesorero", "comision_fiscal"],
   "/cuotas": ["super_admin", "tesorero", "secretaria", "comision_fiscal"],
   "/comunicaciones": ["super_admin", "secretaria", "tesorero", "tienda"],
   "/contabilidad": ["super_admin", "tesorero", "comision_fiscal"],

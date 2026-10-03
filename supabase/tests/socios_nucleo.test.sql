@@ -1,6 +1,6 @@
 -- Socios: membresías, inscripciones, lotes de cuotas y sincronización.
 BEGIN;
-SELECT plan(37);
+SELECT plan(45);
 
 DO $$ BEGIN PERFORM contabilidad.crear_ejercicio(2026); END $$;
 CREATE FUNCTION pg_temp.saldo(p_codigo text) RETURNS numeric LANGUAGE sql AS $$
@@ -125,6 +125,44 @@ SELECT ok(EXISTS (SELECT 1 FROM public.perfil_roles pr JOIN public.roles r ON r.
 DO $$ BEGIN PERFORM socios.baja_socio(pg_temp.persona('23456789'), '2026-08-31', 1::smallint); END $$;
 SELECT ok(NOT (SELECT es_socio FROM public.perfiles WHERE id = '00000000-0000-0000-0000-0000000000e1'),
           'la baja le saca el precio de socio');
+
+-- ---------- Regresiones de la revisión de pantallas
+-- Número de socio libre aunque haya números cargados a mano
+DO $$ BEGIN
+  PERFORM socios.alta_socio('{"cedula": "51111111", "nombre": "N", "apellido": "Prueba", "numero_socio": 500}', '2026-01-01');
+  PERFORM socios.alta_socio('{"cedula": "52222222", "nombre": "N", "apellido": "Prueba"}', '2026-01-01');
+  PERFORM socios.alta_socio('{"cedula": "53333333", "nombre": "N", "apellido": "Prueba"}', '2026-01-01');
+END $$;
+SELECT is((SELECT numero_socio FROM public.padron_socios WHERE cedula = '53333333'), 502, 'el número automático salta los cargados a mano');
+
+-- Inscripción que empezaba después de la baja: no queda viva
+DO $$ BEGIN
+  PERFORM socios.inscribir(pg_temp.persona('52222222'), pg_temp.pl('Cuota social'), '2026-11-01');
+  PERFORM socios.dar_baja(pg_temp.persona('52222222'), '2026-10-15', 1::smallint);
+END $$;
+SELECT is((SELECT count(*) FROM socios.suscripciones WHERE persona_id = pg_temp.persona('52222222')), 0::bigint,
+          'la inscripción posterior a la baja no queda');
+SELECT throws_like($$ SELECT socios.cambiar_medio_cobro(pg_temp.persona('53333333'), '{"medio": "debito_visa"}', '2026-02-01') $$,
+                   '%últimos 4%', 'el débito exige los últimos 4 dígitos');
+
+-- Un usuario de secretaría lee y edita los catálogos (las políticas no
+-- pueden depender de funciones que authenticated no ejecuta)
+INSERT INTO auth.users (id, instance_id, aud, role, email, raw_user_meta_data)
+VALUES ('00000000-0000-0000-0000-0000000000e2', '00000000-0000-0000-0000-000000000000', 'authenticated',
+        'authenticated', 'secre-test@example.com', '{"nombre": "Secre", "apellido": "Prueba"}');
+INSERT INTO public.perfil_roles (perfil_id, rol_id)
+SELECT '00000000-0000-0000-0000-0000000000e2', id FROM public.roles WHERE nombre = 'secretaria';
+SELECT set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000e2","role":"authenticated"}', true);
+SET LOCAL ROLE authenticated;
+SELECT cmp_ok((SELECT count(*) FROM socios.planes), '>', 0::bigint, 'secretaría lee los planes');
+SELECT lives_ok($$ UPDATE socios.planes SET permite_anual = true WHERE nombre = 'Cuota social' $$, 'y los edita');
+SELECT is((SELECT count(*) FROM socios.plan_precios), 3::bigint, 'lee los precios');
+SELECT throws_ok($$ INSERT INTO socios.plan_precios (plan_id, vigente_desde, importe_mensual)
+                    VALUES ((SELECT id FROM socios.planes LIMIT 1), '2027-01-01', 1) $$,
+                 '42501', NULL, 'pero no carga precios (es de tesorería)');
+SELECT lives_ok($$ SELECT count(*) FROM comunicaciones.config $$, 'lee la configuración de comunicaciones');
+RESET ROLE;
+SELECT set_config('request.jwt.claims', '', true);
 
 SELECT * FROM finish();
 ROLLBACK;

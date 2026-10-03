@@ -198,6 +198,9 @@ isOneToOne: false
 "puede_ver":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
+"puede_whatsapp":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
 "registrar_baja":
 { Args: { "p_mensaje": string,"p_origen"?: string }; Returns: string
                            },
