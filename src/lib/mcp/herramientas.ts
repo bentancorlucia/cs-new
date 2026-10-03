@@ -16,6 +16,7 @@ import {
   proyeccionDeCaja,
 } from "./contabilidad";
 import { obtenerResumenSocios } from "@/lib/socios/resumen";
+import { cobranzaSocios, deudoresSocios, estadoCuentaSocio } from "./socios";
 import { uruguayNowParts } from "@/lib/timezone";
 import { tieneRol, usuarioDe, type UsuarioMcp } from "./auth";
 import {
@@ -31,6 +32,7 @@ import {
 const ROLES_REPORTES_TIENDA = ["tienda", "tesorero", "comision_fiscal"];
 const ROLES_CONTABILIDAD = ["tesorero", "comision_fiscal"];
 const ROLES_TESORERIA = ["tesorero"];
+const ROLES_CUOTAS = ["secretaria", "tesorero", "comision_fiscal"];
 const ROLES_SECRETARIA = ["secretaria"];
 const ROLES_CUALQUIER_MODULO = ["tienda", "tesorero", "secretaria"];
 
@@ -46,6 +48,7 @@ Las herramientas devuelven los mismos números que los paneles del dashboard y s
 - Cada herramienta requiere un rol (tienda, tesorero, comision_fiscal, secretaria; super_admin ve todo). Si no hay permiso, decíselo al usuario en vez de inventar datos.
 - Usá "quien_soy" si no sabés qué puede consultar el usuario.
 - Para preguntas generales preferí las herramientas de resumen (estado_tienda_hoy, reporte_tienda, panorama_finanzas, estados_contables, resumen_socios).
+- Cuotas de socios (roles secretaria, tesorero, comision_fiscal): cobranza_socios (deuda, al día, cobrado del mes), deudores_socios (quiénes deben) y estado_cuenta_socio (por nombre, cédula o número). Las altas, cobros y cuotas se cargan en el panel, no desde acá.
 - Para otros datos de tienda o socios: listar_tablas → consultar_tabla (filas) o agregar_tabla (sumas, conteos, promedios agrupados). Solo muestran las tablas del área del usuario.
 - Los datos pueden incluir información personal (nombres, cédulas, teléfonos): usala solo para responder lo que te preguntan.
 Respondé en español rioplatense.`;
@@ -307,6 +310,56 @@ export function registrarHerramientas(server: McpServer) {
     },
     async (args, ctx) =>
       conRol(ctx as Ctx, ROLES_TESORERIA, "importar_extracto", async (token) => importarExtracto(token, args))
+  );
+
+  server.registerTool(
+    "cobranza_socios",
+    {
+      title: "Cobranza de cuotas de socios",
+      description:
+        "Situación de las cuotas hoy: socios vigentes, al día y fuera de tolerancia, deuda total y vencida, saldo a favor, " +
+        "cobrado en el mes por medio y el último lote emitido; para tesorería y Comisión Fiscal, también el control contra la " +
+        "contabilidad. Requiere rol secretaria, tesorero o comision_fiscal.",
+      annotations: soloLectura,
+    },
+    async (ctx) =>
+      conRol(ctx as Ctx, ROLES_CUOTAS, "cobranza_socios", async (token, usuario) =>
+        cobranzaSocios(token, tieneRol(usuario, ROLES_CONTABILIDAD))
+      )
+  );
+
+  server.registerTool(
+    "deudores_socios",
+    {
+      title: "Socios con cuotas vencidas",
+      description:
+        "Personas con cuotas vencidas impagas, de mayor a menor deuda, con cuántas cuotas deben, medio de cobro y si siguen " +
+        "dentro de la tolerancia. Incluye datos personales: usalos solo para lo que te preguntan. Requiere rol secretaria, " +
+        "tesorero o comision_fiscal.",
+      inputSchema: z.object({
+        limite: z.number().int().min(1).max(500).optional().describe("Cuántos devolver (por defecto 50)."),
+      }),
+      annotations: soloLectura,
+    },
+    async ({ limite }, ctx) =>
+      conRol(ctx as Ctx, ROLES_CUOTAS, "deudores_socios", async (token) => deudoresSocios(token, limite ?? 50))
+  );
+
+  server.registerTool(
+    "estado_cuenta_socio",
+    {
+      title: "Estado de cuenta de un socio",
+      description:
+        "Cuotas, cobros y notas de crédito de una persona con su saldo, y su situación (deuda vencida, al día, saldo a favor). " +
+        "Se busca por nombre, cédula o número de socio; si hay varias coincidencias devuelve la lista para elegir. " +
+        "Requiere rol secretaria, tesorero o comision_fiscal.",
+      inputSchema: z.object({
+        buscar: z.string().min(2).describe("Nombre y apellido, cédula o número de socio."),
+      }),
+      annotations: soloLectura,
+    },
+    async ({ buscar }, ctx) =>
+      conRol(ctx as Ctx, ROLES_CUOTAS, "estado_cuenta_socio", async (token) => estadoCuentaSocio(token, buscar))
   );
 
   server.registerTool(
