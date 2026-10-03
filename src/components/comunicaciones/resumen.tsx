@@ -5,6 +5,7 @@ import { AlertTriangle, ClipboardCheck, Inbox, Plus, Send, ServerOff, Workflow }
 import { easeSmooth } from "@/lib/motion";
 import { Aviso, BotonLink, EncabezadoPagina, Kpi, NumeroAnimado, Panel, Vacio } from "./ui";
 import { EnvioItem } from "./envio-item";
+import { ProcesarCola } from "./procesar-cola";
 import type { EnvioResumen } from "./tipos";
 
 export function ResumenComunicaciones({
@@ -34,6 +35,7 @@ export function ResumenComunicaciones({
         titulo="Resumen"
         descripcion="Correos del club a socios y clientes: la cola de salida, lo que espera aprobación y las bajas."
       >
+        {puedeGestionar && smtp && <ProcesarCola enCola={kpis.enCola} />}
         {puedeGestionar && (
           <BotonLink href="/comunicaciones/envios/nuevo">
             <Plus className="size-4" />

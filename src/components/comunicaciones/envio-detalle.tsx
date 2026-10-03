@@ -182,9 +182,10 @@ export function EnvioDetalle({
     start(async () => {
       const r = await enviarPrueba(envio.id);
       if (r.ok) {
-        toast.success(`Prueba en la cola para ${r.data.email}`, {
-          action: { label: "Ver", onClick: () => router.push(`/comunicaciones/envios/${r.data.id}`) },
-        });
+        const ver = { label: "Ver", onClick: () => router.push(`/comunicaciones/envios/${r.data.id}`) };
+        if (r.data.estado === "enviado") toast.success(`Prueba enviada a ${r.data.email}`, { action: ver });
+        else if (r.data.error) toast.error(`La prueba no salió: ${r.data.error}`, { action: ver });
+        else toast.success(`Prueba en la cola para ${r.data.email}`, { action: ver });
         router.refresh();
       } else toast.error(r.error);
     });

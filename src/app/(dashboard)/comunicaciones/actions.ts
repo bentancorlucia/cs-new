@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import {
   createComunicacionesClient,
@@ -9,6 +10,8 @@ import {
   type ComunicacionesClient,
 } from "@/lib/comunicaciones/server";
 import { renderPlantilla, type Variables } from "@/lib/comunicaciones/render";
+import { procesarCola } from "@/lib/comunicaciones/worker";
+import { smtpConfigurado } from "@/lib/comunicaciones/smtp";
 import { correrAutomatizacion, planCorrida } from "@/lib/comunicaciones/automatizaciones";
 import { audienciaCompleta, contarBajas, supresionesVigentes, type Destinatario } from "@/lib/comunicaciones/consultas";
 import {
@@ -197,8 +200,27 @@ export async function aprobarEnvio(input: { id: string; programado_para?: string
       p_programado_para: (programado_para ?? null) as string,
     });
     if (error) return { ok: false, error: errorBase(error) };
+    // Sin esperar al cron (que en las ramas de prueba no corre).
+    if (!programado_para && smtpConfigurado()) {
+      after(() => procesarCola({ presupuestoMs: 50_000 }).catch((e) => console.error("[comunicaciones] cola:", e)));
+    }
     revalidar();
     return { ok: true, data: undefined };
+  } catch (e) {
+    return fallo(e);
+  }
+}
+
+/** Manda ya lo que esté listo en la cola (respetando el tope por hora). */
+export async function procesarColaAhora(): Promise<
+  Resultado<{ enviados: number; fallidos: number; reintentos: number; omitidos: number }>
+> {
+  try {
+    await exigirGestionComunicaciones();
+    if (!smtpConfigurado()) return { ok: false, error: "El servidor de correo no está configurado" };
+    const r = await procesarCola({ presupuestoMs: 50_000 });
+    revalidar();
+    return { ok: true, data: { enviados: r.enviados, fallidos: r.fallidos, reintentos: r.reintentos, omitidos: r.omitidos } };
   } catch (e) {
     return fallo(e);
   }
@@ -237,7 +259,9 @@ export async function reintentarFallidos(id: string): Promise<Resultado<number>>
  * un destinatario (aprobado al momento), con los datos del primer
  * destinatario para ver las variables reales.
  */
-export async function enviarPrueba(id: string): Promise<Resultado<{ id: string; email: string }>> {
+export async function enviarPrueba(
+  id: string
+): Promise<Resultado<{ id: string; email: string; estado: string; error: string | null }>> {
   try {
     await exigirGestionComunicaciones();
     if (!esUuid(id)) return { ok: false, error: "Envío inválido" };
@@ -266,8 +290,23 @@ export async function enviarPrueba(id: string): Promise<Resultado<{ id: string; 
     if (error || !nuevo) return { ok: false, error: errorBase(error ?? {}) };
     const { error: e2 } = await db.rpc("aprobar_envio", { p_envio: nuevo as string });
     if (e2) return { ok: false, error: errorBase(e2) };
+    // La prueba sale en el momento: así se ve enseguida si el SMTP anda.
+    if (smtpConfigurado()) await procesarCola({ presupuestoMs: 25_000 });
+    const { data: msj } = await db
+      .from("mensajes")
+      .select("estado, error, motivo_omision")
+      .eq("envio_id", nuevo as string)
+      .maybeSingle();
     revalidar();
-    return { ok: true, data: { id: nuevo as string, email: user.email } };
+    return {
+      ok: true,
+      data: {
+        id: nuevo as string,
+        email: user.email,
+        estado: msj?.estado ?? "pendiente",
+        error: msj?.error ?? msj?.motivo_omision ?? null,
+      },
+    };
   } catch (e) {
     return fallo(e);
   }
