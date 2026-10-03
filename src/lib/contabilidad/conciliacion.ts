@@ -104,6 +104,9 @@ export type ResumenConciliacion = {
 
 export type Sugerencia = { movimientoId: number; lineaId: number; dias: number };
 
+/** Línea de un asiento y la de su reversión en la cuenta: se concilian entre sí (suman cero). */
+export type ParReversion = { lineaId: number; reversionId: number };
+
 export type DetalleExtracto = {
   extracto: ExtractoResumen;
   cuenta: { id: string; codigo: string; nombre: string; moneda: string | null };
@@ -113,6 +116,7 @@ export type DetalleExtracto = {
   conciliados: GrupoConciliado[];
   resumen: ResumenConciliacion | null;
   sugerencias: Sugerencia[];
+  reversiones: ParReversion[];
   /** Es el último de la cuenta (el único que se puede borrar). */
   esUltimo: boolean;
   anterior: { id: string; estado: EstadoExtracto } | null;
@@ -388,7 +392,8 @@ export async function detalleExtracto(
   if (!e || !e.cuentas) return { detalle: null, error: null };
   const extracto = mapearExtracto(e);
 
-  const [vecinosRes, movsRes, gruposRes, libros, resumenRes, sugerenciasRes] = await Promise.all([
+  const abierto = extracto.estado === "abierto";
+  const [vecinosRes, movsRes, gruposRes, libros, resumenRes, sugerenciasRes, reversionesRes] = await Promise.all([
     conta
       .from("extractos")
       .select("id, fecha_desde, estado")
@@ -426,9 +431,12 @@ export async function detalleExtracto(
     ),
     lineasSinConciliar(conta, extracto.cuentaId, extracto.fechaHasta),
     conta.rpc("resumen_conciliacion", { p_extracto: extractoId }),
-    extracto.estado === "abierto"
+    abierto
       ? conta.rpc("sugerir_conciliacion", { p_extracto: extractoId })
       : Promise.resolve({ data: [] as { movimiento_id: number; linea_id: number; dias: number }[], error: null }),
+    abierto
+      ? conta.rpc("sugerir_reversiones", { p_extracto: extractoId })
+      : Promise.resolve({ data: [] as { linea_id: number; linea_reversion_id: number }[], error: null }),
   ]);
 
   const movimientos = movsRes.filas.map(mapearMovimiento);
@@ -439,15 +447,20 @@ export async function detalleExtracto(
       .filter((l): l is FilaLinea => !!l)
       .map(mapearLinea)
       .sort(ordenarLineas);
+    const movimientos = g.conciliacion_movimientos
+      .map((cm) => porId.get(cm.movimiento_id))
+      .filter((m): m is MovimientoBanco => !!m)
+      .sort((a, b) => a.orden - b.orden);
     return {
       id: g.id,
       createdAt: g.created_at,
-      movimientos: g.conciliacion_movimientos
-        .map((cm) => porId.get(cm.movimiento_id))
-        .filter((m): m is MovimientoBanco => !!m)
-        .sort((a, b) => a.orden - b.orden),
+      movimientos,
       lineas,
-      registradoDesdeExtracto: lineas.some((l) => l.origenTipo === "extracto"),
+      // Solo si el asiento salió de un movimiento de este mismo grupo
+      // (un asiento registrado y su reversión no cuentan).
+      registradoDesdeExtracto: lineas.some(
+        (l) => l.origenTipo === "extracto" && movimientos.some((m) => String(m.id) === l.origenId)
+      ),
     };
   });
 
@@ -477,6 +490,7 @@ export async function detalleExtracto(
     libros.error ??
     (resumenRes.error ? mensajeError(resumenRes.error) : null) ??
     (sugerenciasRes.error ? mensajeError(sugerenciasRes.error) : null) ??
+    (reversionesRes.error ? mensajeError(reversionesRes.error) : null) ??
     (vecinosRes.error ? mensajeError(vecinosRes.error) : null);
 
   return {
@@ -492,6 +506,10 @@ export async function detalleExtracto(
         movimientoId: s.movimiento_id,
         lineaId: s.linea_id,
         dias: s.dias,
+      })),
+      reversiones: (reversionesRes.data ?? []).map((r) => ({
+        lineaId: r.linea_id,
+        reversionId: r.linea_reversion_id,
       })),
       esUltimo: i === vecinos.length - 1,
       anterior: vecino(i - 1),

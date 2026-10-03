@@ -213,6 +213,45 @@ export async function aplicarSugerencias(
   return { ok: true, data: { aplicadas, fallidas, primerError } };
 }
 
+const reversionesSchema = z.object({
+  extractoId: uuid,
+  pares: z
+    .array(z.object({ lineaId: idNumerico, reversionId: idNumerico }))
+    .min(1, "Elegí al menos un par")
+    .max(1000),
+});
+
+/** Concilia cada asiento con su reversión (grupo solo de libros que suma cero). */
+export async function conciliarReversiones(
+  input: z.input<typeof reversionesSchema>
+): Promise<Resultado<{ aplicadas: number; fallidas: number; primerError: string | null }>> {
+  const p = reversionesSchema.safeParse(input);
+  if (!p.success) return invalido(p.error);
+  const noAutorizado = await autorizar();
+  if (noAutorizado) return noAutorizado;
+
+  const db = await createContabilidadClient();
+  let aplicadas = 0;
+  let fallidas = 0;
+  let primerError: string | null = null;
+  for (const par of p.data.pares) {
+    const { error } = await db.rpc("conciliar", {
+      p_extracto: p.data.extractoId,
+      p_movimientos: [],
+      p_lineas: [par.lineaId, par.reversionId],
+    });
+    if (error) {
+      fallidas++;
+      primerError ??= mensajeError(error);
+    } else {
+      aplicadas++;
+    }
+  }
+  if (aplicadas > 0) refrescar();
+  if (aplicadas === 0) return { ok: false, error: primerError ?? "No se pudo conciliar" };
+  return { ok: true, data: { aplicadas, fallidas, primerError } };
+}
+
 export async function desconciliar(conciliacionId: number): Promise<Resultado> {
   const p = idNumerico.safeParse(conciliacionId);
   if (!p.success) return invalido(p.error);
@@ -235,7 +274,10 @@ const contabilizarSchema = z.object({
   disciplinaId: idNumerico.nullable(),
 });
 
-/** Registra en los libros un movimiento del banco que no estaba y lo deja conciliado. */
+/**
+ * Registra en los libros un movimiento del banco que no estaba y lo deja
+ * conciliado. Si ya tenía un asiento (se desconcilió), la base lo reutiliza.
+ */
 export async function registrarEnLibros(
   input: z.input<typeof contabilizarSchema>
 ): Promise<Resultado<{ asientoId: string }>> {
@@ -257,17 +299,7 @@ export async function registrarEnLibros(
     p_descripcion: d.descripcion || undefined,
     p_extra: extra,
   });
-  if (error) {
-    // Ya hay un asiento vigente generado desde este movimiento (se desconcilió).
-    if (error.code === "23505" && error.message.includes("asientos_origen_unico")) {
-      return {
-        ok: false,
-        error:
-          "Este movimiento ya se registró en los libros: conciliálo con esa línea o revertí ese asiento antes de registrarlo de nuevo",
-      };
-    }
-    return { ok: false, error: mensajeError(error) };
-  }
+  if (error) return { ok: false, error: mensajeError(error) };
   refrescar();
   return { ok: true, data: { asientoId: data } };
 }

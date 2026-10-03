@@ -21,6 +21,7 @@ import {
   Search,
   Sparkles,
   Trash2,
+  Undo2,
   Unlink,
   X,
 } from "lucide-react";
@@ -50,6 +51,7 @@ import { BadgeExtracto, BarraAvance, ImporteSigno } from "./ui-conciliacion";
 import { Marca } from "./marca";
 import { RegistrarDialog } from "./registrar-dialog";
 import { SugerenciasDialog } from "./sugerencias-dialog";
+import { ReversionesDialog } from "./reversiones-dialog";
 
 type Accion = "cerrar" | "reabrir" | "eliminar";
 
@@ -100,6 +102,7 @@ export function ConciliarExtracto({
   const [buscarLibros, setBuscarLibros] = useState("");
   const [registrar, setRegistrar] = useState<MovimientoBanco | null>(null);
   const [verSugerencias, setVerSugerencias] = useState(false);
+  const [verReversiones, setVerReversiones] = useState(false);
   const [accion, setAccion] = useState<Accion | null>(null);
   const [aDesconciliar, setADesconciliar] = useState<GrupoConciliado | null>(null);
   const [pendiente, startTransition] = useTransition();
@@ -123,7 +126,8 @@ export function ConciliarExtracto({
     coincide(buscarLibros, [l.descripcion, l.detalle, l.numero ? String(l.numero) : null, formatFecha(l.fecha)], l.importe)
   );
 
-  // Asientos ya generados desde un movimiento (quedan pendientes si se desconcilió).
+  // Asientos ya generados desde un movimiento (quedan pendientes si se desconcilió):
+  // atajo de un clic para volver a conciliarlos sin elegir cuenta.
   const registradoPorMov = useMemo(() => {
     const m = new Map<number, LineaLibros>();
     for (const l of detalle.pendientesLibros) {
@@ -276,22 +280,40 @@ export function ConciliarExtracto({
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-heading text-base text-foreground">Sin conciliar</h2>
-          {editable && detalle.sugerencias.length > 0 && (
-            <motion.button
-              type="button"
-              onClick={() => setVerSugerencias(true)}
-              whileHover={{ scale: 1.03, y: -1 }}
-              whileTap={{ scale: 0.97 }}
-              transition={springBouncy}
-              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-dorado-300 bg-dorado-50 px-3.5 text-sm font-medium text-dorado-900 shadow-sm transition-colors hover:bg-dorado-100"
-            >
-              <Sparkles className="size-4 text-dorado-600" />
-              Aplicar sugerencias
-              <span className="rounded-full bg-dorado-300 px-1.5 text-xs tabular-nums text-dorado-900">
-                {detalle.sugerencias.length}
-              </span>
-            </motion.button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {editable && detalle.reversiones.length > 0 && (
+              <motion.button
+                type="button"
+                onClick={() => setVerReversiones(true)}
+                whileHover={{ scale: 1.03, y: -1 }}
+                whileTap={{ scale: 0.97 }}
+                transition={springBouncy}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-rose-200 bg-white px-3.5 text-sm font-medium text-rose-800 shadow-sm transition-colors hover:bg-rose-50"
+              >
+                <Undo2 className="size-4" />
+                Conciliar reversiones
+                <span className="rounded-full bg-rose-100 px-1.5 text-xs tabular-nums text-rose-800">
+                  {detalle.reversiones.length}
+                </span>
+              </motion.button>
+            )}
+            {editable && detalle.sugerencias.length > 0 && (
+              <motion.button
+                type="button"
+                onClick={() => setVerSugerencias(true)}
+                whileHover={{ scale: 1.03, y: -1 }}
+                whileTap={{ scale: 0.97 }}
+                transition={springBouncy}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-dorado-300 bg-dorado-50 px-3.5 text-sm font-medium text-dorado-900 shadow-sm transition-colors hover:bg-dorado-100"
+              >
+                <Sparkles className="size-4 text-dorado-600" />
+                Aplicar sugerencias
+                <span className="rounded-full bg-dorado-300 px-1.5 text-xs tabular-nums text-dorado-900">
+                  {detalle.sugerencias.length}
+                </span>
+              </motion.button>
+            )}
+          </div>
         </div>
 
         {/* Pestañas en mobile */}
@@ -485,6 +507,16 @@ export function ConciliarExtracto({
           extractoId={extracto.id}
           sugerencias={detalle.sugerencias}
           movimientos={movPorId}
+          lineas={linPorId}
+          moneda={moneda}
+        />
+      )}
+      {editable && (
+        <ReversionesDialog
+          open={verReversiones}
+          onOpenChange={setVerReversiones}
+          extractoId={extracto.id}
+          pares={detalle.reversiones}
           lineas={linPorId}
           moneda={moneda}
         />
@@ -811,7 +843,7 @@ function FilaBanco({
         </div>
       </div>
       <ImporteSigno valor={mov.importe} moneda={moneda} className="text-sm font-medium" />
-      {editable && registrada ? (
+      {editable && registrada && (
         <motion.button
           type="button"
           disabled={ocupado}
@@ -828,7 +860,8 @@ function FilaBanco({
         >
           <Link2 className="size-4" />
         </motion.button>
-      ) : puedeRegistrar && (
+      )}
+      {puedeRegistrar && (
         <motion.button
           type="button"
           onClick={(e) => {
