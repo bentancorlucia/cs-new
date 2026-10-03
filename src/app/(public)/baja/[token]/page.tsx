@@ -20,12 +20,14 @@ export default async function BajaPage({ params }: { params: Promise<{ token: st
   const mensajeId = verificarTokenBaja(token);
   let email: string | null = null;
   let yaDadaDeBaja = false;
+  let personal = false;
   if (mensajeId) {
     const db = createComunicacionesAdminClient();
-    const { data } = await db.from("mensajes").select("email").eq("id", mensajeId).maybeSingle();
+    const { data } = await db.from("mensajes").select("email, categoria").eq("id", mensajeId).maybeSingle();
     email = data?.email ?? null;
+    personal = data?.categoria === "personal";
     if (email) {
-      const { data: s } = await db.rpc("suprimido", { p_email: email, p_categoria: "difusion" });
+      const { data: s } = await db.rpc("suprimido", { p_email: email, p_categoria: personal ? "personal" : "difusion" });
       yaDadaDeBaja = Boolean(s);
     }
   }
@@ -37,6 +39,7 @@ export default async function BajaPage({ params }: { params: Promise<{ token: st
         valido={Boolean(email)}
         email={email ? enmascarar(email) : null}
         yaDadaDeBaja={yaDadaDeBaja}
+        personal={personal}
       />
     </div>
   );

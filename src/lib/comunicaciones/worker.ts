@@ -58,7 +58,11 @@ export async function procesarCola({ presupuestoMs = 50_000 } = {}) {
       }
 
       const { adjunto, ...variables } = (m.variables ?? {}) as Record<string, unknown>;
+      // Difusión: enlace de baja y encabezado de envío masivo (baja en un clic).
+      // Personal (cumpleaños, bienvenida): enlace discreto, sin ese encabezado,
+      // para que Gmail no lo trate como promoción.
       const esDifusion = m.categoria === "difusion";
+      const conBaja = esDifusion || m.categoria === "personal";
       let asunto: string;
       let html: string;
       let texto: string | undefined;
@@ -75,7 +79,12 @@ export async function procesarCola({ presupuestoMs = 50_000 } = {}) {
             encabezado: envio.encabezado as Encabezado,
           },
           { nombre: m.nombre ?? "", ...(variables as Variables) },
-          { pie: cfg.pie, bajaUrl: esDifusion ? urlPaginaBaja(m.id) : null, moldeHtml: cfg.molde_html }
+          {
+            pie: cfg.pie,
+            bajaUrl: conBaja ? urlPaginaBaja(m.id) : null,
+            moldeHtml: cfg.molde_html,
+            categoria: m.categoria,
+          }
         );
         asunto = r.asunto;
         html = r.html;

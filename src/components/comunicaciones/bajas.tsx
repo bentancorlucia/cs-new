@@ -55,7 +55,7 @@ export function Bajas({
   // Alta manual
   const [alta, setAlta] = useState(false);
   const [email, setEmail] = useState("");
-  const [alcance, setAlcance] = useState<"difusion" | "total">("difusion");
+  const [alcance, setAlcance] = useState<"difusion" | "personal" | "total">("difusion");
   const [motivo, setMotivo] = useState<"baja" | "rebote" | "queja" | "manual">("baja");
   const [notas, setNotas] = useState("");
   const [errorEmail, setErrorEmail] = useState<string | null>(null);
@@ -80,9 +80,12 @@ export function Bajas({
 
       {error && <Aviso tono="error" icono={AlertTriangle}>{error}</Aviso>}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi etiqueta="Bajas de difusión" delay={0.02} detalle="Siguen recibiendo lo institucional">
           <NumeroAnimado valor={vigentes.filter((s) => s.alcance === "difusion").length} />
+        </Kpi>
+        <Kpi etiqueta="Bajas de saludos" delay={0.04} detalle="No reciben cumpleaños ni bienvenida">
+          <NumeroAnimado valor={vigentes.filter((s) => s.alcance === "personal").length} />
         </Kpi>
         <Kpi etiqueta="Bajas totales" delay={0.06} detalle="No reciben ningún correo">
           <NumeroAnimado valor={vigentes.filter((s) => s.alcance === "total").length} />
@@ -201,7 +204,8 @@ export function Bajas({
           <div className="grid gap-2">
             {(
               [
-                { v: "difusion", t: "Solo difusión", d: "Sigue recibiendo cuotas, recibos y avisos institucionales." },
+                { v: "difusion", t: "Solo difusión", d: "Sigue recibiendo cuotas, recibos, avisos y saludos." },
+                { v: "personal", t: "Solo saludos", d: "No recibe cumpleaños ni bienvenida; el resto le sigue llegando." },
                 { v: "total", t: "Todo", d: "No se le escribe más (rebote permanente o pedido expreso)." },
               ] as const
             ).map((o) => (
@@ -251,7 +255,7 @@ export function Bajas({
           revocar && (
             <span>
               <span className="font-medium text-foreground">{revocar.email}</span> vuelve a recibir{" "}
-              {revocar.alcance === "total" ? "todos los correos" : "la difusión"} desde los próximos envíos. La baja queda en el
+              {revocar.alcance === "total" ? "todos los correos" : revocar.alcance === "personal" ? "los saludos" : "la difusión"} desde los próximos envíos. La baja queda en el
               historial como revocada.
             </span>
           )

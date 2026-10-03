@@ -88,7 +88,11 @@ export function BadgeCategoria({ categoria }: { categoria: string }) {
     <span
       className={cn(
         pill,
-        categoria === "difusion" ? "border-bordo-100 bg-bordo-50 text-bordo-800" : "border-linea bg-superficie text-foreground/70"
+        categoria === "difusion"
+          ? "border-bordo-100 bg-bordo-50 text-bordo-800"
+          : categoria === "personal"
+            ? "border-dorado-300 bg-dorado-100/60 text-dorado-900"
+            : "border-linea bg-superficie text-foreground/70"
       )}
     >
       {CATEGORIAS[categoria as keyof typeof CATEGORIAS]?.nombre ?? categoria}

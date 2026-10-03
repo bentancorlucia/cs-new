@@ -108,6 +108,7 @@ export type PrevisualizacionAudiencia = {
   total: number;
   socios: number;
   bajaDifusion: number;
+  bajaPersonal: number;
   bajaTotal: number;
   invalidos: string[];
   cantidadInvalidos: number;
@@ -135,6 +136,7 @@ export async function previsualizarAudiencia(audiencia: Audiencia): Promise<Resu
         total: destinatarios.length,
         socios: destinatarios.filter((d) => d.persona_id !== null).length,
         bajaDifusion: bajas.difusion,
+        bajaPersonal: bajas.personal,
         bajaTotal: bajas.total,
         invalidos: invalidos.slice(0, 20),
         cantidadInvalidos: invalidos.length,
@@ -353,7 +355,12 @@ export async function leerMensaje(id: string): Promise<Resultado<{ asunto: strin
         encabezado: envio?.encabezado,
       },
       { nombre: m.nombre ?? "", ...(variables as Variables) },
-      { pie: cfg?.pie, bajaUrl: m.categoria === "difusion" ? URL_BAJA_EJEMPLO : null, moldeHtml: cfg?.molde_html }
+      {
+        pie: cfg?.pie,
+        bajaUrl: m.categoria === "difusion" || m.categoria === "personal" ? URL_BAJA_EJEMPLO : null,
+        moldeHtml: cfg?.molde_html,
+        categoria: m.categoria,
+      }
     );
     return { ok: true, data: { asunto: r.asunto, html: r.html } };
   } catch (e) {

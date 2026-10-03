@@ -55,7 +55,8 @@ export function VistaPreviaDestinatarios({
       return renderPlantilla({ asunto, cuerpo, formato, usaMolde, encabezado }, variables, {
         pie,
         moldeHtml,
-        bajaUrl: categoria === "difusion" ? URL_BAJA_EJEMPLO : null,
+        bajaUrl: categoria === "difusion" || categoria === "personal" ? URL_BAJA_EJEMPLO : null,
+        categoria,
       });
     } catch {
       // Mientras se escribe, una sección puede quedar abierta: se avisa en el editor.

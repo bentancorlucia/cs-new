@@ -11,7 +11,8 @@
  *   {{{contenido}}}    el mensaje ya armado
  *   {{#firma}}…{{/firma}} con {{saludo}} y {{firmante}} (opcional)
  *   {{pie}}            línea extra del pie (Configuración)
- *   {{enlace_baja}}    solo en difusión
+ *   {{enlace_baja}}    en difusión y en los saludos personales
+ *   {{#es_personal}}   saludos personales (texto de baja distinto)
  * más todos los datos del destinatario ({{nombre}}, {{numero_socio}}…).
  */
 export const MOLDE_ORIGINAL = `<!DOCTYPE html>
@@ -129,7 +130,12 @@ export const MOLDE_ORIGINAL = `<!DOCTYPE html>
               <p style="margin:0 0 6px 0; font-size:12px; line-height:18px;">{{pie}}</p>
               {{/pie}}
               {{#enlace_baja}}
+              {{#es_personal}}
+              <p style="margin:0; font-size:12px; line-height:18px;">Recibís este correo por ser socio/a de Club Seminario. ¿No querés recibir estos saludos? <a href="{{enlace_baja}}" style="color:#94918B; text-decoration:underline;">Avisanos acá</a>.</p>
+              {{/es_personal}}
+              {{^es_personal}}
               <p style="margin:0; font-size:12px; line-height:18px;">Recibís este correo por ser socio/a de Club Seminario. Si no querés recibir más novedades, <a href="{{enlace_baja}}" style="color:#94918B; text-decoration:underline;">date de baja acá</a>.</p>
+              {{/es_personal}}
               {{/enlace_baja}}
             </td>
           </tr>

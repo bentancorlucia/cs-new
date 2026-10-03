@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, Eye, FileText, History, Lock, Megaphone, PenLine, Save, Send, ShoppingBag, Trash2, Workflow } from "lucide-react";
+import { ArrowLeft, Cake, Eye, FileText, History, Lock, Megaphone, PenLine, Save, Send, ShoppingBag, Trash2, Workflow } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { easeSmooth } from "@/lib/motion";
@@ -215,7 +215,7 @@ export function PlantillaEditor({
             {!auto && (
             <div className="space-y-1.5">
               <span className="px-0.5 text-[10px] uppercase tracking-editorial text-muted-foreground">Categoría</span>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2 sm:grid-cols-3">
                 {(Object.keys(CATEGORIAS) as Categoria[]).map((c) => (
                   <motion.button
                     key={c}
@@ -229,6 +229,8 @@ export function PlantillaEditor({
                   >
                     {c === "difusion" ? (
                       <Megaphone className="mt-0.5 size-4 shrink-0 text-bordo-700" />
+                    ) : c === "personal" ? (
+                      <Cake className="mt-0.5 size-4 shrink-0 text-bordo-700" />
                     ) : (
                       <FileText className="mt-0.5 size-4 shrink-0 text-bordo-700" />
                     )}

@@ -11,9 +11,11 @@ type Props = {
   valido: boolean;
   email: string | null;
   yaDadaDeBaja: boolean;
+  /** Baja de los saludos (cumpleaños, bienvenida), no de la difusión. */
+  personal?: boolean;
 };
 
-export function BajaConfirmacion({ token, valido, email, yaDadaDeBaja }: Props) {
+export function BajaConfirmacion({ token, valido, email, yaDadaDeBaja, personal = false }: Props) {
   const [estado, setEstado] = useState<"inicial" | "enviando" | "listo" | "error">(
     yaDadaDeBaja ? "listo" : "inicial"
   );
@@ -57,23 +59,29 @@ export function BajaConfirmacion({ token, valido, email, yaDadaDeBaja }: Props) 
             transition={springBouncy}
           >
             <CheckCircle2 className="mx-auto mb-4 size-12 text-emerald-600" />
-            <h1 className="font-heading text-xl font-bold text-bordo-950">Listo, te dimos de baja</h1>
+            <h1 className="font-heading text-xl font-bold text-bordo-950">
+              {personal ? "Listo, no te mandamos más saludos" : "Listo, te dimos de baja"}
+            </h1>
             <p className="mt-3 text-sm text-muted-foreground">
-              {email} no va a recibir más novedades ni difusión del club. Vas a seguir recibiendo lo
-              necesario sobre tus cuotas, compras y entradas.
+              {personal
+                ? `${email} no va a recibir más saludos del club (cumpleaños, bienvenida). Lo demás te sigue llegando.`
+                : `${email} no va a recibir más novedades ni difusión del club. Vas a seguir recibiendo lo necesario sobre tus cuotas, compras y entradas.`}
             </p>
           </motion.div>
         ) : (
           <motion.div key="confirmar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <MailX className="mx-auto mb-4 size-10 text-bordo-800" />
-            <h1 className="font-heading text-xl font-bold text-bordo-950">¿Dejar de recibir novedades?</h1>
+            <h1 className="font-heading text-xl font-bold text-bordo-950">
+              {personal ? "¿Dejar de recibir saludos?" : "¿Dejar de recibir novedades?"}
+            </h1>
             <p className="mt-3 text-sm text-muted-foreground">
-              {email} va a dejar de recibir correos de difusión de Club Seminario. Los avisos sobre
-              cuotas, compras y entradas se siguen enviando.
+              {personal
+                ? `${email} va a dejar de recibir los saludos del club (cumpleaños, bienvenida). Las novedades y los avisos sobre cuotas, compras y entradas se siguen enviando.`
+                : `${email} va a dejar de recibir correos de difusión de Club Seminario. Los avisos sobre cuotas, compras y entradas se siguen enviando.`}
             </p>
             <motion.div whileTap={{ scale: 0.97 }} className="mt-6 inline-block">
               <Button onClick={confirmar} disabled={estado === "enviando"} className="bg-bordo-800 hover:bg-bordo-900">
-                {estado === "enviando" ? "Procesando…" : "Sí, darme de baja"}
+                {estado === "enviando" ? "Procesando…" : personal ? "Sí, no quiero saludos" : "Sí, darme de baja"}
               </Button>
             </motion.div>
             {estado === "error" && (

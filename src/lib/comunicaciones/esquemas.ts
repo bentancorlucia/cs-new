@@ -34,16 +34,20 @@ export const URL_BAJA_EJEMPLO = "https://www.clubseminario.com.uy/baja/ejemplo";
 // Nombres
 // ------------------------------------------------------------
 
-export type Categoria = "institucional" | "difusion";
+export type Categoria = "institucional" | "personal" | "difusion";
 
 export const CATEGORIAS: Record<Categoria, { nombre: string; descripcion: string }> = {
   institucional: {
     nombre: "Institucional",
     descripcion: "Cuotas, avisos y trámites del socio: llega igual aunque se haya dado de baja de la difusión.",
   },
+  personal: {
+    nombre: "Personal",
+    descripcion: "Saludos de a uno (cumpleaños, bienvenida): baja discreta en el pie y sin marca de envío masivo, para que no vaya a Promociones.",
+  },
   difusion: {
     nombre: "Difusión",
-    descripcion: "Novedades, eventos, saludos: lleva enlace de baja y no llega a quien se dio de baja.",
+    descripcion: "Novedades y eventos para muchos: lleva enlace de baja y no llega a quien se dio de baja.",
   },
 };
 
@@ -72,6 +76,7 @@ export const NOMBRE_ORIGEN: Record<string, string> = {
 
 export const NOMBRE_ALCANCE: Record<string, string> = {
   difusion: "Solo difusión",
+  personal: "Solo saludos",
   total: "Todo (también institucional)",
 };
 
@@ -111,7 +116,7 @@ const email = z
   .toLowerCase()
   .max(254, "Dirección demasiado larga")
   .regex(REGEX_EMAIL, "Dirección de correo inválida");
-const categoria = z.enum(["institucional", "difusion"], { message: "Elegí la categoría" });
+const categoria = z.enum(["institucional", "personal", "difusion"], { message: "Elegí la categoría" });
 
 export const filtroAudienciaSchema = z.object({
   vigentes: z.boolean().default(true),
@@ -186,7 +191,7 @@ export type PlantillaInput = z.input<typeof plantillaSchema>;
 
 export const supresionSchema = z.object({
   email,
-  alcance: z.enum(["difusion", "total"]),
+  alcance: z.enum(["difusion", "personal", "total"]),
   motivo: z.enum(["baja", "rebote", "queja", "manual"]),
   notas: z.string().trim().max(500).optional(),
 });

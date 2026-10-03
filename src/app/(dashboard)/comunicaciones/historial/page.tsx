@@ -17,7 +17,7 @@ export default async function HistorialPage({
   const sp = await searchParams;
   const filtros: FiltrosHistorial = {
     estado: ESTADOS_MENSAJE.includes(sp.estado as never) ? sp.estado! : "",
-    categoria: sp.categoria === "institucional" || sp.categoria === "difusion" ? sp.categoria : "",
+    categoria: ["institucional", "personal", "difusion"].includes(sp.categoria ?? "") ? sp.categoria! : "",
     origen: ["manual", "transaccional", "automatizacion"].includes(sp.origen ?? "") ? sp.origen! : "",
     q: (sp.q ?? "").slice(0, 120),
     persona: /^\d+$/.test(sp.persona ?? "") ? sp.persona! : "",

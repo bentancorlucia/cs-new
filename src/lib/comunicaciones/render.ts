@@ -144,8 +144,10 @@ function cuerpoATexto(cuerpo: string, variables: Variables, formato: Formato) {
   return t.replace(/\*\*(.+?)\*\*/g, "$1").replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)");
 }
 
-function pieBaja(bajaUrl: string) {
-  return `<p style="margin:0">Si no querés recibir más estos correos, <a href="${escaparAtributo(bajaUrl)}" style="color:${SECUNDARIO}">date de baja acá</a>.</p>`;
+function pieBaja(bajaUrl: string, personal = false) {
+  return personal
+    ? `<p style="margin:0">¿No querés recibir estos saludos? <a href="${escaparAtributo(bajaUrl)}" style="color:${SECUNDARIO}">Avisanos acá</a>.</p>`
+    : `<p style="margin:0">Si no querés recibir más estos correos, <a href="${escaparAtributo(bajaUrl)}" style="color:${SECUNDARIO}">date de baja acá</a>.</p>`;
 }
 
 export type OpcionesMolde = {
@@ -153,6 +155,8 @@ export type OpcionesMolde = {
   bajaUrl?: string | null;
   /** Molde propio de Configuración; sin él (o si falla), el original. */
   moldeHtml?: string | null;
+  /** "personal": el pie ofrece dejar de recibir saludos (no la difusión). */
+  categoria?: string | null;
 };
 
 /**
@@ -175,6 +179,7 @@ export function molde(
     contenido: contenidoHtml,
     pie: opciones.pie?.trim() || "",
     enlace_baja: opciones.bajaUrl ?? "",
+    es_personal: opciones.categoria === "personal",
   };
   if (opciones.moldeHtml?.trim()) {
     try {
@@ -187,9 +192,9 @@ export function molde(
 }
 
 /** Un HTML completo de difusión que no usa {{enlace_baja}} recibe el pie de baja. */
-function asegurarBaja(html: string, usaEnlace: boolean, bajaUrl: string | null | undefined) {
+function asegurarBaja(html: string, usaEnlace: boolean, bajaUrl: string | null | undefined, personal = false) {
   if (!bajaUrl || usaEnlace) return html;
-  const pie = `<div style="padding:16px;font-size:12px;color:${SECUNDARIO};text-align:center;font-family:Helvetica,Arial,sans-serif">${pieBaja(bajaUrl)}</div>`;
+  const pie = `<div style="padding:16px;font-size:12px;color:${SECUNDARIO};text-align:center;font-family:Helvetica,Arial,sans-serif">${pieBaja(bajaUrl, personal)}</div>`;
   return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${pie}</body>`) : html + pie;
 }
 
@@ -232,7 +237,8 @@ export function renderPlantilla(
       html = asegurarBaja(
         contenido,
         analizarVariables(plantilla.cuerpo).variables.includes("enlace_baja"),
-        opciones.bajaUrl
+        opciones.bajaUrl,
+        opciones.categoria === "personal"
       );
     }
   }
@@ -242,6 +248,10 @@ export function renderPlantilla(
     html,
     texto:
       cuerpoATexto(plantilla.cuerpo, vars, formato) +
-      (opciones.bajaUrl ? `\n\n—\nPara darte de baja: ${opciones.bajaUrl}` : ""),
+      (opciones.bajaUrl
+        ? opciones.categoria === "personal"
+          ? `\n\n—\n¿No querés recibir estos saludos? ${opciones.bajaUrl}`
+          : `\n\n—\nPara darte de baja: ${opciones.bajaUrl}`
+        : ""),
   };
 }

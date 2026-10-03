@@ -1,7 +1,7 @@
 -- Comunicaciones: cola, omisiones, tope por hora, reintentos, bajas y
 -- automatizaciones.
 BEGIN;
-SELECT plan(33);
+SELECT plan(39);
 
 CREATE FUNCTION pg_temp.estado(p_envio uuid, p_email text) RETURNS text LANGUAGE sql AS $$
   SELECT estado FROM comunicaciones.mensajes WHERE envio_id = p_envio AND email = p_email
@@ -105,6 +105,20 @@ SELECT is((SELECT formato || '/' || usa_molde::text FROM comunicaciones.envios W
           'html/false', 'el envío guarda formato y molde');
 SELECT throws_like($$ SELECT comunicaciones.crear_envio('X', 'difusion', 'Hola', 'x', '[]', NULL, NULL, 'pdf') $$,
                    '%Formato inválido%', 'solo texto o html');
+
+-- Categoría personal (saludos): baja propia, independiente de la difusión
+SELECT is((SELECT string_agg(clave || '=' || categoria, ',' ORDER BY clave) FROM comunicaciones.plantillas
+           WHERE clave IN ('bienvenida', 'cumpleanos')), 'bienvenida=personal,cumpleanos=personal',
+          'cumpleaños y bienvenida son personales');
+CREATE TEMP TABLE e_pers AS SELECT comunicaciones.crear_envio('Prueba saludo', 'personal', 'Feliz cumple', 'Hola',
+  '[{"email": "saludo@example.com"}]') AS id;
+SELECT is(comunicaciones.registrar_baja((SELECT id FROM comunicaciones.mensajes WHERE envio_id = (SELECT id FROM e_pers))),
+          'saludo@example.com', 'baja desde un saludo');
+SELECT is((SELECT alcance FROM comunicaciones.supresiones WHERE email = 'saludo@example.com'), 'personal',
+          'la baja es solo de saludos');
+SELECT ok(comunicaciones.suprimido('saludo@example.com', 'personal'), 'no recibe más saludos');
+SELECT ok(NOT comunicaciones.suprimido('saludo@example.com', 'difusion'), 'pero sigue recibiendo difusión');
+SELECT ok(NOT comunicaciones.suprimido('baja@example.com', 'personal'), 'y una baja de difusión no corta los saludos');
 
 SELECT * FROM finish();
 ROLLBACK;

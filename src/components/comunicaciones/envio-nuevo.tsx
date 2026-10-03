@@ -19,6 +19,7 @@ import {
   Send,
   ShieldCheck,
   Users,
+  Cake,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -136,7 +137,10 @@ export function EnvioNuevo({
   const prev = listaVacia ? null : (res?.prev ?? null);
   const errorAud = listaVacia || contando ? null : (res?.error ?? null);
 
-  const bajasQueAplican = prev ? prev.bajaTotal + (categoria === "difusion" ? prev.bajaDifusion : 0) : 0;
+  const bajasQueAplican = prev
+    ? prev.bajaTotal +
+      (categoria === "difusion" ? prev.bajaDifusion : categoria === "personal" ? prev.bajaPersonal : 0)
+    : 0;
   const efectivos = prev ? Math.max(prev.total - bajasQueAplican, 0) : 0;
 
   function elegirPlantilla(id: string) {
@@ -456,7 +460,7 @@ export function EnvioNuevo({
 
                     <div className="space-y-1.5">
                       <span className="px-0.5 text-[10px] uppercase tracking-editorial text-muted-foreground">Categoría</span>
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="grid gap-2 sm:grid-cols-3">
                         {(Object.keys(CATEGORIAS) as Categoria[]).map((c) => (
                           <motion.button
                             key={c}
@@ -470,6 +474,8 @@ export function EnvioNuevo({
                           >
                             {c === "difusion" ? (
                               <Megaphone className="mt-0.5 size-4 shrink-0 text-bordo-700" />
+                            ) : c === "personal" ? (
+                              <Cake className="mt-0.5 size-4 shrink-0 text-bordo-700" />
                             ) : (
                               <FileText className="mt-0.5 size-4 shrink-0 text-bordo-700" />
                             )}
@@ -505,7 +511,12 @@ export function EnvioNuevo({
                   <div className="space-y-3 p-4">
                     <p className="text-xs text-muted-foreground">
                       Mirá algunos destinatarios con sus datos reales. Es exactamente el correo que arma el servidor
-                      {categoria === "difusion" ? ", con el enlace de baja al pie" : ""}.
+                      {categoria === "difusion"
+                        ? ", con el enlace de baja al pie"
+                        : categoria === "personal"
+                          ? ", con el enlace discreto para dejar de recibir saludos"
+                          : ""}
+                      .
                     </p>
                     <VistaPreviaDestinatarios
                       asunto={asunto}
@@ -634,14 +645,20 @@ export function EnvioNuevo({
                 <span>Dados de baja de difusión</span>
                 <NumeroAnimado valor={prev.bajaDifusion} className="font-medium" />
               </div>
+              <div className={cn("flex justify-between", prev.bajaPersonal > 0 ? "text-dorado-800" : "text-muted-foreground")}>
+                <span>Dados de baja de saludos</span>
+                <NumeroAnimado valor={prev.bajaPersonal} className="font-medium" />
+              </div>
               <div className={cn("flex justify-between", prev.bajaTotal > 0 ? "text-rose-700" : "text-muted-foreground")}>
                 <span>Baja total (no reciben nada)</span>
                 <NumeroAnimado valor={prev.bajaTotal} className="font-medium" />
               </div>
               <div className="border-t border-linea pt-1.5 text-muted-foreground">
                 {categoria === "difusion"
-                  ? "Como es difusión, las bajas se omiten."
-                  : "Institucional: solo se omiten las bajas totales."}
+                  ? "Como es difusión, se omiten las bajas de difusión y las totales."
+                  : categoria === "personal"
+                    ? "Como es personal, se omiten las bajas de saludos y las totales."
+                    : "Institucional: solo se omiten las bajas totales."}
                 <div className="mt-1 flex justify-between text-foreground">
                   <span>Lo reciben</span>
                   <NumeroAnimado valor={efectivos} className="font-semibold" />

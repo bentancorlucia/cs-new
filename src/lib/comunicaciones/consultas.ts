@@ -59,14 +59,18 @@ export async function supresionesVigentes(db: ComunicacionesClient) {
 /** Cuántos de la lista no recibirían un envío de esa categoría. */
 export function contarBajas(emails: string[], supresiones: Map<string, Set<string>>) {
   let difusion = 0;
+  let personal = 0;
   let total = 0;
   for (const e of emails) {
     const s = supresiones.get(e);
     if (!s) continue;
     if (s.has("total")) total++;
-    else if (s.has("difusion")) difusion++;
+    else {
+      if (s.has("difusion")) difusion++;
+      if (s.has("personal")) personal++;
+    }
   }
-  return { difusion, total };
+  return { difusion, personal, total };
 }
 
 /** Comienzo del mes actual en Uruguay, como ISO. */
