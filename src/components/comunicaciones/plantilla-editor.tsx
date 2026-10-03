@@ -4,12 +4,14 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, Eye, FileText, Lock, Megaphone, PenLine, Save, Send, Trash2, Workflow } from "lucide-react";
+import { ArrowLeft, Eye, FileText, History, Lock, Megaphone, PenLine, Save, Send, ShoppingBag, Trash2, Workflow } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { easeSmooth } from "@/lib/motion";
 import { CATEGORIAS, REGEX_CLAVE, VARIABLES, type Categoria } from "@/lib/comunicaciones/esquemas";
-import { eliminarPlantilla, guardarPlantilla } from "@/app/(dashboard)/comunicaciones/actions";
+import { eliminarPlantilla, guardarPlantilla, restaurarPlantilla } from "@/app/(dashboard)/comunicaciones/actions";
+import { transaccional as datosTransaccional } from "@/lib/comunicaciones/transaccionales";
+import type { Formato } from "@/lib/comunicaciones/render";
 import { Switch } from "@/components/ui/switch";
 import { Aviso, Boton, BotonLink, Campo, DialogoAccion, EncabezadoPagina, Panel, claseControl } from "./ui";
 import { EditorCuerpo } from "./editor-cuerpo";
@@ -63,6 +65,14 @@ export function PlantillaEditor({
   const [asunto, setAsunto] = useState(plantilla?.asunto ?? "");
   const [cuerpo, setCuerpo] = useState(plantilla?.cuerpo ?? "");
   const [activa, setActiva] = useState(plantilla?.activa ?? true);
+  const [formato, setFormato] = useState<Formato>(plantilla?.formato === "html" ? "html" : "texto");
+  const [usaMolde, setUsaMolde] = useState(plantilla?.usa_molde ?? true);
+  const [restaurar, setRestaurar] = useState(false);
+  // Mails automáticos de la tienda y eventos: sus propias variables y datos de ejemplo.
+  const auto = plantilla?.transaccional ? datosTransaccional(plantilla.clave) : null;
+  const ejemplos = auto
+    ? [{ email: "maria.perez@ejemplo.com", nombre: "María Pérez", variables: auto.ejemplo }]
+    : EJEMPLOS;
   const [intento, setIntento] = useState(false);
   const [guardando, start] = useTransition();
   const [borrar, setBorrar] = useState(false);
@@ -87,7 +97,12 @@ export function PlantillaEditor({
     categoria !== plantilla.categoria ||
     asunto !== plantilla.asunto ||
     cuerpo !== plantilla.cuerpo ||
-    activa !== plantilla.activa;
+    activa !== plantilla.activa ||
+    formato !== (plantilla.formato === "html" ? "html" : "texto") ||
+    usaMolde !== plantilla.usa_molde;
+  const modificadaDelOriginal =
+    !!plantilla?.cuerpo_original &&
+    (plantilla.cuerpo !== plantilla.cuerpo_original || plantilla.asunto !== plantilla.asunto_original || !plantilla.usa_molde);
 
   function guardar() {
     setIntento(true);
@@ -96,7 +111,10 @@ export function PlantillaEditor({
       return;
     }
     start(async () => {
-      const r = await guardarPlantilla({ clave: claveEfectiva, nombre, categoria, asunto, cuerpo, activa }, plantilla?.id);
+      const r = await guardarPlantilla(
+        { clave: claveEfectiva, nombre, categoria, asunto, cuerpo, activa, formato, usa_molde: usaMolde },
+        plantilla?.id
+      );
       if (!r.ok) {
         toast.error(r.error);
         return;
@@ -113,9 +131,11 @@ export function PlantillaEditor({
         eyebrow="Comunicaciones · Plantillas"
         titulo={nueva ? "Nueva plantilla" : <span className="normal-case">{plantilla.nombre}</span>}
         descripcion={
-          plantilla?.sistema
-            ? "Plantilla del sistema: podés cambiar el texto o desactivarla, pero no borrarla ni cambiarle la clave."
-            : "El texto admite párrafos, **negrita**, [enlaces](https://…), listas y datos del destinatario."
+          auto
+            ? `Mail automático: ${auto.cuando} Podés cambiar el asunto y el HTML; si algo falla al armarlo, sale la versión original.`
+            : plantilla?.sistema
+              ? "Plantilla del sistema: podés cambiar el texto o desactivarla, pero no borrarla ni cambiarle la clave."
+              : "En texto con formato (párrafos, **negrita**, enlaces, listas) o en HTML, con datos del destinatario."
         }
       >
         <Link
@@ -126,6 +146,13 @@ export function PlantillaEditor({
           Plantillas
         </Link>
       </EncabezadoPagina>
+
+      {auto && (
+        <Aviso tono="info" icono={ShoppingBag}>
+          Para listas usá <code className="font-mono">{"{{#items}}…{{/items}}"}</code> y para mostrar algo solo si hay dato{" "}
+          <code className="font-mono">{"{{#motivo}}…{{/motivo}}"}</code>. La vista previa usa datos de ejemplo.
+        </Aviso>
+      )}
 
       {usos.length > 0 && (
         <Aviso tono="info" icono={Workflow}>
@@ -161,6 +188,7 @@ export function PlantillaEditor({
               </Campo>
             </div>
 
+            {!auto && (
             <div className="space-y-1.5">
               <span className="px-0.5 text-[10px] uppercase tracking-editorial text-muted-foreground">Categoría</span>
               <div className="grid gap-2 sm:grid-cols-2">
@@ -188,6 +216,7 @@ export function PlantillaEditor({
                 ))}
               </div>
             </div>
+            )}
 
             <EditorCuerpo
               asunto={asunto}
@@ -197,8 +226,14 @@ export function PlantillaEditor({
               errorAsunto={intento ? errores.asunto : null}
               errorCuerpo={intento ? errores.cuerpo : null}
               deshabilitado={soloLectura}
+              formato={formato}
+              onFormato={auto ? undefined : setFormato}
+              usaMolde={usaMolde}
+              onUsaMolde={setUsaMolde}
+              variables={auto ? auto.variables : undefined}
             />
 
+            {!auto && (
             <label className="flex items-center justify-between gap-3 rounded-xl border border-linea px-3 py-2.5">
               <span>
                 <span className="block text-sm font-medium">Activa</span>
@@ -206,6 +241,7 @@ export function PlantillaEditor({
               </span>
               <Switch checked={activa} onCheckedChange={setActiva} disabled={soloLectura} />
             </label>
+            )}
           </fieldset>
         </Panel>
 
@@ -220,7 +256,15 @@ export function PlantillaEditor({
             Vista previa en vivo
             <span className="text-xs font-normal text-muted-foreground">con datos de ejemplo</span>
           </div>
-          <VistaPreviaDestinatarios asunto={asunto} cuerpo={cuerpo} categoria={categoria} pie={pie} destinatarios={EJEMPLOS} />
+          <VistaPreviaDestinatarios
+            asunto={asunto}
+            cuerpo={cuerpo}
+            categoria={categoria}
+            pie={pie}
+            formato={formato}
+            usaMolde={usaMolde}
+            destinatarios={ejemplos}
+          />
         </motion.div>
       </div>
 
@@ -238,7 +282,14 @@ export function PlantillaEditor({
                 Borrar
               </Boton>
             )}
-            {!nueva && plantilla.activa && (
+            {!nueva && modificadaDelOriginal && (
+              <Boton variante="secundario" onClick={() => setRestaurar(true)} disabled={guardando}>
+                <History className="size-4" />
+                <span className="sm:hidden">Original</span>
+                <span className="hidden sm:inline">Restaurar original</span>
+              </Boton>
+            )}
+            {!nueva && plantilla.activa && !plantilla.transaccional && (
               <BotonLink href={`/comunicaciones/envios/nuevo?plantilla=${plantilla.id}`} variante="secundario">
                 <Send className="size-4" />
                 <span className="sm:hidden">Usar</span>
@@ -251,6 +302,20 @@ export function PlantillaEditor({
             {nueva ? "Crear plantilla" : "Guardar cambios"}
           </Boton>
         </motion.div>
+      )}
+
+      {plantilla && (
+        <DialogoAccion
+          open={restaurar}
+          onOpenChange={setRestaurar}
+          icono={History}
+          titulo="Restaurar el original"
+          descripcion="El asunto y el texto vuelven a la versión original del sistema (con el molde del club). Lo que cambiaste se pierde."
+          textoAccion="Restaurar"
+          mensajeOk="Plantilla restaurada"
+          ejecutar={() => restaurarPlantilla(plantilla.id)}
+          alTerminar={() => window.location.reload()}
+        />
       )}
 
       {plantilla && (

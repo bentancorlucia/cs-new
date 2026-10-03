@@ -70,13 +70,13 @@ isOneToOne: false
                   ]
                 },"envios": {
                   Row: {
-                    "aprobado_at": string | null,"aprobado_por": string | null,"asunto": string,"audiencia": Json | null,"categoria": string,"creado_por": string | null,"created_at": string,"cuerpo": string | null,"estado": string,"id": string,"nombre": string,"origen": string,"plantilla_id": string | null,"programado_para": string
+                    "aprobado_at": string | null,"aprobado_por": string | null,"asunto": string,"audiencia": Json | null,"categoria": string,"creado_por": string | null,"created_at": string,"cuerpo": string | null,"estado": string,"formato": string,"id": string,"nombre": string,"origen": string,"plantilla_id": string | null,"programado_para": string,"usa_molde": boolean
                   }
                   Insert: {
-                    "aprobado_at"?: string | null,"aprobado_por"?: string | null,"asunto": string,"audiencia"?: Json | null,"categoria": string,"creado_por"?: string | null,"created_at"?: string,"cuerpo"?: string | null,"estado"?: string,"id"?: string,"nombre": string,"origen"?: string,"plantilla_id"?: string | null,"programado_para"?: string
+                    "aprobado_at"?: string | null,"aprobado_por"?: string | null,"asunto": string,"audiencia"?: Json | null,"categoria": string,"creado_por"?: string | null,"created_at"?: string,"cuerpo"?: string | null,"estado"?: string,"formato"?: string,"id"?: string,"nombre": string,"origen"?: string,"plantilla_id"?: string | null,"programado_para"?: string,"usa_molde"?: boolean
                   }
                   Update: {
-                    "aprobado_at"?: string | null,"aprobado_por"?: string | null,"asunto"?: string,"audiencia"?: Json | null,"categoria"?: string,"creado_por"?: string | null,"created_at"?: string,"cuerpo"?: string | null,"estado"?: string,"id"?: string,"nombre"?: string,"origen"?: string,"plantilla_id"?: string | null,"programado_para"?: string
+                    "aprobado_at"?: string | null,"aprobado_por"?: string | null,"asunto"?: string,"audiencia"?: Json | null,"categoria"?: string,"creado_por"?: string | null,"created_at"?: string,"cuerpo"?: string | null,"estado"?: string,"formato"?: string,"id"?: string,"nombre"?: string,"origen"?: string,"plantilla_id"?: string | null,"programado_para"?: string,"usa_molde"?: boolean
                   }
                   Relationships: [
                     {
@@ -114,13 +114,13 @@ isOneToOne: false
                   ]
                 },"plantillas": {
                   Row: {
-                    "activa": boolean,"asunto": string,"categoria": string,"clave": string,"created_at": string,"cuerpo": string,"id": string,"nombre": string,"sistema": boolean,"updated_at": string,"updated_by": string | null
+                    "activa": boolean,"asunto": string,"asunto_original": string | null,"categoria": string,"clave": string,"created_at": string,"cuerpo": string,"cuerpo_original": string | null,"formato": string,"id": string,"nombre": string,"sistema": boolean,"transaccional": boolean,"updated_at": string,"updated_by": string | null,"usa_molde": boolean
                   }
                   Insert: {
-                    "activa"?: boolean,"asunto": string,"categoria": string,"clave": string,"created_at"?: string,"cuerpo": string,"id"?: string,"nombre": string,"sistema"?: boolean,"updated_at"?: string,"updated_by"?: string | null
+                    "activa"?: boolean,"asunto": string,"asunto_original"?: string | null,"categoria": string,"clave": string,"created_at"?: string,"cuerpo": string,"cuerpo_original"?: string | null,"formato"?: string,"id"?: string,"nombre": string,"sistema"?: boolean,"transaccional"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"usa_molde"?: boolean
                   }
                   Update: {
-                    "activa"?: boolean,"asunto"?: string,"categoria"?: string,"clave"?: string,"created_at"?: string,"cuerpo"?: string,"id"?: string,"nombre"?: string,"sistema"?: boolean,"updated_at"?: string,"updated_by"?: string | null
+                    "activa"?: boolean,"asunto"?: string,"asunto_original"?: string | null,"categoria"?: string,"clave"?: string,"created_at"?: string,"cuerpo"?: string,"cuerpo_original"?: string | null,"formato"?: string,"id"?: string,"nombre"?: string,"sistema"?: boolean,"transaccional"?: boolean,"updated_at"?: string,"updated_by"?: string | null,"usa_molde"?: boolean
                   }
                   Relationships: [
                     
@@ -149,7 +149,7 @@ isOneToOne: false
           Views: {
             "envios_resumen": {
                   Row: {
-                    "aprobado_at": string | null,"aprobado_por": string | null,"asunto": string | null,"audiencia": Json | null,"cancelados": number | null,"categoria": string | null,"creado_por": string | null,"created_at": string | null,"cuerpo": string | null,"enviados": number | null,"enviando": number | null,"estado": string | null,"fallidos": number | null,"id": string | null,"nombre": string | null,"omitidos": number | null,"origen": string | null,"pendientes": number | null,"plantilla_id": string | null,"programado_para": string | null,"total": number | null
+                    "aprobado_at": string | null,"aprobado_por": string | null,"asunto": string | null,"audiencia": Json | null,"cancelados": number | null,"categoria": string | null,"creado_por": string | null,"created_at": string | null,"cuerpo": string | null,"enviados": number | null,"enviando": number | null,"estado": string | null,"fallidos": number | null,"formato": string | null,"id": string | null,"nombre": string | null,"omitidos": number | null,"origen": string | null,"pendientes": number | null,"plantilla_id": string | null,"programado_para": string | null,"total": number | null,"usa_molde": boolean | null
                   }
                   Relationships: [
                     {
@@ -164,7 +164,7 @@ isOneToOne: false
           }
           Functions: {
             "_encolar":
-{ Args: { "p_aprobado": boolean,"p_asunto": string,"p_audiencia"?: Json,"p_categoria": string,"p_cuerpo": string,"p_destinatarios": Json,"p_nombre": string,"p_origen": string,"p_plantilla"?: string,"p_programado_para"?: string }; Returns: string
+{ Args: { "p_aprobado": boolean,"p_asunto": string,"p_audiencia"?: Json,"p_categoria": string,"p_cuerpo": string,"p_destinatarios": Json,"p_formato"?: string,"p_nombre": string,"p_origen": string,"p_plantilla"?: string,"p_programado_para"?: string,"p_usa_molde"?: boolean }; Returns: string
                            },
 "_exigir_gestion":
 { Args: Record<PropertyKey, never>; Returns: undefined
@@ -184,7 +184,7 @@ isOneToOne: false
 { Args: { "p_clave": string,"p_dedupe_prefijo": string,"p_filtro": Json,"p_periodo": string }; Returns: string
                            },
 "crear_envio":
-{ Args: { "p_asunto": string,"p_audiencia"?: Json,"p_categoria": string,"p_cuerpo": string,"p_destinatarios": Json,"p_nombre": string,"p_plantilla"?: string }; Returns: string
+{ Args: { "p_asunto": string,"p_audiencia"?: Json,"p_categoria": string,"p_cuerpo": string,"p_destinatarios": Json,"p_formato"?: string,"p_nombre": string,"p_plantilla"?: string,"p_usa_molde"?: boolean }; Returns: string
                            },
 "encolar_transaccional":
 { Args: { "p_asunto": string,"p_dedupe_key": string,"p_email": string,"p_html": string,"p_nombre": string,"p_perfil"?: string,"p_ref_id"?: string,"p_ref_tipo"?: string,"p_variables"?: Json }; Returns: string

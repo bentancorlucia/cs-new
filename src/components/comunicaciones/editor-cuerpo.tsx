@@ -2,20 +2,42 @@
 
 import { useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, Bold, Braces, Link2, List } from "lucide-react";
+import {
+  AlertTriangle,
+  Bold,
+  Braces,
+  Code2,
+  Eye,
+  FileCode2,
+  Link2,
+  List,
+  ListTree,
+  MousePointerClick,
+  Pilcrow,
+  Type,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { variablesUsadas } from "@/lib/comunicaciones/render";
-import { CLAVES_VARIABLES, VARIABLES } from "@/lib/comunicaciones/esquemas";
+import { analizarVariables, variablesDesconocidas, type Formato } from "@/lib/comunicaciones/render";
+import { VARIABLES } from "@/lib/comunicaciones/esquemas";
+import { Switch } from "@/components/ui/switch";
 import { Campo, claseControl } from "./ui";
 
-/** Variables que no existen en las audiencias (quedarían vacías). */
-export function variablesDesconocidas(...textos: string[]) {
-  return variablesUsadas(textos.join("\n")).filter((v) => !CLAVES_VARIABLES.includes(v));
-}
+export type VariableEditor = { clave: string; etiqueta: string; lista?: boolean };
+
+const BOTON_HTML = `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px auto;">
+  <tr>
+    <td align="center" style="background:#730d32;border-radius:8px;">
+      <a href="https://" target="_blank" style="display:inline-block;padding:12px 32px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;">Texto del botón</a>
+    </td>
+  </tr>
+</table>`;
+
+const PARRAFO_HTML = `<p style="margin:0 0 16px;font-size:14px;color:#1f1f1f;">Texto</p>`;
 
 /**
- * Asunto + cuerpo con formato simple y selector de variables. El selector
- * inserta en el último campo que tuvo el foco.
+ * Asunto + cuerpo con selector de variables. Dos formatos: texto con
+ * formato simple, o HTML (dentro del molde del club o completo). El
+ * selector inserta en el último campo que tuvo el foco.
  */
 export function EditorCuerpo({
   asunto,
@@ -25,6 +47,11 @@ export function EditorCuerpo({
   errorAsunto,
   errorCuerpo,
   deshabilitado,
+  formato = "texto",
+  onFormato,
+  usaMolde = true,
+  onUsaMolde,
+  variables = VARIABLES,
 }: {
   asunto: string;
   cuerpo: string;
@@ -33,11 +60,19 @@ export function EditorCuerpo({
   errorAsunto?: string | null;
   errorCuerpo?: string | null;
   deshabilitado?: boolean;
+  formato?: Formato;
+  /** Sin esto, el formato es fijo. */
+  onFormato?: (f: Formato) => void;
+  usaMolde?: boolean;
+  onUsaMolde?: (v: boolean) => void;
+  variables?: readonly VariableEditor[];
 }) {
   const refAsunto = useRef<HTMLInputElement>(null);
   const refCuerpo = useRef<HTMLTextAreaElement>(null);
   const ultimo = useRef<"asunto" | "cuerpo">("cuerpo");
-  const desconocidas = variablesDesconocidas(asunto, cuerpo);
+  const html = formato === "html";
+  const { error: errorVariables } = analizarVariables(asunto, cuerpo);
+  const desconocidas = errorVariables ? [] : variablesDesconocidas(variables.map((v) => v.clave), asunto, cuerpo);
 
   /** Reemplaza la selección del cuerpo (o inserta en el cursor) y deja el cursor donde corresponde. */
   function editarCuerpo(fn: (sel: string) => { texto: string; cursor?: [number, number] }) {
@@ -58,7 +93,7 @@ export function EditorCuerpo({
   function negrita() {
     editarCuerpo((sel) => {
       const t = sel || "texto en negrita";
-      return { texto: `**${t}**`, cursor: [2, 2 + t.length] };
+      return html ? { texto: `<strong>${t}</strong>`, cursor: [8, 8 + t.length] } : { texto: `**${t}**`, cursor: [2, 2 + t.length] };
     });
   }
 
@@ -66,6 +101,10 @@ export function EditorCuerpo({
     editarCuerpo((sel) => {
       const t = sel || "texto del enlace";
       const url = "https://";
+      if (html) {
+        const pre = `<a href="`;
+        return { texto: `${pre}${url}" style="color:#730d32;font-weight:600;">${t}</a>`, cursor: [pre.length, pre.length + url.length] };
+      }
       return { texto: `[${t}](${url})`, cursor: [t.length + 3, t.length + 3 + url.length] };
     });
   }
@@ -73,29 +112,61 @@ export function EditorCuerpo({
   function lista() {
     editarCuerpo((sel) => {
       const lineas = (sel || "Primer punto\nSegundo punto").split("\n");
+      if (html) {
+        const texto = `<ul style="margin:0 0 16px;padding-left:20px;">\n${lineas.map((l) => `  <li>${l}</li>`).join("\n")}\n</ul>`;
+        return { texto };
+      }
       const texto = lineas.map((l) => (l.startsWith("- ") ? l : `- ${l}`)).join("\n");
       return { texto: `\n${texto}\n`, cursor: [1, 1 + texto.length] };
     });
   }
 
-  function insertarVariable(clave: string) {
-    const v = `{{${clave}}}`;
+  function insertar(texto: string) {
+    editarCuerpo(() => ({ texto }));
+  }
+
+  function siHayDato() {
+    const v = variables.find((x) => !x.clave.includes("."))?.clave ?? "dato";
+    editarCuerpo((sel) => {
+      const adentro = sel || "Esto se muestra solo si hay dato";
+      const ini = `{{#${v}}}`;
+      return { texto: `${ini}${adentro}{{/${v}}}`, cursor: [2, 3 + v.length] };
+    });
+  }
+
+  function insertarVariable(v: VariableEditor) {
+    if (v.lista) {
+      const campos = variables.filter((x) => x.clave.startsWith(`${v.clave}.`)).map((x) => x.clave.split(".")[1]);
+      const fila = campos.map((c) => `{{${c}}}`).join(" — ") || "…";
+      editarCuerpo(() => ({ texto: `{{#${v.clave}}}\n  ${html ? `<p>${fila}</p>` : fila}\n{{/${v.clave}}}` }));
+      return;
+    }
+    const nombre = v.clave.includes(".") ? v.clave.split(".")[1] : v.clave;
+    const t = `{{${nombre}}}`;
     if (ultimo.current === "asunto" && refAsunto.current) {
       const el = refAsunto.current;
       const ini = el.selectionStart ?? asunto.length;
       const fin = el.selectionEnd ?? asunto.length;
-      onAsunto(asunto.slice(0, ini) + v + asunto.slice(fin));
+      onAsunto(asunto.slice(0, ini) + t + asunto.slice(fin));
       requestAnimationFrame(() => {
         el.focus();
-        el.setSelectionRange(ini + v.length, ini + v.length);
+        el.setSelectionRange(ini + t.length, ini + t.length);
       });
     } else {
-      editarCuerpo(() => ({ texto: v }));
+      insertar(t);
     }
+  }
+
+  /** Tab inserta dos espacios en el HTML (en vez de saltar de campo). */
+  function teclas(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (!html || e.key !== "Tab" || e.shiftKey) return;
+    e.preventDefault();
+    insertar("  ");
   }
 
   const herramienta =
     "inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-superficie hover:text-foreground disabled:opacity-50";
+  const errorMostrado = errorCuerpo ?? (errorVariables ? `Revisá las variables: ${errorVariables}` : null);
 
   return (
     <div className="space-y-3">
@@ -113,29 +184,113 @@ export function EditorCuerpo({
         />
       </Campo>
 
+      {onFormato && (
+        <div className="space-y-1.5">
+          <span className="px-0.5 text-[10px] uppercase tracking-editorial text-muted-foreground">Formato</span>
+          <div className="grid grid-cols-2 gap-1 rounded-xl border border-linea bg-superficie/50 p-1">
+            {(
+              [
+                { f: "texto", icono: Type, nombre: "Texto con formato", ayuda: "Negrita, enlaces y listas" },
+                { f: "html", icono: FileCode2, nombre: "HTML", ayuda: "Diseño libre" },
+              ] as const
+            ).map(({ f, icono: Icono, nombre, ayuda }) => (
+              <motion.button
+                key={f}
+                type="button"
+                whileTap={{ scale: 0.97 }}
+                disabled={deshabilitado}
+                onClick={() => onFormato(f)}
+                className={cn(
+                  "relative flex items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors",
+                  formato === f ? "text-bordo-900" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {formato === f && (
+                  <motion.span
+                    layoutId="formato-activo"
+                    className="absolute inset-0 rounded-lg bg-white shadow-sm ring-1 ring-bordo-800/10"
+                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                  />
+                )}
+                <Icono className="relative size-4 shrink-0" />
+                <span className="relative min-w-0">
+                  <span className="block text-sm font-medium">{nombre}</span>
+                  <span className="block truncate text-[11px] opacity-70">{ayuda}</span>
+                </span>
+              </motion.button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <AnimatePresence initial={false}>
+        {html && onUsaMolde && (
+          <motion.label
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="flex items-center justify-between gap-3 overflow-hidden rounded-xl border border-linea px-3 py-2.5"
+          >
+            <span>
+              <span className="block text-sm font-medium">Usar el molde del club</span>
+              <span className="block text-xs text-muted-foreground">
+                {usaMolde
+                  ? "Tu HTML va dentro del encabezado y el pie del club."
+                  : "Tu HTML es el correo completo (con <html> y <body>). En difusión, usá {{enlace_baja}} o se agrega un pie de baja."}
+              </span>
+            </span>
+            <Switch checked={usaMolde} onCheckedChange={onUsaMolde} disabled={deshabilitado} />
+          </motion.label>
+        )}
+      </AnimatePresence>
+
       <div className="space-y-1">
-        <span className="px-0.5 text-[10px] uppercase tracking-editorial text-muted-foreground">Mensaje</span>
+        <span className="px-0.5 text-[10px] uppercase tracking-editorial text-muted-foreground">
+          {html ? "HTML del mensaje" : "Mensaje"}
+        </span>
         <div
           className={cn(
             "overflow-hidden rounded-lg border bg-white transition-all focus-within:border-bordo-700 focus-within:ring-3 focus-within:ring-bordo-800/10",
-            errorCuerpo ? "border-rose-300" : "border-linea hover:border-bordo-200"
+            errorMostrado ? "border-rose-300" : "border-linea hover:border-bordo-200"
           )}
         >
           <div className="flex flex-wrap items-center gap-0.5 border-b border-linea bg-superficie/50 px-1.5 py-1">
-            <motion.button whileTap={{ scale: 0.92 }} type="button" onClick={negrita} disabled={deshabilitado} className={herramienta} title="Negrita">
+            <motion.button whileTap={{ scale: 0.92 }} type="button" onClick={negrita} disabled={deshabilitado} className={herramienta} title="Negrita" aria-label="Negrita">
               <Bold className="size-3.5" />
               <span className="hidden sm:inline">Negrita</span>
             </motion.button>
-            <motion.button whileTap={{ scale: 0.92 }} type="button" onClick={enlace} disabled={deshabilitado} className={herramienta} title="Enlace">
+            <motion.button whileTap={{ scale: 0.92 }} type="button" onClick={enlace} disabled={deshabilitado} className={herramienta} title="Enlace" aria-label="Enlace">
               <Link2 className="size-3.5" />
               <span className="hidden sm:inline">Enlace</span>
             </motion.button>
-            <motion.button whileTap={{ scale: 0.92 }} type="button" onClick={lista} disabled={deshabilitado} className={herramienta} title="Lista">
+            <motion.button whileTap={{ scale: 0.92 }} type="button" onClick={lista} disabled={deshabilitado} className={herramienta} title="Lista" aria-label="Lista">
               <List className="size-3.5" />
               <span className="hidden sm:inline">Lista</span>
             </motion.button>
+            {html && (
+              <>
+                <motion.button whileTap={{ scale: 0.92 }} type="button" onClick={() => insertar(PARRAFO_HTML)} disabled={deshabilitado} className={herramienta} title="Párrafo" aria-label="Párrafo">
+                  <Pilcrow className="size-3.5" />
+                  <span className="hidden sm:inline">Párrafo</span>
+                </motion.button>
+                <motion.button whileTap={{ scale: 0.92 }} type="button" onClick={() => insertar(BOTON_HTML)} disabled={deshabilitado} className={herramienta} title="Botón" aria-label="Botón">
+                  <MousePointerClick className="size-3.5" />
+                  <span className="hidden sm:inline">Botón</span>
+                </motion.button>
+              </>
+            )}
+            <motion.button whileTap={{ scale: 0.92 }} type="button" onClick={siHayDato} disabled={deshabilitado} className={herramienta} title="Mostrar solo si hay dato" aria-label="Mostrar solo si hay dato">
+              <Eye className="size-3.5" />
+              <span className="hidden sm:inline">Si hay dato</span>
+            </motion.button>
             <span className="ml-auto hidden px-2 text-[11px] text-muted-foreground md:inline">
-              Línea en blanco = párrafo nuevo
+              {html ? (
+                <span className="inline-flex items-center gap-1">
+                  <Code2 className="size-3" /> Estilos en línea (style=&quot;…&quot;) para que se vean en todos los correos
+                </span>
+              ) : (
+                "Línea en blanco = párrafo nuevo"
+              )}
             </span>
           </div>
           <textarea
@@ -144,20 +299,25 @@ export function EditorCuerpo({
             disabled={deshabilitado}
             onFocus={() => (ultimo.current = "cuerpo")}
             onChange={(e) => onCuerpo(e.target.value)}
-            rows={12}
-            placeholder={"Hola {{nombre}}:\n\nEscribí acá el mensaje…"}
-            className="block min-h-56 w-full resize-y bg-white px-3 py-2.5 font-mono text-[13px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
+            onKeyDown={teclas}
+            rows={html ? 20 : 12}
+            spellCheck={!html}
+            placeholder={html ? '<h2 style="color:#730d32;">Hola {{nombre}}</h2>\n<p>…</p>' : "Hola {{nombre}}:\n\nEscribí acá el mensaje…"}
+            className={cn(
+              "block w-full resize-y bg-white px-3 py-2.5 font-mono leading-relaxed outline-none placeholder:text-muted-foreground/70",
+              html ? "min-h-96 text-[12px] whitespace-pre" : "min-h-56 text-[13px]"
+            )}
           />
         </div>
         <AnimatePresence initial={false}>
-          {errorCuerpo && (
+          {errorMostrado && (
             <motion.span
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               className="block px-0.5 text-xs text-rose-700"
             >
-              {errorCuerpo}
+              {errorMostrado}
             </motion.span>
           )}
         </AnimatePresence>
@@ -166,10 +326,10 @@ export function EditorCuerpo({
       <div className="space-y-1.5">
         <div className="flex items-center gap-1.5 px-0.5 text-[11px] text-muted-foreground">
           <Braces className="size-3.5" />
-          Insertar dato del destinatario (en el asunto o el mensaje, donde esté el cursor):
+          Insertar un dato (en el asunto o el mensaje, donde esté el cursor):
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {VARIABLES.map((v) => (
+          {variables.map((v) => (
             <motion.button
               key={v.clave}
               type="button"
@@ -177,12 +337,18 @@ export function EditorCuerpo({
               whileTap={{ scale: 0.94 }}
               disabled={deshabilitado}
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => insertarVariable(v.clave)}
-              className="rounded-full border border-bordo-100 bg-bordo-50/60 px-2.5 py-1 font-mono text-[11px] text-bordo-800 transition-colors hover:bg-bordo-100"
-              title={`Ej: ${v.ejemplo}`}
+              onClick={() => insertarVariable(v)}
+              className={cn(
+                "rounded-full border px-2.5 py-1 font-mono text-[11px] transition-colors",
+                v.lista
+                  ? "border-dorado-300 bg-dorado-100/60 text-dorado-900 hover:bg-dorado-100"
+                  : "border-bordo-100 bg-bordo-50/60 text-bordo-800 hover:bg-bordo-100"
+              )}
+              title={"ejemplo" in v ? `Ej: ${(v as { ejemplo?: string }).ejemplo}` : v.etiqueta}
             >
-              {`{{${v.clave}}}`}
-              <span className="ml-1 font-sans text-bordo-800/60">{v.etiqueta}</span>
+              {v.lista ? <ListTree className="mr-1 inline size-3" /> : null}
+              {v.lista ? `{{#${v.clave}}}` : `{{${v.clave.includes(".") ? v.clave.split(".")[1] : v.clave}}}`}
+              <span className="ml-1 font-sans opacity-60">{v.etiqueta}</span>
             </motion.button>
           ))}
         </div>

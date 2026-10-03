@@ -3,14 +3,14 @@
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, UserRound } from "lucide-react";
-import { renderPlantilla, type Variables } from "@/lib/comunicaciones/render";
+import { renderPlantilla, type Formato, type Variables } from "@/lib/comunicaciones/render";
 import { URL_BAJA_EJEMPLO, VARIABLES_EJEMPLO } from "@/lib/comunicaciones/esquemas";
 import { VistaMail } from "./ui";
 
 export type DestinatarioPrevia = {
   email: string;
   nombre: string | null;
-  variables: Record<string, string | number | null>;
+  variables: Record<string, unknown>;
 };
 
 /**
@@ -24,7 +24,11 @@ export function VistaPreviaDestinatarios({
   pie,
   destinatarios,
   alto,
+  formato = "texto",
+  usaMolde = true,
 }: {
+  formato?: Formato;
+  usaMolde?: boolean;
   asunto: string;
   cuerpo: string;
   categoria: string;
@@ -42,11 +46,20 @@ export function VistaPreviaDestinatarios({
     const variables: Variables = actual
       ? { nombre: actual.nombre ?? "", ...actual.variables }
       : { ...VARIABLES_EJEMPLO };
-    return renderPlantilla({ asunto, cuerpo }, variables, {
-      pie,
-      bajaUrl: categoria === "difusion" ? URL_BAJA_EJEMPLO : null,
-    });
-  }, [actual, asunto, cuerpo, categoria, pie]);
+    try {
+      return renderPlantilla({ asunto, cuerpo, formato, usaMolde }, variables, {
+        pie,
+        bajaUrl: categoria === "difusion" ? URL_BAJA_EJEMPLO : null,
+      });
+    } catch {
+      // Mientras se escribe, una sección puede quedar abierta: se avisa en el editor.
+      return {
+        asunto,
+        html: `<p style="font-family:sans-serif;color:#9f1239;padding:24px">La vista previa vuelve cuando las variables estén bien escritas.</p>`,
+        texto: "",
+      };
+    }
+  }, [actual, asunto, cuerpo, categoria, pie, formato, usaMolde]);
 
   function mover(d: number) {
     if (!lista) return;

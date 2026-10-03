@@ -3,14 +3,14 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, ArrowRight, FileText, Lock, Plus, Search, Send, Workflow } from "lucide-react";
+import { AlertTriangle, ArrowRight, FileCode2, FileText, Lock, Plus, Search, Send, ShoppingBag, Workflow } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { easeSmooth } from "@/lib/motion";
 import { formatCorta } from "@/lib/comunicaciones/esquemas";
 import { Aviso, BadgeCategoria, BotonLink, EncabezadoPagina, Filtros, Vacio, claseControl, pill } from "./ui";
 import type { PlantillaFila } from "./tipos";
 
-type Filtro = "activas" | "todas" | "inactivas" | "sistema";
+type Filtro = "activas" | "todas" | "inactivas" | "sistema" | "automaticos";
 
 export function PlantillasLista({
   plantillas,
@@ -32,6 +32,7 @@ export function PlantillasLista({
         if (filtro === "activas" && !p.activa) return false;
         if (filtro === "inactivas" && p.activa) return false;
         if (filtro === "sistema" && !p.sistema) return false;
+        if (filtro === "automaticos" && !p.transaccional) return false;
         return !q || `${p.nombre} ${p.clave} ${p.asunto}`.toLowerCase().includes(q);
       }),
     [plantillas, filtro, q]
@@ -42,7 +43,7 @@ export function PlantillasLista({
       <EncabezadoPagina
         eyebrow="Comunicaciones"
         titulo="Plantillas"
-        descripcion="Textos reutilizables con datos del destinatario. Las del sistema las usan las automatizaciones: se editan, pero no se borran."
+        descripcion="Textos reutilizables con datos del destinatario, en texto con formato o en HTML. Las del sistema (automatizaciones y los mails de la tienda y eventos) se editan y se pueden restaurar, pero no se borran."
       >
         {puedeGestionar && (
           <BotonLink href="/comunicaciones/plantillas/nueva">
@@ -71,6 +72,7 @@ export function PlantillasLista({
           opciones={[
             { valor: "activas", etiqueta: "Activas", cantidad: plantillas.filter((p) => p.activa).length },
             { valor: "inactivas", etiqueta: "Desactivadas", cantidad: plantillas.filter((p) => !p.activa).length },
+            { valor: "automaticos", etiqueta: "Mails de tienda y eventos", cantidad: plantillas.filter((p) => p.transaccional).length },
             { valor: "sistema", etiqueta: "Del sistema", cantidad: plantillas.filter((p) => p.sistema).length },
             { valor: "todas", etiqueta: "Todas", cantidad: plantillas.length },
           ]}
@@ -105,7 +107,19 @@ export function PlantillasLista({
                     </div>
                     <div className="flex shrink-0 flex-wrap justify-end gap-1">
                       <BadgeCategoria categoria={p.categoria} />
-                      {p.sistema && (
+                      {p.formato === "html" && (
+                        <span className={cn(pill, "border-bordo-100 bg-bordo-50/60 text-bordo-800")}>
+                          <FileCode2 className="size-3" />
+                          HTML
+                        </span>
+                      )}
+                      {p.transaccional && (
+                        <span className={cn(pill, "border-dorado-300 bg-dorado-100/60 text-dorado-900")}>
+                          <ShoppingBag className="size-3" />
+                          Automático
+                        </span>
+                      )}
+                      {p.sistema && !p.transaccional && (
                         <span className={cn(pill, "border-linea bg-superficie text-muted-foreground")}>
                           <Lock className="size-3" />
                           Sistema
@@ -115,7 +129,11 @@ export function PlantillasLista({
                     </div>
                   </div>
                   <p className="mt-2 line-clamp-1 text-sm text-foreground/80">{p.asunto}</p>
-                  <p className="mt-1 line-clamp-2 text-xs whitespace-pre-line text-muted-foreground">{p.cuerpo}</p>
+                  <p className="mt-1 line-clamp-2 text-xs whitespace-pre-line text-muted-foreground">
+                    {p.formato === "html"
+                      ? p.cuerpo.replace(/<[^>]+>/g, " ").replace(/\{\{[#/^][^}]*\}\}/g, " ").replace(/\s+/g, " ").trim()
+                      : p.cuerpo}
+                  </p>
                   {usos[p.clave] && (
                     <p className="mt-2 flex items-center gap-1 text-[11px] text-violet-800">
                       <Workflow className="size-3" />
@@ -125,7 +143,7 @@ export function PlantillasLista({
                   <div className="mt-auto flex items-center justify-between gap-2 pt-3">
                     <span className="text-[11px] text-muted-foreground">Editada {formatCorta(p.updated_at)}</span>
                     <div className="flex items-center gap-1">
-                      {puedeGestionar && p.activa && (
+                      {puedeGestionar && p.activa && !p.transaccional && (
                         <Link
                           href={`/comunicaciones/envios/nuevo?plantilla=${p.id}`}
                           className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-bordo-800 transition-colors hover:bg-bordo-50"

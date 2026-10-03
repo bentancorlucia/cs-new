@@ -135,7 +135,9 @@ export const contenidoSchema = z.object({
   plantilla_id: z.string().uuid().nullable().optional(),
   categoria,
   asunto: z.string().trim().min(1, "Falta el asunto").max(300, "El asunto es demasiado largo"),
-  cuerpo: z.string().trim().min(1, "Falta el texto del mensaje").max(50_000, "El mensaje es demasiado largo"),
+  cuerpo: z.string().trim().min(1, "Falta el texto del mensaje").max(200_000, "El mensaje es demasiado largo"),
+  formato: z.enum(["texto", "html"]).default("texto"),
+  usa_molde: z.boolean().default(true),
 });
 export type Contenido = z.input<typeof contenidoSchema>;
 
@@ -160,8 +162,10 @@ export const plantillaSchema = z.object({
   nombre: z.string().trim().min(1, "Falta el nombre").max(120),
   categoria,
   asunto: z.string().trim().min(1, "Falta el asunto").max(300),
-  cuerpo: z.string().trim().min(1, "Falta el texto").max(50_000),
+  cuerpo: z.string().trim().min(1, "Falta el texto").max(200_000),
   activa: z.boolean(),
+  formato: z.enum(["texto", "html"]),
+  usa_molde: z.boolean(),
 });
 export type PlantillaInput = z.input<typeof plantillaSchema>;
 

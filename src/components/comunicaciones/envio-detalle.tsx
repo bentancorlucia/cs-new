@@ -65,6 +65,8 @@ export type EnvioCompleto = {
   categoria: string;
   estado: string;
   origen: string;
+  formato: string;
+  usa_molde: boolean;
   audiencia: unknown;
   programado_para: string;
   aprobado_at: string | null;
@@ -422,6 +424,8 @@ export function EnvioDetalle({
                       cuerpo={envio.cuerpo}
                       categoria={envio.categoria}
                       pie={pie}
+                      formato={envio.formato === "html" ? "html" : "texto"}
+                      usaMolde={envio.usa_molde}
                       destinatarios={muestra}
                     />
                   ) : hayHtml ? (

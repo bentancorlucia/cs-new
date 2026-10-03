@@ -16,7 +16,7 @@ export default async function PlantillaPage({ params }: { params: Promise<{ id: 
     permisosComunicaciones(),
     db
       .from("plantillas")
-      .select("id, clave, nombre, categoria, asunto, cuerpo, sistema, activa, updated_at")
+      .select("id, clave, nombre, categoria, asunto, cuerpo, sistema, activa, updated_at, formato, usa_molde, transaccional, asunto_original, cuerpo_original")
       .eq("id", id)
       .maybeSingle(),
     leerConfig(db),

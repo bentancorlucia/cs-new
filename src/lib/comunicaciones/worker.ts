@@ -5,7 +5,7 @@ import { urlBajaUnClic, urlPaginaBaja } from "./baja";
 import { generarQREntrada } from "@/lib/qr/generate";
 import { generarTicketPDF } from "@/lib/pdf/ticket-pdf";
 
-type Envio = { id: string; asunto: string; cuerpo: string | null; categoria: string };
+type Envio = { id: string; asunto: string; cuerpo: string | null; categoria: string; formato: string; usa_molde: boolean };
 
 /**
  * Vacía la cola: toma tandas (respetando el tope por hora que controla la
@@ -42,7 +42,7 @@ export async function procesarCola({ presupuestoMs = 50_000 } = {}) {
 
       let envio = envios.get(m.envio_id);
       if (!envio) {
-        const { data } = await db.from("envios").select("id, asunto, cuerpo, categoria").eq("id", m.envio_id).single();
+        const { data } = await db.from("envios").select("id, asunto, cuerpo, categoria, formato, usa_molde").eq("id", m.envio_id).single();
         if (!data) continue;
         envio = data;
         envios.set(m.envio_id, data);
@@ -58,7 +58,7 @@ export async function procesarCola({ presupuestoMs = 50_000 } = {}) {
         html = m.html;
       } else {
         const r = renderPlantilla(
-          { asunto: envio.asunto, cuerpo: envio.cuerpo ?? "" },
+          { asunto: envio.asunto, cuerpo: envio.cuerpo ?? "", formato: envio.formato, usaMolde: envio.usa_molde },
           { nombre: m.nombre ?? "", ...(variables as Variables) },
           { pie: cfg.pie, bajaUrl: esDifusion ? urlPaginaBaja(m.id) : null }
         );

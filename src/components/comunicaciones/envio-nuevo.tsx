@@ -36,6 +36,7 @@ import {
 import { aprobarEnvio, crearEnvio, previsualizarAudiencia, type PrevisualizacionAudiencia } from "@/app/(dashboard)/comunicaciones/actions";
 import { Aviso, Boton, Campo, EncabezadoPagina, NumeroAnimado, Panel, claseControl } from "./ui";
 import { EditorCuerpo } from "./editor-cuerpo";
+import type { Formato } from "@/lib/comunicaciones/render";
 import { VistaPreviaDestinatarios } from "./vista-previa";
 import type { PlantillaFila } from "./tipos";
 
@@ -83,6 +84,8 @@ export function EnvioNuevo({
   const [categoria, setCategoria] = useState<Categoria>((inicial?.categoria as Categoria) ?? "difusion");
   const [asunto, setAsunto] = useState(inicial?.asunto ?? "");
   const [cuerpo, setCuerpo] = useState(inicial?.cuerpo ?? "");
+  const [formato, setFormato] = useState<Formato>(inicial?.formato === "html" ? "html" : "texto");
+  const [usaMolde, setUsaMolde] = useState(inicial?.usa_molde ?? true);
   const [nombre, setNombre] = useState("");
   const [intento, setIntento] = useState(false);
 
@@ -145,6 +148,8 @@ export function EnvioNuevo({
     setAsunto(p.asunto);
     setCuerpo(p.cuerpo);
     setCategoria(p.categoria as Categoria);
+    setFormato(p.formato === "html" ? "html" : "texto");
+    setUsaMolde(p.usa_molde);
   }
 
   const errorAsunto = intento && !asunto.trim() ? "Falta el asunto" : null;
@@ -181,7 +186,7 @@ export function EnvioNuevo({
     startCrear(async () => {
       const r = await crearEnvio({
         audiencia,
-        contenido: { nombre: nombre.trim() || undefined, plantilla_id: plantillaId, categoria, asunto, cuerpo },
+        contenido: { nombre: nombre.trim() || undefined, plantilla_id: plantillaId, categoria, asunto, cuerpo, formato, usa_molde: usaMolde },
       });
       if (!r.ok) {
         toast.error(r.error);
@@ -479,6 +484,10 @@ export function EnvioNuevo({
                       onCuerpo={setCuerpo}
                       errorAsunto={errorAsunto}
                       errorCuerpo={errorCuerpo}
+                      formato={formato}
+                      onFormato={setFormato}
+                      usaMolde={usaMolde}
+                      onUsaMolde={setUsaMolde}
                     />
                   </div>
                 </Panel>
@@ -496,6 +505,8 @@ export function EnvioNuevo({
                       cuerpo={cuerpo}
                       categoria={categoria}
                       pie={pie}
+                      formato={formato}
+                      usaMolde={usaMolde}
                       destinatarios={prev?.muestra ?? []}
                     />
                   </div>

@@ -18,8 +18,9 @@ export default async function NuevoEnvioPage({ searchParams }: { searchParams: P
     searchParams,
     db
       .from("plantillas")
-      .select("id, clave, nombre, categoria, asunto, cuerpo, sistema, activa, updated_at")
+      .select("id, clave, nombre, categoria, asunto, cuerpo, sistema, activa, updated_at, formato, usa_molde, transaccional, asunto_original, cuerpo_original")
       .eq("activa", true)
+      .eq("transaccional", false)
       .order("nombre"),
     publico.from("disciplinas").select("id, nombre").eq("activa", true).order("nombre"),
     leerConfig(db),

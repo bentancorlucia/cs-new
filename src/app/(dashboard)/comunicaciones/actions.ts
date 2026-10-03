@@ -9,7 +9,7 @@ import {
   permisosComunicaciones,
   type ComunicacionesClient,
 } from "@/lib/comunicaciones/server";
-import { renderPlantilla, type Variables } from "@/lib/comunicaciones/render";
+import { analizarVariables, renderPlantilla, type Variables } from "@/lib/comunicaciones/render";
 import { procesarCola } from "@/lib/comunicaciones/worker";
 import { smtpConfigurado } from "@/lib/comunicaciones/smtp";
 import { correrAutomatizacion, planCorrida } from "@/lib/comunicaciones/automatizaciones";
@@ -173,6 +173,8 @@ export async function crearEnvio(input: { audiencia: Audiencia; contenido: Conte
         variables: d.variables,
       })) as Json,
       p_plantilla: (contenido.plantilla_id ?? null) as string,
+      p_formato: contenido.formato,
+      p_usa_molde: contenido.usa_molde,
       p_audiencia: (audiencia.tipo === "socios"
         ? { tipo: "socios", filtro }
         : { tipo: "lista", cantidad: destinatarios.length }) as Json,
@@ -269,7 +271,7 @@ export async function enviarPrueba(
     if (!user?.email) return { ok: false, error: "Tu usuario no tiene correo" };
     const db = await createComunicacionesClient();
     const [{ data: envio, error: e1 }, { data: muestra }] = await Promise.all([
-      db.from("envios").select("id, nombre, categoria, asunto, cuerpo, plantilla_id").eq("id", id).maybeSingle(),
+      db.from("envios").select("id, nombre, categoria, asunto, cuerpo, plantilla_id, formato, usa_molde").eq("id", id).maybeSingle(),
       db.from("mensajes").select("nombre, variables").eq("envio_id", id).is("html", null).order("created_at").limit(1),
     ]);
     if (e1) return { ok: false, error: errorBase(e1) };
@@ -286,6 +288,8 @@ export async function enviarPrueba(
       ] as Json,
       p_plantilla: (envio.plantilla_id ?? null) as string,
       p_audiencia: { tipo: "prueba", envio: id } as Json,
+      p_formato: envio.formato,
+      p_usa_molde: envio.usa_molde,
     });
     if (error || !nuevo) return { ok: false, error: errorBase(error ?? {}) };
     const { error: e2 } = await db.rpc("aprobar_envio", { p_envio: nuevo as string });
@@ -321,18 +325,23 @@ export async function leerMensaje(id: string): Promise<Resultado<{ asunto: strin
     const db = await createComunicacionesClient();
     const { data: m, error } = await db
       .from("mensajes")
-      .select("id, nombre, categoria, variables, html, envios(asunto, cuerpo)")
+      .select("id, nombre, categoria, variables, html, envios(asunto, cuerpo, formato, usa_molde)")
       .eq("id", id)
       .maybeSingle();
     if (error) return { ok: false, error: errorBase(error) };
     if (!m) return { ok: false, error: "El mensaje no existe" };
-    const envio = m.envios as unknown as { asunto: string; cuerpo: string | null } | null;
+    const envio = m.envios as unknown as {
+      asunto: string;
+      cuerpo: string | null;
+      formato: string;
+      usa_molde: boolean;
+    } | null;
     if (m.html) return { ok: true, data: { asunto: envio?.asunto ?? "", html: m.html } };
     const { data: cfg } = await db.from("config").select("pie").maybeSingle();
     const { adjunto: _a, ...variables } = (m.variables ?? {}) as Record<string, unknown>;
     void _a;
     const r = renderPlantilla(
-      { asunto: envio?.asunto ?? "", cuerpo: envio?.cuerpo ?? "" },
+      { asunto: envio?.asunto ?? "", cuerpo: envio?.cuerpo ?? "", formato: envio?.formato, usaMolde: envio?.usa_molde },
       { nombre: m.nombre ?? "", ...(variables as Variables) },
       { pie: cfg?.pie, bajaUrl: m.categoria === "difusion" ? URL_BAJA_EJEMPLO : null }
     );
@@ -355,21 +364,65 @@ export async function guardarPlantilla(input: PlantillaInput, id?: string): Prom
     const db = await createComunicacionesClient();
     if (id) {
       if (!esUuid(id)) return { ok: false, error: "Plantilla inválida" };
-      const { data: actual } = await db.from("plantillas").select("clave, sistema").eq("id", id).maybeSingle();
+      const { data: actual } = await db
+        .from("plantillas")
+        .select("clave, sistema, transaccional")
+        .eq("id", id)
+        .maybeSingle();
       if (!actual) return { ok: false, error: "La plantilla no existe" };
       if (actual.sistema && actual.clave !== p.clave) {
         return { ok: false, error: "Las plantillas del sistema no cambian de clave" };
       }
-      const { data: filas, error } = await db.from("plantillas").update(p).eq("id", id).select("id");
+      // Los mails automáticos de tienda y eventos: siempre activos, institucionales y en HTML.
+      const cambios = actual.transaccional
+        ? { nombre: p.nombre, asunto: p.asunto, cuerpo: p.cuerpo, usa_molde: p.usa_molde }
+        : p;
+      const error0 = validarPlantilla(p);
+      if (error0) return { ok: false, error: error0 };
+      const { data: filas, error } = await db.from("plantillas").update(cambios).eq("id", id).select("id");
       if (error) return { ok: false, error: errorBase(error) };
       if (!filas?.length) return { ok: false, error: "No tenés permiso para editar plantillas" };
       revalidar();
       return { ok: true, data: id };
     }
+    const error0 = validarPlantilla(p);
+    if (error0) return { ok: false, error: error0 };
     const { data, error } = await db.from("plantillas").insert(p).select("id").single();
     if (error) return { ok: false, error: errorBase(error) };
     revalidar();
     return { ok: true, data: data.id };
+  } catch (e) {
+    return fallo(e);
+  }
+}
+
+/** Que las variables estén bien escritas (una sección sin cerrar rompería el mail). */
+function validarPlantilla(p: { asunto: string; cuerpo: string }) {
+  const { error } = analizarVariables(p.asunto, p.cuerpo);
+  return error ? `Revisá las variables: ${error}` : null;
+}
+
+/** Vuelve una plantilla del sistema a su versión original. */
+export async function restaurarPlantilla(id: string): Promise<Resultado> {
+  try {
+    await exigirGestionComunicaciones();
+    if (!esUuid(id)) return { ok: false, error: "Plantilla inválida" };
+    const db = await createComunicacionesClient();
+    const { data: p } = await db
+      .from("plantillas")
+      .select("asunto_original, cuerpo_original")
+      .eq("id", id)
+      .maybeSingle();
+    if (!p?.asunto_original || !p.cuerpo_original) return { ok: false, error: "Esta plantilla no tiene versión original" };
+    const { data: filas, error } = await db
+      .from("plantillas")
+      .update({ asunto: p.asunto_original, cuerpo: p.cuerpo_original, usa_molde: true })
+      .eq("id", id)
+      .select("id");
+    if (error) return { ok: false, error: errorBase(error) };
+    if (!filas?.length) return { ok: false, error: "No tenés permiso para editar plantillas" };
+    revalidar();
+    return { ok: true, data: undefined };
   } catch (e) {
     return fallo(e);
   }

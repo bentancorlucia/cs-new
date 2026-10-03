@@ -1,7 +1,7 @@
 -- Comunicaciones: cola, omisiones, tope por hora, reintentos, bajas y
 -- automatizaciones.
 BEGIN;
-SELECT plan(27);
+SELECT plan(33);
 
 CREATE FUNCTION pg_temp.estado(p_envio uuid, p_email text) RETURNS text LANGUAGE sql AS $$
   SELECT estado FROM comunicaciones.mensajes WHERE envio_id = p_envio AND email = p_email
@@ -90,6 +90,21 @@ UPDATE comunicaciones.automatizaciones SET activa = true WHERE clave = 'cumplean
 SELECT is(comunicaciones.correr_automatizacion('cumpleanos', '2026-01-01', '{"cumple_hoy": true, "vigentes": false, "alta_desde": "2099-01-01"}', 'c'),
           NULL, 'sin destinatarios no corre');
 SELECT is((SELECT count(*) FROM comunicaciones.corridas WHERE clave = 'cumpleanos'), 0::bigint, 'y no queda registrada');
+
+-- Plantillas en HTML y mails automáticos
+SELECT is((SELECT count(*) FROM comunicaciones.plantillas WHERE transaccional), 6::bigint, 'seis mails automáticos editables');
+SELECT throws_like($$ UPDATE comunicaciones.plantillas SET activa = false WHERE clave = 'pedido_listo' $$,
+                   '%solo cambian de asunto%', 'un mail automático no se desactiva');
+SELECT throws_like($$ UPDATE comunicaciones.plantillas SET cuerpo_original = 'x' WHERE clave = 'pedido_listo' $$,
+                   '%solo cambian de asunto%', 'ni se le cambia el original');
+SELECT lives_ok($$ UPDATE comunicaciones.plantillas SET cuerpo = '<p>Hola {{nombre}}</p>', usa_molde = false WHERE clave = 'pedido_listo' $$,
+                'se edita el HTML');
+CREATE TEMP TABLE e_html AS SELECT comunicaciones.crear_envio('Prueba HTML', 'difusion', 'Hola', '<h1>Hola</h1>',
+  '[{"email": "html@example.com"}]', NULL, NULL, 'html', false) AS id;
+SELECT is((SELECT formato || '/' || usa_molde::text FROM comunicaciones.envios WHERE id = (SELECT id FROM e_html)),
+          'html/false', 'el envío guarda formato y molde');
+SELECT throws_like($$ SELECT comunicaciones.crear_envio('X', 'difusion', 'Hola', 'x', '[]', NULL, NULL, 'pdf') $$,
+                   '%Formato inválido%', 'solo texto o html');
 
 SELECT * FROM finish();
 ROLLBACK;

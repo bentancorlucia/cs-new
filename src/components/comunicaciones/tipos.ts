@@ -28,6 +28,11 @@ export type PlantillaFila = {
   sistema: boolean;
   activa: boolean;
   updated_at: string;
+  formato: string;
+  usa_molde: boolean;
+  transaccional: boolean;
+  asunto_original: string | null;
+  cuerpo_original: string | null;
 };
 
 export type MensajeFila = {
