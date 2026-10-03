@@ -138,9 +138,6 @@ export function orderReadyHtml(data: OrderReadyData) {
         <strong>Horario:</strong> Martes, Jueves y Viernes de 12:30 a 15:30 hs
       </p>
     </div>
-    <p style="margin:0 0 16px;font-size:13px;color:${COLORS.textoSecundario};">
-      ¿Necesitás envío? Contactanos al <a href="https://wa.me/59891498409" style="color:${COLORS.bordo};text-decoration:none;font-weight:600;">+598 91 965 438</a>.
-    </p>
     ${data.pedidoUrl ? button("Ver detalles del pedido", data.pedidoUrl) : ""}
   `);
 }

@@ -116,8 +116,7 @@ export const MOLDE_ORIGINAL = `<!DOCTYPE html>
               <p style="margin:0 0 10px 0; color:#730D32; font-weight:700;">Club Seminario, desde 2010</p>
               <p style="margin:0 0 10px 0;">
                 Soriano 1472, Montevideo<br>
-                <a href="mailto:secretaria@clubseminario.com.uy" style="color:#94918B; text-decoration:underline;">secretaria@clubseminario.com.uy</a><br>
-                <a href="tel:+59891965438" style="color:#94918B; text-decoration:none;">+598 91 965 438</a>
+                <a href="mailto:secretaria@clubseminario.com.uy" style="color:#94918B; text-decoration:underline;">secretaria@clubseminario.com.uy</a>
               </p>
               <p style="margin:0 0 14px 0;">
                 <a href="https://www.clubseminario.com.uy" style="color:#730D32; font-weight:700; text-decoration:none;">clubseminario.com.uy</a>
