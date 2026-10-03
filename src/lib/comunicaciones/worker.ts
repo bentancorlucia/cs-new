@@ -1,11 +1,20 @@
 import { createComunicacionesAdminClient } from "./server";
 import { renderPlantilla, type Variables } from "./render";
+import type { Encabezado } from "./molde";
 import { enviarCorreo, smtpConfigurado } from "./smtp";
 import { urlBajaUnClic, urlPaginaBaja } from "./baja";
 import { generarQREntrada } from "@/lib/qr/generate";
 import { generarTicketPDF } from "@/lib/pdf/ticket-pdf";
 
-type Envio = { id: string; asunto: string; cuerpo: string | null; categoria: string; formato: string; usa_molde: boolean };
+type Envio = {
+  id: string;
+  asunto: string;
+  cuerpo: string | null;
+  categoria: string;
+  formato: string;
+  usa_molde: boolean;
+  encabezado: unknown;
+};
 
 /**
  * Vacía la cola: toma tandas (respetando el tope por hora que controla la
@@ -42,7 +51,7 @@ export async function procesarCola({ presupuestoMs = 50_000 } = {}) {
 
       let envio = envios.get(m.envio_id);
       if (!envio) {
-        const { data } = await db.from("envios").select("id, asunto, cuerpo, categoria, formato, usa_molde").eq("id", m.envio_id).single();
+        const { data } = await db.from("envios").select("id, asunto, cuerpo, categoria, formato, usa_molde, encabezado").eq("id", m.envio_id).single();
         if (!data) continue;
         envio = data;
         envios.set(m.envio_id, data);
@@ -58,9 +67,15 @@ export async function procesarCola({ presupuestoMs = 50_000 } = {}) {
         html = m.html;
       } else {
         const r = renderPlantilla(
-          { asunto: envio.asunto, cuerpo: envio.cuerpo ?? "", formato: envio.formato, usaMolde: envio.usa_molde },
+          {
+            asunto: envio.asunto,
+            cuerpo: envio.cuerpo ?? "",
+            formato: envio.formato,
+            usaMolde: envio.usa_molde,
+            encabezado: envio.encabezado as Encabezado,
+          },
           { nombre: m.nombre ?? "", ...(variables as Variables) },
-          { pie: cfg.pie, bajaUrl: esDifusion ? urlPaginaBaja(m.id) : null }
+          { pie: cfg.pie, bajaUrl: esDifusion ? urlPaginaBaja(m.id) : null, moldeHtml: cfg.molde_html }
         );
         asunto = r.asunto;
         html = r.html;

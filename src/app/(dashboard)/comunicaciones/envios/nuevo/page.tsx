@@ -18,7 +18,7 @@ export default async function NuevoEnvioPage({ searchParams }: { searchParams: P
     searchParams,
     db
       .from("plantillas")
-      .select("id, clave, nombre, categoria, asunto, cuerpo, sistema, activa, updated_at, formato, usa_molde, transaccional, asunto_original, cuerpo_original")
+      .select("id, clave, nombre, categoria, asunto, cuerpo, sistema, activa, updated_at, formato, usa_molde, transaccional, asunto_original, cuerpo_original, encabezado, encabezado_original")
       .eq("activa", true)
       .eq("transaccional", false)
       .order("nombre"),
@@ -30,6 +30,7 @@ export default async function NuevoEnvioPage({ searchParams }: { searchParams: P
       plantillas={(plantillas ?? []) as PlantillaFila[]}
       disciplinas={disciplinas ?? []}
       pie={config?.pie ?? null}
+      moldeHtml={config?.molde_html ?? null}
       plantillaInicial={plantilla ?? null}
     />
   );

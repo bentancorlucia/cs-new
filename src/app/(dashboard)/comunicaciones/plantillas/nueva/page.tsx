@@ -11,5 +11,6 @@ export default async function NuevaPlantillaPage() {
   const { puedeGestionar } = await permisosComunicaciones();
   if (!puedeGestionar) redirect("/comunicaciones/plantillas");
   const config = await leerConfig(await createComunicacionesClient());
-  return <PlantillaEditor plantilla={null} pie={config?.pie ?? null} puedeGestionar usos={[]} />;
+  return <PlantillaEditor plantilla={null} pie={config?.pie ?? null}
+      moldeHtml={config?.molde_html ?? null} puedeGestionar usos={[]} />;
 }

@@ -16,7 +16,7 @@ export default async function PlantillaPage({ params }: { params: Promise<{ id: 
     permisosComunicaciones(),
     db
       .from("plantillas")
-      .select("id, clave, nombre, categoria, asunto, cuerpo, sistema, activa, updated_at, formato, usa_molde, transaccional, asunto_original, cuerpo_original")
+      .select("id, clave, nombre, categoria, asunto, cuerpo, sistema, activa, updated_at, formato, usa_molde, transaccional, asunto_original, cuerpo_original, encabezado, encabezado_original")
       .eq("id", id)
       .maybeSingle(),
     leerConfig(db),
@@ -27,6 +27,7 @@ export default async function PlantillaPage({ params }: { params: Promise<{ id: 
     <PlantillaEditor
       plantilla={data as PlantillaFila}
       pie={config?.pie ?? null}
+      moldeHtml={config?.molde_html ?? null}
       puedeGestionar={permisos.puedeGestionar}
       usos={(autos ?? []).map((a) => a.nombre)}
     />

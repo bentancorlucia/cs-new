@@ -130,6 +130,19 @@ export const audienciaSchema = z.discriminatedUnion("tipo", [
 ]);
 export type Audiencia = z.input<typeof audienciaSchema>;
 
+const textoEncabezado = z.string().trim().max(300).nullish();
+
+/** Título, subtítulo, vista previa y firma del molde (vacío = no se muestra). */
+export const encabezadoSchema = z
+  .object({
+    titulo: textoEncabezado,
+    subtitulo: textoEncabezado,
+    preencabezado: textoEncabezado,
+    firma: textoEncabezado,
+  })
+  .default({});
+export type EncabezadoInput = z.input<typeof encabezadoSchema>;
+
 export const contenidoSchema = z.object({
   nombre: z.string().trim().max(200).optional(),
   plantilla_id: z.string().uuid().nullable().optional(),
@@ -138,6 +151,7 @@ export const contenidoSchema = z.object({
   cuerpo: z.string().trim().min(1, "Falta el texto del mensaje").max(200_000, "El mensaje es demasiado largo"),
   formato: z.enum(["texto", "html"]).default("texto"),
   usa_molde: z.boolean().default(true),
+  encabezado: encabezadoSchema,
 });
 export type Contenido = z.input<typeof contenidoSchema>;
 
@@ -166,6 +180,7 @@ export const plantillaSchema = z.object({
   activa: z.boolean(),
   formato: z.enum(["texto", "html"]),
   usa_molde: z.boolean(),
+  encabezado: encabezadoSchema,
 });
 export type PlantillaInput = z.input<typeof plantillaSchema>;
 
@@ -194,6 +209,13 @@ export const configSchema = z.object({
     .trim()
     .max(1000)
     .transform((v) => v || null),
+  /** Sin el campo: no se toca. Vacío: vuelve al molde original del código. */
+  molde_html: z
+    .string()
+    .trim()
+    .max(200_000)
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v || null)),
 });
 export type ConfigInput = z.input<typeof configSchema>;
 

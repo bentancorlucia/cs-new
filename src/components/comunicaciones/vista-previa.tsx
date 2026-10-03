@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, UserRound } from "lucide-react";
 import { renderPlantilla, type Formato, type Variables } from "@/lib/comunicaciones/render";
+import type { Encabezado } from "@/lib/comunicaciones/molde";
 import { URL_BAJA_EJEMPLO, VARIABLES_EJEMPLO } from "@/lib/comunicaciones/esquemas";
 import { VistaMail } from "./ui";
 
@@ -26,9 +27,13 @@ export function VistaPreviaDestinatarios({
   alto,
   formato = "texto",
   usaMolde = true,
+  encabezado,
+  moldeHtml,
 }: {
   formato?: Formato;
   usaMolde?: boolean;
+  encabezado?: Encabezado | null;
+  moldeHtml?: string | null;
   asunto: string;
   cuerpo: string;
   categoria: string;
@@ -47,8 +52,9 @@ export function VistaPreviaDestinatarios({
       ? { nombre: actual.nombre ?? "", ...actual.variables }
       : { ...VARIABLES_EJEMPLO };
     try {
-      return renderPlantilla({ asunto, cuerpo, formato, usaMolde }, variables, {
+      return renderPlantilla({ asunto, cuerpo, formato, usaMolde, encabezado }, variables, {
         pie,
+        moldeHtml,
         bajaUrl: categoria === "difusion" ? URL_BAJA_EJEMPLO : null,
       });
     } catch {
@@ -59,7 +65,7 @@ export function VistaPreviaDestinatarios({
         texto: "",
       };
     }
-  }, [actual, asunto, cuerpo, categoria, pie, formato, usaMolde]);
+  }, [actual, asunto, cuerpo, categoria, pie, formato, usaMolde, encabezado, moldeHtml]);
 
   function mover(d: number) {
     if (!lista) return;

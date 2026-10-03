@@ -3,6 +3,7 @@ import { createComunicacionesAdminClient } from "../comunicaciones/server";
 import { procesarCola } from "../comunicaciones/worker";
 import { renderPlantilla } from "../comunicaciones/render";
 import { pesos } from "../comunicaciones/transaccionales";
+import type { Encabezado } from "../comunicaciones/molde";
 import {
   orderConfirmationHtml,
   orderReadyHtml,
@@ -50,14 +51,20 @@ async function armar(
   try {
     const db = createComunicacionesAdminClient();
     const [{ data: p }, { data: cfg }] = await Promise.all([
-      db.from("plantillas").select("asunto, cuerpo, formato, usa_molde").eq("clave", clave).eq("transaccional", true).maybeSingle(),
-      db.from("config").select("pie").maybeSingle(),
+      db.from("plantillas").select("asunto, cuerpo, formato, usa_molde, encabezado").eq("clave", clave).eq("transaccional", true).maybeSingle(),
+      db.from("config").select("pie, molde_html").maybeSingle(),
     ]);
     if (!p) return respaldo;
     const r = renderPlantilla(
-      { asunto: p.asunto, cuerpo: p.cuerpo, formato: p.formato, usaMolde: p.usa_molde },
+      {
+        asunto: p.asunto,
+        cuerpo: p.cuerpo,
+        formato: p.formato,
+        usaMolde: p.usa_molde,
+        encabezado: p.encabezado as Encabezado,
+      },
       variables,
-      { pie: cfg?.pie ?? null }
+      { pie: cfg?.pie ?? null, moldeHtml: cfg?.molde_html ?? null }
     );
     if (!r.asunto.trim() || !r.html.trim()) return respaldo;
     return { asunto: r.asunto, html: r.html };

@@ -12,11 +12,17 @@ import { CATEGORIAS, REGEX_CLAVE, VARIABLES, type Categoria } from "@/lib/comuni
 import { eliminarPlantilla, guardarPlantilla, restaurarPlantilla } from "@/app/(dashboard)/comunicaciones/actions";
 import { transaccional as datosTransaccional } from "@/lib/comunicaciones/transaccionales";
 import type { Formato } from "@/lib/comunicaciones/render";
+import type { Encabezado } from "@/lib/comunicaciones/molde";
 import { Switch } from "@/components/ui/switch";
 import { Aviso, Boton, BotonLink, Campo, DialogoAccion, EncabezadoPagina, Panel, claseControl } from "./ui";
 import { EditorCuerpo } from "./editor-cuerpo";
 import { VistaPreviaDestinatarios } from "./vista-previa";
 import type { PlantillaFila } from "./tipos";
+
+/** Sin los campos vacíos (para comparar y guardar). */
+function limpiarEnc(e: Encabezado): Encabezado {
+  return Object.fromEntries(Object.entries(e).filter(([, v]) => typeof v === "string" && v.trim())) as Encabezado;
+}
 
 /** De "Aviso de torneo" → "aviso_de_torneo". */
 function claveDesde(nombre: string) {
@@ -48,11 +54,13 @@ const EJEMPLOS = [
 export function PlantillaEditor({
   plantilla,
   pie,
+  moldeHtml,
   puedeGestionar,
   usos,
 }: {
   plantilla: PlantillaFila | null;
   pie: string | null;
+  moldeHtml?: string | null;
   puedeGestionar: boolean;
   usos: string[];
 }) {
@@ -67,6 +75,8 @@ export function PlantillaEditor({
   const [activa, setActiva] = useState(plantilla?.activa ?? true);
   const [formato, setFormato] = useState<Formato>(plantilla?.formato === "html" ? "html" : "texto");
   const [usaMolde, setUsaMolde] = useState(plantilla?.usa_molde ?? true);
+  const encInicial = (plantilla?.encabezado ?? {}) as Encabezado;
+  const [encabezado, setEncabezado] = useState<Encabezado>(encInicial);
   const [restaurar, setRestaurar] = useState(false);
   // Mails automáticos de la tienda y eventos: sus propias variables y datos de ejemplo.
   const auto = plantilla?.transaccional ? datosTransaccional(plantilla.clave) : null;
@@ -99,10 +109,14 @@ export function PlantillaEditor({
     cuerpo !== plantilla.cuerpo ||
     activa !== plantilla.activa ||
     formato !== (plantilla.formato === "html" ? "html" : "texto") ||
-    usaMolde !== plantilla.usa_molde;
+    usaMolde !== plantilla.usa_molde ||
+    JSON.stringify(limpiarEnc(encabezado)) !== JSON.stringify(limpiarEnc(encInicial));
   const modificadaDelOriginal =
     !!plantilla?.cuerpo_original &&
-    (plantilla.cuerpo !== plantilla.cuerpo_original || plantilla.asunto !== plantilla.asunto_original || !plantilla.usa_molde);
+    (plantilla.cuerpo !== plantilla.cuerpo_original ||
+      plantilla.asunto !== plantilla.asunto_original ||
+      !plantilla.usa_molde ||
+      JSON.stringify(limpiarEnc(encInicial)) !== JSON.stringify(limpiarEnc((plantilla.encabezado_original ?? {}) as Encabezado)));
 
   function guardar() {
     setIntento(true);
@@ -112,7 +126,17 @@ export function PlantillaEditor({
     }
     start(async () => {
       const r = await guardarPlantilla(
-        { clave: claveEfectiva, nombre, categoria, asunto, cuerpo, activa, formato, usa_molde: usaMolde },
+        {
+          clave: claveEfectiva,
+          nombre,
+          categoria,
+          asunto,
+          cuerpo,
+          activa,
+          formato,
+          usa_molde: usaMolde,
+          encabezado: limpiarEnc(encabezado),
+        },
         plantilla?.id
       );
       if (!r.ok) {
@@ -231,6 +255,8 @@ export function PlantillaEditor({
               usaMolde={usaMolde}
               onUsaMolde={setUsaMolde}
               variables={auto ? auto.variables : undefined}
+              encabezado={encabezado}
+              onEncabezado={setEncabezado}
             />
 
             {!auto && (
@@ -261,8 +287,10 @@ export function PlantillaEditor({
             cuerpo={cuerpo}
             categoria={categoria}
             pie={pie}
+            moldeHtml={moldeHtml}
             formato={formato}
             usaMolde={usaMolde}
+            encabezado={encabezado}
             destinatarios={ejemplos}
           />
         </motion.div>

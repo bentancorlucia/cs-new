@@ -33,6 +33,8 @@ export type PlantillaFila = {
   transaccional: boolean;
   asunto_original: string | null;
   cuerpo_original: string | null;
+  encabezado: unknown;
+  encabezado_original: unknown;
 };
 
 export type MensajeFila = {
@@ -58,6 +60,7 @@ export type ConfigComunicaciones = {
   limite_por_hora: number;
   limite_por_tanda: number;
   pie: string | null;
+  molde_html: string | null;
   whatsapp_tienda: string | null;
   whatsapp_mensajes: Record<string, string>;
   updated_at: string;

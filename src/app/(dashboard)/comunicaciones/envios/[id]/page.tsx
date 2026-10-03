@@ -46,6 +46,7 @@ export default async function EnvioPage({ params }: { params: Promise<{ id: stri
       mensajes={filas}
       limite={LIMITE}
       pie={config?.pie ?? null}
+      moldeHtml={config?.molde_html ?? null}
       plantilla={plantilla}
       corrida={corrida}
       puedeGestionar={permisos.puedeGestionar}

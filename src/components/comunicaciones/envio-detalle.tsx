@@ -54,6 +54,7 @@ import {
   conteoDe,
 } from "./ui";
 import { VistaPreviaDestinatarios } from "./vista-previa";
+import type { Encabezado } from "@/lib/comunicaciones/molde";
 import { MensajeDialogo, type MensajeResumen } from "./mensaje-dialogo";
 import type { MensajeFila } from "./tipos";
 
@@ -67,6 +68,7 @@ export type EnvioCompleto = {
   origen: string;
   formato: string;
   usa_molde: boolean;
+  encabezado: unknown;
   audiencia: unknown;
   programado_para: string;
   aprobado_at: string | null;
@@ -115,6 +117,7 @@ export function EnvioDetalle({
   mensajes,
   limite,
   pie,
+  moldeHtml,
   plantilla,
   corrida,
   puedeGestionar,
@@ -124,6 +127,7 @@ export function EnvioDetalle({
   mensajes: MensajeFila[];
   limite: number;
   pie: string | null;
+  moldeHtml?: string | null;
   plantilla: { id: string; nombre: string } | null;
   corrida: { clave: string; periodo: string } | null;
   puedeGestionar: boolean;
@@ -424,8 +428,10 @@ export function EnvioDetalle({
                       cuerpo={envio.cuerpo}
                       categoria={envio.categoria}
                       pie={pie}
+            moldeHtml={moldeHtml}
                       formato={envio.formato === "html" ? "html" : "texto"}
                       usaMolde={envio.usa_molde}
+                      encabezado={envio.encabezado as Encabezado}
                       destinatarios={muestra}
                     />
                   ) : hayHtml ? (

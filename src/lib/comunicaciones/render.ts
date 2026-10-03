@@ -1,5 +1,6 @@
 import Mustache from "mustache";
 import { Marked } from "marked";
+import { MOLDE_ORIGINAL, partirFirma, type Encabezado } from "./molde";
 
 /**
  * Arma un mail a partir de una plantilla. Dos formatos:
@@ -14,9 +15,6 @@ import { Marked } from "marked";
  */
 
 const BORDO = "#730d32";
-const AMARILLO = "#f7b643";
-const FONDO = "#faf8f5";
-const TEXTO = "#1f1f1f";
 const SECUNDARIO = "#6b7280";
 
 export type Formato = "texto" | "html";
@@ -28,6 +26,9 @@ const marked = new Marked({
   renderer: {
     // Sin HTML crudo en las plantillas de texto.
     html: () => "",
+    paragraph({ tokens }) {
+      return `<p style="margin:0 0 18px 0;">${this.parser.parseInline(tokens)}</p>\n`;
+    },
     link({ href, tokens }) {
       const texto = this.parser.parseInline(tokens);
       const seguro = /^(https?:|mailto:|tel:)/i.test(href) ? href : "#";
@@ -147,29 +148,42 @@ function pieBaja(bajaUrl: string) {
   return `<p style="margin:0">Si no querés recibir más estos correos, <a href="${escaparAtributo(bajaUrl)}" style="color:${SECUNDARIO}">date de baja acá</a>.</p>`;
 }
 
-export function molde(contenidoHtml: string, opciones: { pie?: string | null; bajaUrl?: string | null } = {}) {
-  const pie = opciones.pie ? `<p style="margin:0 0 8px">${escaparHtml(opciones.pie)}</p>` : "";
-  const baja = opciones.bajaUrl ? pieBaja(opciones.bajaUrl) : "";
-  return `<!doctype html>
-<html lang="es">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:${FONDO};font-family:Helvetica,Arial,sans-serif;color:${TEXTO}">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${FONDO}">
-    <tr><td align="center" style="padding:24px 12px">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-top:4px solid ${BORDO}">
-        <tr><td style="padding:20px 28px;border-bottom:1px solid #eee">
-          <span style="font-size:18px;font-weight:700;color:${BORDO};letter-spacing:0.5px">CLUB SEMINARIO</span>
-          <span style="display:inline-block;width:24px;height:3px;background:${AMARILLO};vertical-align:middle;margin-left:8px"></span>
-        </td></tr>
-        <tr><td style="padding:24px 28px;font-size:15px;line-height:1.6">${contenidoHtml}</td></tr>
-        <tr><td style="padding:16px 28px 24px;font-size:12px;line-height:1.5;color:${SECUNDARIO};border-top:1px solid #eee">
-          ${pie}${baja}
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+export type OpcionesMolde = {
+  pie?: string | null;
+  bajaUrl?: string | null;
+  /** Molde propio de Configuración; sin él (o si falla), el original. */
+  moldeHtml?: string | null;
+};
+
+/**
+ * Pone el contenido dentro del molde del club. Título, subtítulo, vista
+ * previa y firma pueden tener variables ({{nombre}}).
+ */
+export function molde(
+  contenidoHtml: string,
+  opciones: OpcionesMolde & { encabezado?: Encabezado | null; asunto?: string; variables?: Variables } = {}
+) {
+  const vars = opciones.variables ?? {};
+  const enc = opciones.encabezado ?? {};
+  const texto = (t: string | null | undefined) => (t ? aplicarVariables(t, vars).trim() : "");
+  const datos = {
+    ...vars,
+    titulo: texto(enc.titulo) || texto(opciones.asunto) || "Club Seminario",
+    subtitulo: texto(enc.subtitulo),
+    preencabezado: texto(enc.preencabezado),
+    firma: partirFirma(texto(enc.firma)),
+    contenido: contenidoHtml,
+    pie: opciones.pie?.trim() || "",
+    enlace_baja: opciones.bajaUrl ?? "",
+  };
+  if (opciones.moldeHtml?.trim()) {
+    try {
+      return Mustache.render(opciones.moldeHtml, datos);
+    } catch {
+      // Un molde propio roto no deja a nadie sin mail: va el original.
+    }
+  }
+  return Mustache.render(MOLDE_ORIGINAL, datos);
 }
 
 /** Un HTML completo de difusión que no usa {{enlace_baja}} recibe el pie de baja. */
@@ -184,26 +198,36 @@ export type PlantillaRender = {
   cuerpo: string;
   formato?: Formato | string | null;
   usaMolde?: boolean | null;
+  encabezado?: Encabezado | null;
 };
 
 export function renderPlantilla(
   plantilla: PlantillaRender,
   variables: Variables,
-  opciones: { pie?: string | null; bajaUrl?: string | null } = {}
+  opciones: OpcionesMolde = {}
 ) {
   const formato: Formato = plantilla.formato === "html" ? "html" : "texto";
   const usaMolde = plantilla.usaMolde ?? true;
   const vars: Variables = { ...variables, enlace_baja: opciones.bajaUrl ?? "" };
 
+  const enMolde = (contenido: string, bajaUrl: string | null | undefined) =>
+    molde(contenido, {
+      ...opciones,
+      bajaUrl,
+      encabezado: plantilla.encabezado,
+      asunto: plantilla.asunto,
+      variables: vars,
+    });
+
   let html: string;
   if (formato === "texto") {
-    html = molde(cuerpoTextoAHtml(plantilla.cuerpo, vars), opciones);
+    html = enMolde(cuerpoTextoAHtml(plantilla.cuerpo, vars), opciones.bajaUrl);
   } else {
     const contenido = aplicarVariables(plantilla.cuerpo, vars, true);
     if (usaMolde) {
       // Dentro del molde: si el HTML ya usa el enlace de baja, el pie no lo repite.
       const usaEnlace = analizarVariables(plantilla.cuerpo).variables.includes("enlace_baja");
-      html = molde(contenido, { pie: opciones.pie, bajaUrl: usaEnlace ? null : opciones.bajaUrl });
+      html = enMolde(contenido, usaEnlace ? null : opciones.bajaUrl);
     } else {
       html = asegurarBaja(
         contenido,

@@ -37,6 +37,7 @@ import { aprobarEnvio, crearEnvio, previsualizarAudiencia, type Previsualizacion
 import { Aviso, Boton, Campo, EncabezadoPagina, NumeroAnimado, Panel, claseControl } from "./ui";
 import { EditorCuerpo } from "./editor-cuerpo";
 import type { Formato } from "@/lib/comunicaciones/render";
+import type { Encabezado } from "@/lib/comunicaciones/molde";
 import { VistaPreviaDestinatarios } from "./vista-previa";
 import type { PlantillaFila } from "./tipos";
 
@@ -55,11 +56,13 @@ export function EnvioNuevo({
   plantillas,
   disciplinas,
   pie,
+  moldeHtml,
   plantillaInicial,
 }: {
   plantillas: PlantillaFila[];
   disciplinas: { id: number; nombre: string }[];
   pie: string | null;
+  moldeHtml?: string | null;
   plantillaInicial: string | null;
 }) {
   const router = useRouter();
@@ -86,6 +89,7 @@ export function EnvioNuevo({
   const [cuerpo, setCuerpo] = useState(inicial?.cuerpo ?? "");
   const [formato, setFormato] = useState<Formato>(inicial?.formato === "html" ? "html" : "texto");
   const [usaMolde, setUsaMolde] = useState(inicial?.usa_molde ?? true);
+  const [encabezado, setEncabezado] = useState<Encabezado>((inicial?.encabezado ?? {}) as Encabezado);
   const [nombre, setNombre] = useState("");
   const [intento, setIntento] = useState(false);
 
@@ -150,6 +154,7 @@ export function EnvioNuevo({
     setCategoria(p.categoria as Categoria);
     setFormato(p.formato === "html" ? "html" : "texto");
     setUsaMolde(p.usa_molde);
+    setEncabezado((p.encabezado ?? {}) as Encabezado);
   }
 
   const errorAsunto = intento && !asunto.trim() ? "Falta el asunto" : null;
@@ -186,7 +191,7 @@ export function EnvioNuevo({
     startCrear(async () => {
       const r = await crearEnvio({
         audiencia,
-        contenido: { nombre: nombre.trim() || undefined, plantilla_id: plantillaId, categoria, asunto, cuerpo, formato, usa_molde: usaMolde },
+        contenido: { nombre: nombre.trim() || undefined, plantilla_id: plantillaId, categoria, asunto, cuerpo, formato, usa_molde: usaMolde, encabezado },
       });
       if (!r.ok) {
         toast.error(r.error);
@@ -488,6 +493,8 @@ export function EnvioNuevo({
                       onFormato={setFormato}
                       usaMolde={usaMolde}
                       onUsaMolde={setUsaMolde}
+                      encabezado={encabezado}
+                      onEncabezado={setEncabezado}
                     />
                   </div>
                 </Panel>
@@ -505,8 +512,10 @@ export function EnvioNuevo({
                       cuerpo={cuerpo}
                       categoria={categoria}
                       pie={pie}
+            moldeHtml={moldeHtml}
                       formato={formato}
                       usaMolde={usaMolde}
+                      encabezado={encabezado}
                       destinatarios={prev?.muestra ?? []}
                     />
                   </div>

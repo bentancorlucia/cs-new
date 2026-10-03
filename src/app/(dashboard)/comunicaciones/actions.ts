@@ -11,6 +11,7 @@ import {
 } from "@/lib/comunicaciones/server";
 import { analizarVariables, renderPlantilla, type Variables } from "@/lib/comunicaciones/render";
 import { procesarCola } from "@/lib/comunicaciones/worker";
+import type { Encabezado } from "@/lib/comunicaciones/molde";
 import { smtpConfigurado } from "@/lib/comunicaciones/smtp";
 import { correrAutomatizacion, planCorrida } from "@/lib/comunicaciones/automatizaciones";
 import { audienciaCompleta, contarBajas, supresionesVigentes, type Destinatario } from "@/lib/comunicaciones/consultas";
@@ -175,6 +176,7 @@ export async function crearEnvio(input: { audiencia: Audiencia; contenido: Conte
       p_plantilla: (contenido.plantilla_id ?? null) as string,
       p_formato: contenido.formato,
       p_usa_molde: contenido.usa_molde,
+      p_encabezado: contenido.encabezado as Json,
       p_audiencia: (audiencia.tipo === "socios"
         ? { tipo: "socios", filtro }
         : { tipo: "lista", cantidad: destinatarios.length }) as Json,
@@ -271,7 +273,7 @@ export async function enviarPrueba(
     if (!user?.email) return { ok: false, error: "Tu usuario no tiene correo" };
     const db = await createComunicacionesClient();
     const [{ data: envio, error: e1 }, { data: muestra }] = await Promise.all([
-      db.from("envios").select("id, nombre, categoria, asunto, cuerpo, plantilla_id, formato, usa_molde").eq("id", id).maybeSingle(),
+      db.from("envios").select("id, nombre, categoria, asunto, cuerpo, plantilla_id, formato, usa_molde, encabezado").eq("id", id).maybeSingle(),
       db.from("mensajes").select("nombre, variables").eq("envio_id", id).is("html", null).order("created_at").limit(1),
     ]);
     if (e1) return { ok: false, error: errorBase(e1) };
@@ -290,6 +292,7 @@ export async function enviarPrueba(
       p_audiencia: { tipo: "prueba", envio: id } as Json,
       p_formato: envio.formato,
       p_usa_molde: envio.usa_molde,
+      p_encabezado: envio.encabezado,
     });
     if (error || !nuevo) return { ok: false, error: errorBase(error ?? {}) };
     const { error: e2 } = await db.rpc("aprobar_envio", { p_envio: nuevo as string });
@@ -325,7 +328,7 @@ export async function leerMensaje(id: string): Promise<Resultado<{ asunto: strin
     const db = await createComunicacionesClient();
     const { data: m, error } = await db
       .from("mensajes")
-      .select("id, nombre, categoria, variables, html, envios(asunto, cuerpo, formato, usa_molde)")
+      .select("id, nombre, categoria, variables, html, envios(asunto, cuerpo, formato, usa_molde, encabezado)")
       .eq("id", id)
       .maybeSingle();
     if (error) return { ok: false, error: errorBase(error) };
@@ -335,15 +338,22 @@ export async function leerMensaje(id: string): Promise<Resultado<{ asunto: strin
       cuerpo: string | null;
       formato: string;
       usa_molde: boolean;
+      encabezado: Encabezado;
     } | null;
     if (m.html) return { ok: true, data: { asunto: envio?.asunto ?? "", html: m.html } };
-    const { data: cfg } = await db.from("config").select("pie").maybeSingle();
+    const { data: cfg } = await db.from("config").select("pie, molde_html").maybeSingle();
     const { adjunto: _a, ...variables } = (m.variables ?? {}) as Record<string, unknown>;
     void _a;
     const r = renderPlantilla(
-      { asunto: envio?.asunto ?? "", cuerpo: envio?.cuerpo ?? "", formato: envio?.formato, usaMolde: envio?.usa_molde },
+      {
+        asunto: envio?.asunto ?? "",
+        cuerpo: envio?.cuerpo ?? "",
+        formato: envio?.formato,
+        usaMolde: envio?.usa_molde,
+        encabezado: envio?.encabezado,
+      },
       { nombre: m.nombre ?? "", ...(variables as Variables) },
-      { pie: cfg?.pie, bajaUrl: m.categoria === "difusion" ? URL_BAJA_EJEMPLO : null }
+      { pie: cfg?.pie, bajaUrl: m.categoria === "difusion" ? URL_BAJA_EJEMPLO : null, moldeHtml: cfg?.molde_html }
     );
     return { ok: true, data: { asunto: r.asunto, html: r.html } };
   } catch (e) {
@@ -375,7 +385,7 @@ export async function guardarPlantilla(input: PlantillaInput, id?: string): Prom
       }
       // Los mails automáticos de tienda y eventos: siempre activos, institucionales y en HTML.
       const cambios = actual.transaccional
-        ? { nombre: p.nombre, asunto: p.asunto, cuerpo: p.cuerpo, usa_molde: p.usa_molde }
+        ? { nombre: p.nombre, asunto: p.asunto, cuerpo: p.cuerpo, usa_molde: p.usa_molde, encabezado: p.encabezado }
         : p;
       const error0 = validarPlantilla(p);
       if (error0) return { ok: false, error: error0 };
@@ -410,13 +420,18 @@ export async function restaurarPlantilla(id: string): Promise<Resultado> {
     const db = await createComunicacionesClient();
     const { data: p } = await db
       .from("plantillas")
-      .select("asunto_original, cuerpo_original")
+      .select("asunto_original, cuerpo_original, encabezado_original")
       .eq("id", id)
       .maybeSingle();
     if (!p?.asunto_original || !p.cuerpo_original) return { ok: false, error: "Esta plantilla no tiene versión original" };
     const { data: filas, error } = await db
       .from("plantillas")
-      .update({ asunto: p.asunto_original, cuerpo: p.cuerpo_original, usa_molde: true })
+      .update({
+        asunto: p.asunto_original,
+        cuerpo: p.cuerpo_original,
+        usa_molde: true,
+        encabezado: p.encabezado_original ?? {},
+      })
       .eq("id", id)
       .select("id");
     if (error) return { ok: false, error: errorBase(error) };
@@ -580,6 +595,13 @@ export async function guardarConfig(input: ConfigInput): Promise<Resultado> {
     const c = parsed.data;
     if (c.limite_por_tanda > c.limite_por_hora) {
       return { ok: false, error: "La tanda no puede ser mayor que el límite por hora" };
+    }
+    if (c.molde_html) {
+      const { error: e } = analizarVariables(c.molde_html);
+      if (e) return { ok: false, error: `Revisá el molde: ${e}` };
+      if (!c.molde_html.includes("{{{contenido}}}")) {
+        return { ok: false, error: "El molde tiene que incluir {{{contenido}}} (donde va el mensaje)" };
+      }
     }
     const [db, user] = await Promise.all([createComunicacionesClient(), usuario()]);
     const { data: filas, error } = await db

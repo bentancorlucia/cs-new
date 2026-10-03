@@ -13,12 +13,14 @@ import {
   List,
   ListTree,
   MousePointerClick,
+  PanelTop,
   Pilcrow,
   Type,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { analizarVariables, variablesDesconocidas, type Formato } from "@/lib/comunicaciones/render";
 import { VARIABLES } from "@/lib/comunicaciones/esquemas";
+import type { Encabezado } from "@/lib/comunicaciones/molde";
 import { Switch } from "@/components/ui/switch";
 import { Campo, claseControl } from "./ui";
 
@@ -52,6 +54,8 @@ export function EditorCuerpo({
   usaMolde = true,
   onUsaMolde,
   variables = VARIABLES,
+  encabezado,
+  onEncabezado,
 }: {
   asunto: string;
   cuerpo: string;
@@ -66,13 +70,21 @@ export function EditorCuerpo({
   usaMolde?: boolean;
   onUsaMolde?: (v: boolean) => void;
   variables?: readonly VariableEditor[];
+  /** Título, subtítulo, vista previa y firma del molde. */
+  encabezado?: Encabezado;
+  onEncabezado?: (e: Encabezado) => void;
 }) {
   const refAsunto = useRef<HTMLInputElement>(null);
   const refCuerpo = useRef<HTMLTextAreaElement>(null);
   const ultimo = useRef<"asunto" | "cuerpo">("cuerpo");
   const html = formato === "html";
-  const { error: errorVariables } = analizarVariables(asunto, cuerpo);
-  const desconocidas = errorVariables ? [] : variablesDesconocidas(variables.map((v) => v.clave), asunto, cuerpo);
+  const textosEncabezado = Object.values(encabezado ?? {}).map((v) => v ?? "");
+  const { error: errorVariables } = analizarVariables(asunto, cuerpo, ...textosEncabezado);
+  const desconocidas = errorVariables
+    ? []
+    : variablesDesconocidas(variables.map((v) => v.clave), asunto, cuerpo, ...textosEncabezado);
+  const conMolde = !html || usaMolde;
+  const campoEnc = (k: keyof Encabezado, v: string) => onEncabezado?.({ ...(encabezado ?? {}), [k]: v });
 
   /** Reemplaza la selección del cuerpo (o inserta en el cursor) y deja el cursor donde corresponde. */
   function editarCuerpo(fn: (sel: string) => { texto: string; cursor?: [number, number] }) {
@@ -235,12 +247,74 @@ export function EditorCuerpo({
               <span className="block text-sm font-medium">Usar el molde del club</span>
               <span className="block text-xs text-muted-foreground">
                 {usaMolde
-                  ? "Tu HTML va dentro del encabezado y el pie del club."
-                  : "Tu HTML es el correo completo (con <html> y <body>). En difusión, usá {{enlace_baja}} o se agrega un pie de baja."}
+                  ? "Tu HTML va en el cuerpo, entre el encabezado bordó con el escudo y el pie con los datos del club."
+                  : "Tu HTML es el correo completo (con <html> y <body>), sin el encabezado ni el pie del club. En difusión, usá {{enlace_baja}} o se agrega un pie de baja."}
               </span>
             </span>
             <Switch checked={usaMolde} onCheckedChange={onUsaMolde} disabled={deshabilitado} />
           </motion.label>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence initial={false}>
+        {onEncabezado && conMolde && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="space-y-3 rounded-xl border border-bordo-100 bg-bordo-50/30 p-3">
+              <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-editorial text-bordo-800">
+                <PanelTop className="size-3.5" />
+                Encabezado del correo
+                <span className="normal-case tracking-normal text-muted-foreground">· admite datos como {"{{nombre}}"}</span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Campo etiqueta="Título" ayuda="Va grande sobre el bordó. Vacío = el asunto.">
+                  <input
+                    value={encabezado?.titulo ?? ""}
+                    disabled={deshabilitado}
+                    onChange={(e) => campoEnc("titulo", e.target.value)}
+                    maxLength={300}
+                    placeholder={asunto || "¡Feliz cumpleaños, {{nombre}}!"}
+                    className={claseControl}
+                  />
+                </Campo>
+                <Campo etiqueta="Subtítulo" ayuda="Línea dorada bajo el título (opcional).">
+                  <input
+                    value={encabezado?.subtitulo ?? ""}
+                    disabled={deshabilitado}
+                    onChange={(e) => campoEnc("subtitulo", e.target.value)}
+                    maxLength={300}
+                    placeholder="Socio/a N.º {{numero_socio}}"
+                    className={claseControl}
+                  />
+                </Campo>
+              </div>
+              <Campo etiqueta="Texto de vista previa" ayuda="Lo que muestra la bandeja de entrada junto al asunto (opcional).">
+                <input
+                  value={encabezado?.preencabezado ?? ""}
+                  disabled={deshabilitado}
+                  onChange={(e) => campoEnc("preencabezado", e.target.value)}
+                  maxLength={300}
+                  placeholder="Todo Club Seminario te desea un muy feliz cumpleaños 🎉"
+                  className={claseControl}
+                />
+              </Campo>
+              <Campo etiqueta="Firma" ayuda="Una o dos líneas; la última va destacada en bordó. Vacía = sin firma.">
+                <textarea
+                  value={encabezado?.firma ?? ""}
+                  disabled={deshabilitado}
+                  onChange={(e) => campoEnc("firma", e.target.value)}
+                  rows={2}
+                  maxLength={300}
+                  placeholder={"Un abrazo grande,\nComisión Directiva de Club Seminario"}
+                  className={cn(claseControl, "h-auto py-2")}
+                />
+              </Campo>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 

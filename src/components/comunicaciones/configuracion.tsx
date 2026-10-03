@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { CheckCircle2, ExternalLink, Gauge, Mail, MessageCircle, Save, ServerOff } from "lucide-react";
+import { CheckCircle2, ExternalLink, Gauge, History, LayoutTemplate, Mail, MessageCircle, Save, ServerOff } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { REGEX_EMAIL } from "@/lib/comunicaciones/esquemas";
@@ -11,6 +11,10 @@ import { REGEX_WHATSAPP, linkWhatsApp, textoWhatsApp } from "@/lib/comunicacione
 import { guardarConfig, guardarWhatsApp } from "@/app/(dashboard)/comunicaciones/actions";
 import { Aviso, Boton, Campo, EncabezadoPagina, Panel, claseControl } from "./ui";
 import type { ConfigComunicaciones } from "./tipos";
+import { MOLDE_ORIGINAL } from "@/lib/comunicaciones/molde";
+import { analizarVariables } from "@/lib/comunicaciones/render";
+import { URL_BAJA_EJEMPLO } from "@/lib/comunicaciones/esquemas";
+import { VistaPreviaDestinatarios } from "./vista-previa";
 
 const claseArea =
   "block w-full resize-y rounded-lg border border-linea bg-white px-3 py-2 text-sm outline-none transition-all placeholder:text-muted-foreground/70 hover:border-bordo-200 focus:border-bordo-700 focus:ring-3 focus:ring-bordo-800/10 disabled:opacity-60";
@@ -47,6 +51,7 @@ export function Configuracion({
             </Aviso>
           )}
           <PanelWhatsApp config={config} editable={puedeWhatsApp} />
+          {(puedeGestionar || !puedeWhatsApp) && <PanelMolde config={config} editable={puedeGestionar} />}
         </div>
       )}
     </div>
@@ -279,6 +284,115 @@ function PanelWhatsApp({ config, editable }: { config: ConfigComunicaciones; edi
           </div>
         )}
       </fieldset>
+    </Panel>
+  );
+}
+
+const EJEMPLO_MOLDE = {
+  asunto: "¡Feliz cumpleaños, {{nombre}}!",
+  cuerpo: "Hola {{nombre}}:\n\nTodo Club Seminario te desea un muy feliz cumpleaños. 🎉",
+  encabezado: {
+    subtitulo: "Socio/a N.º {{numero_socio}}",
+    preencabezado: "Todo Club Seminario te desea un muy feliz cumpleaños 🎉",
+    firma: "Un abrazo grande,\nComisión Directiva de Club Seminario",
+  },
+};
+
+/** El molde de todos los correos: el original del club o uno propio. */
+function PanelMolde({ config, editable }: { config: ConfigComunicaciones; editable: boolean }) {
+  const router = useRouter();
+  const guardado = config.molde_html ?? "";
+  const [html, setHtml] = useState(guardado || MOLDE_ORIGINAL);
+  const [pendiente, start] = useTransition();
+  const propio = html.trim() !== MOLDE_ORIGINAL.trim();
+  const cambios = (propio ? html.trim() : "") !== guardado.trim();
+  const { error } = analizarVariables(html);
+  const sinContenido = !html.includes("{{{contenido}}}");
+
+  function guardar(valor: string) {
+    start(async () => {
+      const r = await guardarConfig({
+        remitente_nombre: config.remitente_nombre,
+        remitente_email: config.remitente_email,
+        responder_a: config.responder_a ?? "",
+        limite_por_hora: config.limite_por_hora,
+        limite_por_tanda: config.limite_por_tanda,
+        pie: config.pie ?? "",
+        molde_html: valor,
+      });
+      if (r.ok) {
+        toast.success(valor ? "Molde guardado" : "Volvió el molde original");
+        if (!valor) setHtml(MOLDE_ORIGINAL);
+        router.refresh();
+      } else toast.error(r.error);
+    });
+  }
+
+  return (
+    <Panel titulo="Molde de los correos" icono={LayoutTemplate} delay={0.15} className="xl:col-span-2">
+      <div className="grid gap-4 p-4 xl:grid-cols-2">
+        <div className="min-w-0 space-y-3">
+          <p className="text-xs text-muted-foreground">
+            El diseño que envuelve todos los correos (encabezado bordó con el escudo, franja, firma y pie). Cada
+            plantilla pone su título, subtítulo, texto de vista previa y firma. Usá{" "}
+            <code className="font-mono">{"{{{contenido}}}"}</code> donde va el mensaje,{" "}
+            <code className="font-mono">{"{{titulo}}"}</code>, <code className="font-mono">{"{{subtitulo}}"}</code>,{" "}
+            <code className="font-mono">{"{{preencabezado}}"}</code>,{" "}
+            <code className="font-mono">{"{{#firma}}{{saludo}} {{firmante}}{{/firma}}"}</code>,{" "}
+            <code className="font-mono">{"{{pie}}"}</code> y <code className="font-mono">{"{{enlace_baja}}"}</code>{" "}
+            (solo en difusión). Si un molde propio falla, se usa el original.
+          </p>
+          <textarea
+            value={html}
+            onChange={(e) => setHtml(e.target.value)}
+            disabled={!editable}
+            spellCheck={false}
+            rows={24}
+            className={cn(claseArea, "min-h-96 font-mono text-[12px] leading-relaxed whitespace-pre")}
+          />
+          {(error || sinContenido) && (
+            <p className="text-xs text-rose-700">
+              {error ? `Revisá las variables: ${error}` : "Falta {{{contenido}}}: sin eso no aparece el mensaje."}
+            </p>
+          )}
+          {editable && (
+            <div className="flex flex-wrap justify-end gap-2">
+              {guardado && (
+                <Boton variante="secundario" onClick={() => guardar("")} pendiente={pendiente}>
+                  <History className="size-4" />
+                  Restaurar original
+                </Boton>
+              )}
+              <Boton
+                onClick={() => guardar(propio ? html : "")}
+                pendiente={pendiente}
+                disabled={!cambios || !!error || sinContenido}
+              >
+                <Save className="size-4" />
+                Guardar molde
+              </Boton>
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 space-y-2">
+          <div className="px-1 text-xs text-muted-foreground">Vista previa (con un cumpleaños de ejemplo, en difusión)</div>
+          <VistaPreviaDestinatarios
+            asunto={EJEMPLO_MOLDE.asunto}
+            cuerpo={EJEMPLO_MOLDE.cuerpo}
+            encabezado={EJEMPLO_MOLDE.encabezado}
+            categoria="difusion"
+            pie={config.pie}
+            moldeHtml={error || sinContenido ? null : html}
+            destinatarios={[
+              {
+                email: "maria.perez@ejemplo.com",
+                nombre: "María",
+                variables: { nombre: "María", numero_socio: "1234", enlace_baja: URL_BAJA_EJEMPLO },
+              },
+            ]}
+          />
+        </div>
+      </div>
     </Panel>
   );
 }
