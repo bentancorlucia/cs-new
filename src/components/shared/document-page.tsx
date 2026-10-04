@@ -5,7 +5,6 @@ import { AnimateOnScroll } from "@/components/shared/animate-on-scroll";
 import {
   FileText,
   Mail,
-  Phone,
   MapPin,
   Download,
   ExternalLink,
@@ -167,13 +166,6 @@ export function DocumentPageClient({
                 ¿Tenés consultas sobre este documento?
               </p>
               <div className="flex flex-col items-center gap-2">
-                <a
-                  href="tel:+59891965438"
-                  className="inline-flex items-center gap-2 font-body text-sm text-muted-foreground hover:text-bordo-800 transition-colors"
-                >
-                  <Phone className="size-4" />
-                  +598 91 965 438
-                </a>
                 <a
                   href="mailto:secretaria@clubseminario.com.uy"
                   className="inline-flex items-center gap-2 font-body text-sm text-muted-foreground hover:text-bordo-800 transition-colors"
