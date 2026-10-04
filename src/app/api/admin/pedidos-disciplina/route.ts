@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { createClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { planesVigentesDePedidos } from "@/lib/socios/disciplinas";
+import type { Database as DbSocios } from "@/types/socios";
 import { round2 } from "@/lib/tienda/precios";
 import { mensajeError } from "@/lib/contabilidad/formato";
 import { ErrorHttp, exigir, respuestaError } from "@/lib/comercial/pedidos";
@@ -59,6 +62,17 @@ export async function GET(request: NextRequest) {
     const { data, error, count } = await query.range(offset, offset + f.limit - 1);
     if (error) throw error;
 
+    // Marca "En plan de pago": los planes viven en el schema socios (RLS de
+    // tesorería), se leen con servicio después de validar el permiso.
+    const socios = createClient<DbSocios, "socios">(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+      db: { schema: "socios" },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const planes = await planesVigentesDePedidos(
+      socios,
+      (data ?? []).map((p) => p.id)
+    ).catch(() => new Map());
+
     const total = count ?? 0;
     return NextResponse.json({
       data: (data ?? []).map((p) => {
@@ -73,6 +87,7 @@ export async function GET(request: NextRequest) {
           notas: p.notas,
           disciplina: d ? { id: d.id, nombre: d.nombre } : null,
           vendedor: v ? `${v.nombre} ${v.apellido}`.trim() : null,
+          plan: planes.get(p.id) ?? null,
           items: (p.pedido_items ?? []).map((i) => ({
             id: i.id,
             cantidad: i.cantidad,

@@ -19,6 +19,7 @@ import {
   type LiquidacionDisciplinaLista,
   type PreviaLiquidacionDisciplina,
 } from "@/lib/socios/cuotas";
+import type { PlanVigente } from "@/lib/socios/disciplinas";
 import {
   anularLiquidacionDisciplina,
   guardarDisciplinaCobranza,
@@ -57,6 +58,7 @@ export function DisciplinasVista({
   cuentaDefecto,
   hoy,
   puedeOperar,
+  planesPago = [],
 }: {
   disciplinas: DisciplinaCobranza[];
   liquidaciones: LiquidacionDisciplinaLista[];
@@ -64,6 +66,8 @@ export function DisciplinasVista({
   cuentaDefecto: string | null;
   hoy: string;
   puedeOperar: boolean;
+  /** Planes de pago vigentes con saldo: lo compensado se puede imputar a sus cuotas. */
+  planesPago?: PlanVigente[];
 }) {
   const router = useRouter();
   const [discId, setDiscId] = useState<number | "">("");
@@ -74,6 +78,7 @@ export function DisciplinasVista({
   const [cuentaId, setCuentaId] = useState(cuentaDefecto ?? cuentas[0]?.id ?? "");
   const [fecha, setFecha] = useState(hoy);
   const [notas, setNotas] = useState("");
+  const [planId, setPlanId] = useState<number | "">("");
   const [calculando, start] = useTransition();
   const [confirmar, setConfirmar] = useState(false);
   const [editar, setEditar] = useState<DisciplinaCobranza | null>(null);
@@ -85,6 +90,8 @@ export function DisciplinasVista({
   const montoComp = Number(compensar.replace(",", ".")) || 0;
   const transferir = p ? r2(p.importe - montoComp) : 0;
   const maxComp = p ? r2(Math.max(0, Math.min(p.importe, p.deuda))) : 0;
+  const planesDisc = planesPago.filter((pl) => pl.disciplina_id === discId);
+  const planElegido = montoComp > 0 ? planesDisc.find((pl) => pl.id === planId) : undefined;
 
   function elegir(id: number | "") {
     setDiscId(id);
@@ -92,6 +99,7 @@ export function DisciplinasVista({
     setDesde(r.desde);
     setHasta(r.hasta);
     setPrevia(null);
+    setPlanId("");
   }
 
   function calcular() {
@@ -183,6 +191,29 @@ export function DisciplinasVista({
                                 {cuentas.map((c) => (
                                   <option key={c.id} value={c.id}>
                                     {c.codigo} · {c.nombre}
+                                  </option>
+                                ))}
+                              </select>
+                            </Campo>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                      <AnimatePresence initial={false}>
+                        {montoComp > 0 && planesDisc.length > 0 && (
+                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="sm:col-span-2">
+                            <Campo
+                              etiqueta="Imputar a un plan de pago"
+                              ayuda={
+                                planElegido
+                                  ? `Lo compensado se aplica a las cuotas más viejas del plan (saldo ${formatImporte(planElegido.saldo)}${planElegido.saldo_vencido > 0 ? `, ${formatImporte(planElegido.saldo_vencido)} vencido` : ""}).`
+                                  : "Opcional: lo compensado baja la deuda igual; elegí un plan para que cuente como pago de sus cuotas."
+                              }
+                            >
+                              <select value={planId} onChange={(e) => setPlanId(e.target.value ? Number(e.target.value) : "")} className={claseControl}>
+                                <option value="">No imputar a un plan</option>
+                                {planesDisc.map((pl) => (
+                                  <option key={pl.id} value={pl.id}>
+                                    {pl.descripcion} · saldo {formatImporte(pl.saldo)}
                                   </option>
                                 ))}
                               </select>
@@ -317,8 +348,9 @@ export function DisciplinasVista({
           descripcion={
             <span>
               Del {formatFecha(desde)} al {formatFecha(hasta)}: {formatImporte(p.importe, "UYU")} a liquidar,{" "}
-              {formatImporte(montoComp, "UYU")} compensados de su deuda y {formatImporte(transferir, "UYU")} transferidos. Después no se
-              pueden registrar cobros de la disciplina con fecha dentro del período.
+              {formatImporte(montoComp, "UYU")} compensados de su deuda
+              {planElegido ? ` (imputados a "${planElegido.descripcion}")` : ""} y {formatImporte(transferir, "UYU")} transferidos. Después no
+              se pueden registrar cobros de la disciplina con fecha dentro del período.
             </span>
           }
           textoAccion="Liquidar"
@@ -326,6 +358,7 @@ export function DisciplinasVista({
           alTerminar={() => {
             setPrevia(null);
             setNotas("");
+            setPlanId("");
             router.refresh();
           }}
           ejecutar={async () => {
@@ -337,6 +370,7 @@ export function DisciplinasVista({
               compensar: montoComp,
               cuenta_id: transferir > 0 ? cuentaId || null : null,
               notas: notas.trim() || null,
+              plan_id: planElegido?.id ?? null,
             });
             return r.ok ? { ok: true } : r;
           }}

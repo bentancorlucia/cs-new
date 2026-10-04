@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   ArrowUpRight,
   BookOpen,
+  CalendarClock,
   ChevronLeft,
   ChevronRight,
   Plus,
@@ -345,11 +346,14 @@ export default function PedidosDisciplinasPage() {
         <motion.ul variants={staggerContainerFast} initial="hidden" animate="visible" className="space-y-2">
           <AnimatePresence mode="popLayout">
             {pedidos.map((p) => (
-              <motion.li key={p.id} variants={fadeInUp} layout exit={{ opacity: 0, scale: 0.97 }}>
-                <Link
-                  href={`/admin/pedidos/${p.id}`}
-                  className="block rounded-xl border border-linea bg-white p-3 transition-shadow hover:shadow-sm sm:p-4"
-                >
+              <motion.li
+                key={p.id}
+                variants={fadeInUp}
+                layout
+                exit={{ opacity: 0, scale: 0.97 }}
+                className="overflow-hidden rounded-xl border border-linea bg-white transition-shadow hover:shadow-sm"
+              >
+                <Link href={`/admin/pedidos/${p.id}`} className="block p-3 sm:p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
                       <span className="font-mono text-sm font-semibold">{p.numero_pedido}</span>
@@ -394,6 +398,7 @@ export default function PedidosDisciplinasPage() {
                     </p>
                   )}
                 </Link>
+                {p.plan && <MarcaPlan plan={p.plan} conLink={conLink} />}
               </motion.li>
             ))}
           </AnimatePresence>
@@ -420,5 +425,25 @@ export default function PedidosDisciplinasPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/** El pedido está en un plan de pago vigente (se paga en cuotas; no se cancela sin cancelar el plan). */
+function MarcaPlan({ plan, conLink }: { plan: NonNullable<PedidoDisciplinaFila["plan"]>; conLink: boolean }) {
+  const contenido = (
+    <>
+      <CalendarClock className="size-3.5 shrink-0" />
+      <span className="font-medium">En plan de pago</span>
+      <span className="truncate text-sky-800/80">· {plan.descripcion}</span>
+      {conLink && <ArrowUpRight className="ml-auto size-3.5 shrink-0 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />}
+    </>
+  );
+  const clase = "group flex items-center gap-1.5 border-t border-sky-100 bg-sky-50/70 px-3 py-1.5 text-[11px] text-sky-900 sm:px-4";
+  return conLink ? (
+    <Link href={`/secretaria/disciplinas/${plan.disciplina_id}?tab=planes`} className={cn(clase, "transition-colors hover:bg-sky-100/70")}>
+      {contenido}
+    </Link>
+  ) : (
+    <div className={clase}>{contenido}</div>
   );
 }

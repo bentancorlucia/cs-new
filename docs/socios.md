@@ -56,6 +56,14 @@ Consultas: vistas `cuotas_saldo` (pagado, acreditado, saldo) y `cobros_saldo` (s
 | comision_cobranza | 5.2.08 (con centro) |
 | liquidacion_disciplinas | 5.2.09 (con centro) |
 
+## Disciplinas: cuenta corriente y planes de pago
+
+Migraciones `20261007100000_disciplinas_cuenta_planes.sql` y `20261007110000_disciplinas_correcciones.sql`; pantallas en `/secretaria/disciplinas` (lista y detalle con pestañas Resumen, Cuenta corriente, Planes de pago y Socios).
+
+- **Cuenta corriente** (`cuenta_corriente_disciplina`, `saldos_disciplinas`): la cuenta 1.1.04.03 con el auxiliar de la disciplina, todos los ejercicios (solo la apertura del primero). Tipos: compra de la tienda, devolución, cuota cobrada por la disciplina, liquidación (compensación), pago, anulación. Saldo + = deuda con el club. Solo tesorería, Comisión Fiscal y super_admin; secretaría ve la ficha y los socios.
+- **Pagos de la disciplina** (`registrar_cobro_disciplina`, `anular_cobro_disciplina`): Debe banco/caja / Haber 1.1.04.03; se pueden imputar a un plan.
+- **Planes de pago** (`crear_plan_pago`, `cancelar_plan_pago`): cuotas con vencimiento sobre pedidos de la disciplina (importe = total de los pedidos o menos). No generan asientos: la deuda ya está desde la venta. Pagos y compensaciones de las liquidaciones (`liquidar_disciplina(..., p_plan)`) se imputan a las cuotas en orden; lo que excede queda a cuenta de la deuda general. Vistas `plan_pago_cuotas_saldo` y `planes_pago_resumen` (situación: al día, atrasado, cumplido, cancelado). Un pedido en un solo plan vigente y no se cancela mientras esté en uno; las cuotas no se editan (se cancela y se arma otro).
+
 ## Pendiente
 
 - Pantallas de secretaría (padrón nuevo), de cuotas y cobranza, y estado de cuenta en Mi cuenta.

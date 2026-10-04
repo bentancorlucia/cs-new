@@ -1,6 +1,6 @@
 -- Disciplinas: cuenta corriente, pagos al club y planes de pago.
 BEGIN;
-SELECT plan(21);
+SELECT plan(24);
 
 DO $$ BEGIN PERFORM contabilidad.crear_ejercicio(extract(year FROM contabilidad._hoy())::int); END $$;
 CREATE FUNCTION pg_temp.cta(p text) RETURNS uuid LANGUAGE sql AS $$ SELECT id FROM contabilidad.cuentas WHERE codigo = p $$;
@@ -69,8 +69,16 @@ SELECT is((SELECT saldo FROM socios.planes_pago_resumen WHERE id = (SELECT id FR
           'anular el pago devuelve el saldo del plan');
 SELECT is(pg_temp.cc_saldo(), 3000.00::numeric, 'y la deuda');
 
+-- ---------- Plan ya pago: el excedente queda a cuenta de la deuda general
+CREATE TEMP TABLE pl2 AS SELECT socios.crear_plan_pago(13, ARRAY[9703], '[{"vencimiento": "2030-01-10", "importe": 500}]') AS id;
+DO $$ BEGIN PERFORM socios.registrar_cobro_disciplina(13, pg_temp.hoy(), 500, NULL, NULL, (SELECT id FROM pl2)); END $$;
+SELECT lives_ok($$ SELECT socios.registrar_cobro_disciplina(13, pg_temp.hoy(), 100, NULL, NULL, (SELECT id FROM pl2)) $$,
+                'un pago a un plan ya cumplido no se rechaza');
+
 -- ---------- Cancelar el plan libera los pedidos
 DO $$ BEGIN PERFORM socios.cancelar_plan_pago((SELECT id FROM pl), 'Se rearma'); END $$;
+SELECT is((SELECT count(*) FROM socios.plan_pago_cuotas_saldo WHERE plan_id = (SELECT id FROM pl) AND situacion = 'cancelada'),
+          3::bigint, 'las cuotas impagas de un plan cancelado no figuran como vencidas');
 SELECT lives_ok($$ SELECT socios.crear_plan_pago(7, ARRAY[9701, 9702], '[{"vencimiento": "2030-01-10", "importe": 3000}]') $$,
                 'cancelado el plan, los pedidos van a otro');
 
@@ -84,6 +92,7 @@ SELECT set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000
 SET LOCAL ROLE authenticated;
 SELECT throws_ok($$ SELECT * FROM socios.cuenta_corriente_disciplina(7) $$, '42501', NULL,
                  'secretaría no ve la cuenta corriente');
+SELECT lives_ok($$ SELECT * FROM socios.planes_pago_resumen $$, 'las vistas de planes se leen como usuario del sitio');
 RESET ROLE;
 SELECT set_config('request.jwt.claims', '', true);
 

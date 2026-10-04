@@ -139,6 +139,8 @@ export interface PedidoDisciplinaFila {
   disciplina: { id: number; nombre: string } | null;
   vendedor: string | null;
   items: { id: number; cantidad: number; nombre: string; variante: string | null }[];
+  /** Plan de pago vigente que incluye el pedido. */
+  plan?: { id: number; descripcion: string; disciplina_id: number } | null;
 }
 
 export interface SaldoDisciplina {

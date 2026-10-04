@@ -439,8 +439,10 @@ const liquidarSchema = z
     compensar: z.number().min(0, "Lo compensado no puede ser negativo"),
     cuenta_id: z.uuid().nullish(),
     notas: z.string().trim().max(500).nullish(),
+    plan_id: id.nullish(),
   })
-  .refine((d) => d.hasta >= d.desde, { message: "El período está al revés" });
+  .refine((d) => d.hasta >= d.desde, { message: "El período está al revés" })
+  .refine((d) => !d.plan_id || d.compensar > 0, { message: "Para imputar a un plan de pago hay que compensar parte de la deuda" });
 
 export async function liquidarDisciplina(input: z.input<typeof liquidarSchema>): Promise<Resultado<number>> {
   try {
@@ -457,9 +459,11 @@ export async function liquidarDisciplina(input: z.input<typeof liquidarSchema>):
       p_compensar: d.compensar,
       p_cuenta: nulo(d.cuenta_id),
       p_notas: nulo(d.notas || null),
+      p_plan: nulo(d.plan_id),
     });
     if (error) return { ok: false, error: mensajeError(error) };
     revalidar();
+    if (d.plan_id) revalidatePath(`/secretaria/disciplinas/${d.disciplina_id}`);
     return { ok: true, data };
   } catch (e) {
     return fallo(e);
