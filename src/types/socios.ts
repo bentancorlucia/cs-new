@@ -221,13 +221,13 @@ isOneToOne: false
                   ]
                 },"liquidaciones_disciplina": {
                   Row: {
-                    "anulado_at": string | null,"anulado_por": string | null,"asiento_id": string,"cobrado": number,"comision": number,"compensado": number,"creado_por": string | null,"created_at": string,"cuenta_id": string | null,"desde": string,"disciplina_id": number,"estado": string,"fecha": string,"hasta": string,"id": number,"importe": number,"motivo_anulacion": string | null,"notas": string | null,"transferido": number
+                    "anulado_at": string | null,"anulado_por": string | null,"asiento_id": string,"cobrado": number,"comision": number,"creado_por": string | null,"created_at": string,"desde": string,"disciplina_id": number,"estado": string,"fecha": string,"hasta": string,"id": number,"importe": number,"motivo_anulacion": string | null,"notas": string | null
                   }
                   Insert: {
-                    "anulado_at"?: string | null,"anulado_por"?: string | null,"asiento_id": string,"cobrado": number,"comision": number,"compensado"?: number,"creado_por"?: string | null,"created_at"?: string,"cuenta_id"?: string | null,"desde": string,"disciplina_id": number,"estado"?: string,"fecha": string,"hasta": string,"id"?: never,"importe": number,"motivo_anulacion"?: string | null,"notas"?: string | null,"transferido": number
+                    "anulado_at"?: string | null,"anulado_por"?: string | null,"asiento_id": string,"cobrado": number,"comision": number,"creado_por"?: string | null,"created_at"?: string,"desde": string,"disciplina_id": number,"estado"?: string,"fecha": string,"hasta": string,"id"?: never,"importe": number,"motivo_anulacion"?: string | null,"notas"?: string | null
                   }
                   Update: {
-                    "anulado_at"?: string | null,"anulado_por"?: string | null,"asiento_id"?: string,"cobrado"?: number,"comision"?: number,"compensado"?: number,"creado_por"?: string | null,"created_at"?: string,"cuenta_id"?: string | null,"desde"?: string,"disciplina_id"?: number,"estado"?: string,"fecha"?: string,"hasta"?: string,"id"?: never,"importe"?: number,"motivo_anulacion"?: string | null,"notas"?: string | null,"transferido"?: number
+                    "anulado_at"?: string | null,"anulado_por"?: string | null,"asiento_id"?: string,"cobrado"?: number,"comision"?: number,"creado_por"?: string | null,"created_at"?: string,"desde"?: string,"disciplina_id"?: number,"estado"?: string,"fecha"?: string,"hasta"?: string,"id"?: never,"importe"?: number,"motivo_anulacion"?: string | null,"notas"?: string | null
                   }
                   Relationships: [
                     
@@ -303,15 +303,40 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
-                },"plan_pago_aplicaciones": {
+                },"pagos_liquidacion": {
                   Row: {
-                    "anulada": boolean,"cobro_id": number | null,"cuota_id": number,"fecha": string,"id": number,"importe": number,"liquidacion_id": number | null
+                    "anulado_at": string | null,"anulado_por": string | null,"asiento_id": string,"compensado": number,"creado_por": string | null,"created_at": string,"cuenta_id": string | null,"estado": string,"fecha": string,"id": number,"liquidacion_id": number,"motivo_anulacion": string | null,"notas": string | null,"referencia": string | null,"transferido": number
                   }
                   Insert: {
-                    "anulada"?: boolean,"cobro_id"?: number | null,"cuota_id": number,"fecha": string,"id"?: never,"importe": number,"liquidacion_id"?: number | null
+                    "anulado_at"?: string | null,"anulado_por"?: string | null,"asiento_id": string,"compensado"?: number,"creado_por"?: string | null,"created_at"?: string,"cuenta_id"?: string | null,"estado"?: string,"fecha": string,"id"?: never,"liquidacion_id": number,"motivo_anulacion"?: string | null,"notas"?: string | null,"referencia"?: string | null,"transferido"?: number
                   }
                   Update: {
-                    "anulada"?: boolean,"cobro_id"?: number | null,"cuota_id"?: number,"fecha"?: string,"id"?: never,"importe"?: number,"liquidacion_id"?: number | null
+                    "anulado_at"?: string | null,"anulado_por"?: string | null,"asiento_id"?: string,"compensado"?: number,"creado_por"?: string | null,"created_at"?: string,"cuenta_id"?: string | null,"estado"?: string,"fecha"?: string,"id"?: never,"liquidacion_id"?: number,"motivo_anulacion"?: string | null,"notas"?: string | null,"referencia"?: string | null,"transferido"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "pagos_liquidacion_liquidacion_id_fkey"
+      columns: ["liquidacion_id"]
+isOneToOne: false
+      referencedRelation: "liquidaciones_disciplina"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "pagos_liquidacion_liquidacion_id_fkey"
+      columns: ["liquidacion_id"]
+isOneToOne: false
+      referencedRelation: "liquidaciones_disciplina_saldo"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"plan_pago_aplicaciones": {
+                  Row: {
+                    "anulada": boolean,"cobro_id": number | null,"cuota_id": number,"fecha": string,"id": number,"importe": number,"liquidacion_id": number | null,"pago_liquidacion_id": number | null
+                  }
+                  Insert: {
+                    "anulada"?: boolean,"cobro_id"?: number | null,"cuota_id": number,"fecha": string,"id"?: never,"importe": number,"liquidacion_id"?: number | null,"pago_liquidacion_id"?: number | null
+                  }
+                  Update: {
+                    "anulada"?: boolean,"cobro_id"?: number | null,"cuota_id"?: number,"fecha"?: string,"id"?: never,"importe"?: number,"liquidacion_id"?: number | null,"pago_liquidacion_id"?: number | null
                   }
                   Relationships: [
                     {
@@ -337,6 +362,18 @@ isOneToOne: false
       columns: ["liquidacion_id"]
 isOneToOne: false
       referencedRelation: "liquidaciones_disciplina"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "plan_pago_aplicaciones_liquidacion_id_fkey"
+      columns: ["liquidacion_id"]
+isOneToOne: false
+      referencedRelation: "liquidaciones_disciplina_saldo"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "plan_pago_aplicaciones_pago_liquidacion_id_fkey"
+      columns: ["pago_liquidacion_id"]
+isOneToOne: false
+      referencedRelation: "pagos_liquidacion"
       referencedColumns: ["id"]
     }
                   ]
@@ -501,6 +538,13 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"liquidaciones_disciplina_saldo": {
+                  Row: {
+                    "anulado_at": string | null,"anulado_por": string | null,"asiento_id": string | null,"cobrado": number | null,"comision": number | null,"compensado": number | null,"creado_por": string | null,"created_at": string | null,"desde": string | null,"disciplina_id": number | null,"estado": string | null,"fecha": string | null,"hasta": string | null,"id": number | null,"importe": number | null,"motivo_anulacion": string | null,"notas": string | null,"saldo": number | null,"transferido": number | null
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"plan_pago_cuotas_saldo": {
                   Row: {
                     "id": number | null,"importe": number | null,"numero": number | null,"pagado": number | null,"plan_id": number | null,"saldo": number | null,"situacion": string | null,"vencimiento": string | null
@@ -534,7 +578,7 @@ isOneToOne: false
 { Args: { "p_cobros": (number)[],"p_fecha": string,"p_motivo": string }; Returns: undefined
                            },
 "_aplicar_a_plan":
-{ Args: { "p_cobro": number,"p_disciplina": number,"p_fecha": string,"p_importe": number,"p_liquidacion": number,"p_plan": number }; Returns: number
+{ Args: { "p_cobro": number,"p_disciplina": number,"p_fecha": string,"p_importe": number,"p_pago_liquidacion": number,"p_plan": number }; Returns: number
                            },
 "_aplicar_saldo_a_favor":
 { Args: { "p_fecha": string,"p_persona": number }; Returns: number
@@ -599,6 +643,9 @@ isOneToOne: false
 "anular_lote":
 { Args: { "p_lote": number,"p_motivo": string }; Returns: undefined
                            },
+"anular_pago_liquidacion":
+{ Args: { "p_fecha"?: string,"p_motivo": string,"p_pago": number }; Returns: undefined
+                           },
 "aplicar_liquidacion_visa":
 { Args: { "p_archivo"?: string,"p_cobrados": Json,"p_comision": number,"p_cuenta"?: string,"p_fecha": string,"p_periodo": string,"p_rechazados"?: Json }; Returns: number
                            },
@@ -624,7 +671,7 @@ isOneToOne: false
                            },
 "cuenta_corriente_disciplina":
 { Args: { "p_disciplina": number }; Returns: {
-              "asiento_id": string,"debe": number,"descripcion": string,"fecha": string,"haber": number,"numero": number,"origen_id": string,"origen_tipo": string,"pedido_id": number,"saldo": number,"tipo": string
+              "asiento_id": string,"cuenta": string,"debe": number,"descripcion": string,"fecha": string,"haber": number,"numero": number,"origen_id": string,"origen_tipo": string,"pedido_id": number,"saldo": number,"tipo": string
             }[]
                            },
 "dar_baja":
@@ -654,7 +701,10 @@ isOneToOne: false
 { Args: { "p_desde": string,"p_periodicidad"?: string,"p_persona": number,"p_plan": number }; Returns: number
                            },
 "liquidar_disciplina":
-{ Args: { "p_compensar"?: number,"p_cuenta"?: string,"p_desde": string,"p_disciplina": number,"p_fecha": string,"p_hasta": string,"p_notas"?: string,"p_plan"?: number }; Returns: number
+{ Args: { "p_desde": string,"p_disciplina": number,"p_fecha": string,"p_hasta": string,"p_notas"?: string }; Returns: number
+                           },
+"pagar_liquidacion_disciplina":
+{ Args: { "p_compensar"?: number,"p_cuenta"?: string,"p_fecha": string,"p_liquidacion": number,"p_notas"?: string,"p_plan"?: number,"p_referencia"?: string,"p_transferir"?: number }; Returns: number
                            },
 "precio_vigente":
 { Args: { "p_periodo": string,"p_plan": number }; Returns: {
@@ -705,7 +755,7 @@ isOneToOne: false
                            },
 "saldos_disciplinas":
 { Args: Record<PropertyKey, never>; Returns: {
-              "disciplina_id": number,"saldo": number,"ultimo_movimiento": string
+              "club_le_debe": number,"debe_al_club": number,"disciplina_id": number,"saldo": number,"ultimo_movimiento": string
             }[]
                            },
 "sincronizar_vigencias":

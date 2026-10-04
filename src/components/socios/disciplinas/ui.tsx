@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion, useSpring } from "framer-motion";
 import {
   ArrowDownLeft,
   ArrowUpRight,
   Ban,
   BookOpen,
+  ArrowRightLeft,
+  Banknote,
   HandCoins,
+  NotebookPen,
   PiggyBank,
   RotateCcw,
   ShoppingBag,
@@ -30,22 +33,49 @@ const pill =
 /** Importe que cuenta desde cero al aparecer y anima cada cambio. */
 export function ImporteContador({ valor, moneda, className }: { valor: number; moneda?: string; className?: string }) {
   const reducir = useReducedMotion();
-  const spring = useSpring(0, { stiffness: 140, damping: 26, mass: 0.7, restDelta: 0.0005 });
+  const spring = useSpring(0, { stiffness: 140, damping: 26, mass: 0.7, restDelta: 0.0005, restSpeed: 0.01 });
   const [mostrado, setMostrado] = useState(0);
   useEffect(() => {
     if (reducir) spring.jump(valor);
     else spring.set(valor);
   }, [valor, reducir, spring]);
   useEffect(() => spring.on("change", (v) => setMostrado(v)), [spring]);
+  // Al terminar, el valor exacto (el resorte puede detenerse a centésimos del destino).
+  const destino = useRef(valor);
+  useEffect(() => {
+    destino.current = valor;
+  }, [valor]);
+  useEffect(() => spring.on("animationComplete", () => setMostrado(destino.current)), [spring]);
   const texto = Math.abs(mostrado - valor) < 0.05 ? formatImporte(valor, moneda) : formatImporte(mostrado, moneda);
   return <span className={cn("tabular-nums", className)}>{texto}</span>;
 }
 
-/** Color de la deuda con el club: + debe (rojo), 0 (neutro), − a favor de la disciplina (verde). */
+/**
+ * Color del saldo neto: + la disciplina le debe al club (bordó/rojo),
+ * − el club le debe a la disciplina (ámbar), 0 (neutro).
+ */
 export function claseSaldo(saldo: number) {
   if (saldo > 0.004) return "text-rose-700";
-  if (saldo < -0.004) return "text-emerald-700";
+  if (saldo < -0.004) return "text-amber-700";
   return "text-muted-foreground";
+}
+
+/** Color de cada cuenta: lo que debe la disciplina (rosa) y lo que debe el club (ámbar). */
+export const CLASE_CUENTA = {
+  disciplina_debe: "text-rose-700",
+  club_debe: "text-amber-700",
+} as const;
+
+/** "La disciplina debe $ 1.000,00" / "El club le debe $ 1.000,00" / "Cuenta saldada". */
+export function SaldoNeto({ neto, className, corto }: { neto: number; className?: string; corto?: boolean }) {
+  const abs = Math.abs(neto);
+  if (abs < 0.005) return <span className={cn("text-muted-foreground", className)}>{corto ? "Saldada" : "Cuenta saldada"}</span>;
+  return (
+    <span className={cn(claseSaldo(neto), className)}>
+      {neto > 0 ? (corto ? "Debe " : "La disciplina debe ") : corto ? "Le deben " : "El club le debe "}
+      <ImporteContador valor={abs} moneda="UYU" />
+    </span>
+  );
 }
 
 export const ICONO_TIPO: Record<TipoMovimiento, LucideIcon> = {
@@ -54,7 +84,10 @@ export const ICONO_TIPO: Record<TipoMovimiento, LucideIcon> = {
   devolucion_tienda: RotateCcw,
   cuota_cobrada: Wallet,
   liquidacion: Sigma,
+  pago_liquidacion: Banknote,
+  compensacion: ArrowRightLeft,
   pago: HandCoins,
+  manual: NotebookPen,
   anulacion: Ban,
   otro: PiggyBank,
 };
@@ -65,7 +98,10 @@ const ESTILO_TIPO: Record<TipoMovimiento, string> = {
   devolucion_tienda: "border-sky-200 bg-sky-50 text-sky-800",
   cuota_cobrada: "border-violet-200 bg-violet-50 text-violet-800",
   liquidacion: "border-dorado-300 bg-dorado-100 text-dorado-800",
+  pago_liquidacion: "border-sky-200 bg-sky-50 text-sky-800",
+  compensacion: "border-teal-200 bg-teal-50 text-teal-800",
   pago: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  manual: "border-slate-300 bg-white text-slate-700",
   anulacion: "border-rose-200 bg-rose-50 text-rose-700",
   otro: "border-linea bg-superficie text-muted-foreground",
 };

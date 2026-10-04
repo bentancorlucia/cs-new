@@ -31,7 +31,8 @@ import type {
 import type { CuentaDisponible } from "@/lib/socios/cuotas";
 import { Aviso, Boton, Explicacion, NumeroAnimado, Panel, Pastilla } from "@/components/socios/cuotas/ui";
 import { DialogoDisciplina, type DatosDisciplina } from "./form-disciplina";
-import { BadgeSituacionCuota, BadgeTipoMovimiento, Cifra, ImporteContador, Pestanas, claseSaldo } from "./ui";
+import { BadgeSituacionCuota, BadgeTipoMovimiento, CLASE_CUENTA, Cifra, ImporteContador, Pestanas, SaldoNeto } from "./ui";
+import { importeEnCuenta, saldosCuenta } from "./cuenta-corriente";
 import { CuentaCorrienteVista } from "./cuenta-corriente";
 import { PlanesPagoVista } from "./planes-pago";
 import { SociosVista } from "./socios";
@@ -208,7 +209,7 @@ function Resumen({
   const vigentes = socios?.vigentes.length ?? 0;
   const conDeuda = socios?.vigentes.filter((s) => s.alDia === false).length ?? 0;
   const mesActual = socios?.porMes.at(-1);
-  const deuda = tesoreria?.movimientos.at(-1)?.saldo ?? 0;
+  const { debeDisciplina, debeClub, neto } = saldosCuenta(tesoreria?.movimientos ?? []);
   const planes = tesoreria?.planes.filter((p) => p.estado === "vigente") ?? [];
   const vencido = planes.reduce((s, p) => s + p.saldo_vencido, 0);
   const ultimaLiq = tesoreria?.liquidaciones.find((l) => l.estado === "vigente") ?? null;
@@ -221,15 +222,27 @@ function Resumen({
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {verTesoreria && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <Cifra etiqueta="Debe al club" icono={BookOpen} tono={debeDisciplina > 0 ? "alerta" : "neutro"} detalle="Compras, cuotas cobradas en su cuenta y préstamos">
+            <ImporteContador valor={debeDisciplina} moneda="UYU" />
+          </Cifra>
+          <Cifra etiqueta="El club le debe" tono={debeClub > 0 ? "dorado" : "neutro"} delay={0.03} detalle="Liquidaciones pendientes de pago">
+            <ImporteContador valor={debeClub} moneda="UYU" className={debeClub > 0 ? "text-amber-700" : undefined} />
+          </Cifra>
+          <div className="col-span-2 lg:col-span-1">
+            <Cifra etiqueta="Neto" delay={0.06} detalle="Lo que debe la disciplina menos lo que le debe el club">
+              <SaldoNeto neto={neto} />
+            </Cifra>
+          </div>
+        </div>
+      )}
+      <div className={cn("grid grid-cols-2 gap-3", verTesoreria ? "lg:grid-cols-3" : "lg:grid-cols-4")}>
         <Cifra etiqueta="Socios vigentes" icono={Users} delay={0.02} detalle={mesActual ? `${mesActual.altas} alta${mesActual.altas === 1 ? "" : "s"} y ${mesActual.bajas} baja${mesActual.bajas === 1 ? "" : "s"} este mes` : undefined}>
           <NumeroAnimado valor={vigentes} />
         </Cifra>
         {verTesoreria ? (
           <>
-            <Cifra etiqueta={deuda < 0 ? "Saldo a favor" : "Deuda con el club"} tono={deuda > 0 ? "alerta" : deuda < 0 ? "bueno" : "neutro"} delay={0.05} detalle="Saldo de la cuenta corriente">
-              <ImporteContador valor={Math.abs(deuda)} moneda="UYU" />
-            </Cifra>
             <Cifra
               etiqueta="Vencido en planes"
               icono={CalendarClock}
@@ -243,7 +256,11 @@ function Resumen({
               etiqueta="Última liquidación"
               icono={Receipt}
               delay={0.11}
-              detalle={ultimaLiq ? `Hasta el ${formatFecha(ultimaLiq.hasta)} · ${formatImporte(ultimaLiq.transferido, "UYU")} transferido` : "Todavía no se le liquidó"}
+              detalle={
+                ultimaLiq
+                  ? `Hasta el ${formatFecha(ultimaLiq.hasta)} · ${ultimaLiq.saldo > 0 ? `pendiente ${formatImporte(ultimaLiq.saldo, "UYU")}` : "pagada"}`
+                  : "Todavía no se le liquidó"
+              }
             >
               {ultimaLiq ? <ImporteContador valor={ultimaLiq.importe} moneda="UYU" /> : <span className="text-muted-foreground">—</span>}
             </Cifra>
@@ -356,9 +373,12 @@ function Resumen({
                           {formatFecha(m.fecha)} · {m.descripcion}
                         </div>
                       </div>
-                      <span className={cn("shrink-0 tabular-nums", m.debe > 0 ? "text-rose-700" : "text-emerald-700")}>
-                        {m.debe > 0 ? "+" : "−"}
-                        {formatImporte(m.debe > 0 ? m.debe : m.haber)}
+                      <span className={cn("flex shrink-0 flex-col items-end tabular-nums", CLASE_CUENTA[m.cuenta])}>
+                        <span>
+                          {importeEnCuenta(m) >= 0 ? "+" : "−"}
+                          {formatImporte(Math.abs(importeEnCuenta(m)))}
+                        </span>
+                        <span className="text-[10px] opacity-80">{m.cuenta === "club_debe" ? "le debe el club" : "debe la disciplina"}</span>
                       </span>
                     </motion.li>
                   ))}
@@ -366,8 +386,8 @@ function Resumen({
               )}
               {ultimos.length > 0 && (
                 <div className="flex items-center justify-between border-t border-linea px-4 py-2 text-xs">
-                  <span className="text-muted-foreground">Saldo</span>
-                  <span className={cn("font-medium tabular-nums", claseSaldo(deuda))}>{formatImporte(deuda, "UYU")}</span>
+                  <span className="text-muted-foreground">Saldo neto</span>
+                  <SaldoNeto neto={neto} className="font-medium" />
                 </div>
               )}
             </Panel>
@@ -381,7 +401,7 @@ function Resumen({
 
       {verTesoreria && planes.some((p) => p.situacion === "atrasado") && (
         <Aviso titulo="Hay planes de pago atrasados">
-          {formatImporte(vencido, "UYU")} vencido sin pagar. Se imputa al registrar un pago de la disciplina o al compensar en una liquidación.
+          {formatImporte(vencido, "UYU")} vencido sin pagar. Se imputa al registrar un pago de la disciplina o al compensar su deuda cuando se le paga una liquidación.
         </Aviso>
       )}
       {!verTesoreria && (

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Ban, Calculator, History, Pencil, Receipt, Send, Settings2 } from "lucide-react";
+import { Calculator, History, Pencil, Send, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatFecha, formatImporte } from "@/lib/contabilidad/formato";
@@ -11,7 +11,6 @@ import { easeSmooth } from "@/lib/motion";
 import {
   finMes,
   inicioMes,
-  r2,
   sumarDias,
   sumarMeses,
   type CuentaDisponible,
@@ -20,28 +19,20 @@ import {
   type PreviaLiquidacionDisciplina,
 } from "@/lib/socios/cuotas";
 import type { PlanVigente } from "@/lib/socios/disciplinas";
-import {
-  anularLiquidacionDisciplina,
-  guardarDisciplinaCobranza,
-  liquidarDisciplina,
-  previsualizarDisciplina,
-} from "@/app/(dashboard)/cuotas/actions";
+import { guardarDisciplinaCobranza, liquidarDisciplina, previsualizarDisciplina } from "@/app/(dashboard)/cuotas/actions";
 import {
   Aviso,
-  BadgeEstado,
   Boton,
   Campo,
   DialogoAccion,
-  DialogoAnular,
   EncabezadoPagina,
   Explicacion,
   ImporteAnimado,
-  LinkAsiento,
   Panel,
   Pastilla,
-  Vacio,
   claseControl,
 } from "./ui";
+import { ListaLiquidaciones } from "./liquidaciones";
 
 function rangoSugerido(d: DisciplinaCobranza | undefined, hoy: string) {
   const mesPasado = sumarMeses(inicioMes(hoy), -1);
@@ -59,6 +50,7 @@ export function DisciplinasVista({
   hoy,
   puedeOperar,
   planesPago = [],
+  deudas = {},
 }: {
   disciplinas: DisciplinaCobranza[];
   liquidaciones: LiquidacionDisciplinaLista[];
@@ -66,32 +58,27 @@ export function DisciplinasVista({
   cuentaDefecto: string | null;
   hoy: string;
   puedeOperar: boolean;
-  /** Planes de pago vigentes con saldo: lo compensado se puede imputar a sus cuotas. */
+  /** Planes de pago vigentes con saldo: lo compensado al pagar se puede imputar a sus cuotas. */
   planesPago?: PlanVigente[];
+  /** Lo que cada disciplina le debe al club (tope de la compensación al pagar). */
+  deudas?: Record<number, number>;
 }) {
   const router = useRouter();
   const [discId, setDiscId] = useState<number | "">("");
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
   const [previa, setPrevia] = useState<{ clave: string; datos: PreviaLiquidacionDisciplina } | null>(null);
-  const [compensar, setCompensar] = useState("");
-  const [cuentaId, setCuentaId] = useState(cuentaDefecto ?? cuentas[0]?.id ?? "");
   const [fecha, setFecha] = useState(hoy);
   const [notas, setNotas] = useState("");
-  const [planId, setPlanId] = useState<number | "">("");
   const [calculando, start] = useTransition();
   const [confirmar, setConfirmar] = useState(false);
   const [editar, setEditar] = useState<DisciplinaCobranza | null>(null);
-  const [anular, setAnular] = useState<LiquidacionDisciplinaLista | null>(null);
 
   const disc = disciplinas.find((d) => d.id === discId);
   const clave = `${discId}|${desde}|${hasta}`;
   const p = previa && previa.clave === clave ? previa.datos : null;
-  const montoComp = Number(compensar.replace(",", ".")) || 0;
-  const transferir = p ? r2(p.importe - montoComp) : 0;
-  const maxComp = p ? r2(Math.max(0, Math.min(p.importe, p.deuda))) : 0;
-  const planesDisc = planesPago.filter((pl) => pl.disciplina_id === discId);
-  const planElegido = montoComp > 0 ? planesDisc.find((pl) => pl.id === planId) : undefined;
+  const pendientes = liquidaciones.filter((l) => l.estado === "vigente" && l.saldo > 0);
+  const totalPendiente = pendientes.reduce((s, l) => s + l.saldo, 0);
 
   function elegir(id: number | "") {
     setDiscId(id);
@@ -99,7 +86,6 @@ export function DisciplinasVista({
     setDesde(r.desde);
     setHasta(r.hasta);
     setPrevia(null);
-    setPlanId("");
   }
 
   function calcular() {
@@ -111,7 +97,6 @@ export function DisciplinasVista({
         return;
       }
       setPrevia({ clave, datos: r.data });
-      setCompensar(String(r2(Math.max(0, Math.min(r.data.importe, r.data.deuda)))));
     });
   }
 
@@ -119,8 +104,7 @@ export function DisciplinasVista({
   if (p) {
     if (p.yaLiquidado) errores.push("Ese período ya se liquidó (total o parcialmente)");
     if (p.importe <= 0) errores.push("No hay nada para liquidar en el período");
-    if (montoComp < 0 || montoComp > maxComp) errores.push(`Lo compensado va de 0 a ${formatImporte(maxComp)}`);
-    if (transferir > 0 && !cuentaId) errores.push("Elegí la cuenta desde la que se transfiere");
+    if (!fecha || fecha > hoy) errores.push("La fecha no puede ser futura");
   }
 
   return (
@@ -128,12 +112,12 @@ export function DisciplinasVista({
       <EncabezadoPagina
         eyebrow="Cuotas y cobranza"
         titulo="Liquidación a disciplinas"
-        descripcion="Lo cobrado de las cuotas de cada disciplina, menos su parte de la comisión del débito, se le liquida; puede compensar lo que le debe al club."
+        descripcion="Lo cobrado de las cuotas de cada disciplina, menos su parte de la comisión del débito, se le liquida: queda como deuda del club con la disciplina. Después se paga, en una o varias veces, transfiriendo y/o compensando lo que la disciplina le debe al club."
       />
 
       <Panel titulo="Liquidar" icono={Calculator} delay={0.04}>
         <div className="space-y-4 p-4">
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_10rem_auto] sm:items-end">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_10rem_auto] sm:items-end">
             <Campo etiqueta="Disciplina">
               <select value={discId} onChange={(e) => elegir(e.target.value ? Number(e.target.value) : "")} className={claseControl}>
                 <option value="">Elegí…</option>
@@ -161,85 +145,36 @@ export function DisciplinasVista({
           <AnimatePresence mode="wait">
             {p && (
               <motion.div key={clave} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={easeSmooth} className="space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <Cifra etiqueta="Cobrado" valor={p.cobrado} texto="Lo aplicado a cuotas de la disciplina en el período (cobros y saldo a favor, por fecha de aplicación)." />
                   <Cifra etiqueta="Comisión" valor={p.comision} texto="Su parte de la comisión del débito Visa acreditado en el período." negativo />
-                  <Cifra etiqueta="A liquidar" valor={p.importe} texto="Cobrado menos comisión: lo que le corresponde a la disciplina." fuerte />
+                  <Cifra etiqueta="A liquidar" valor={p.importe} texto="Cobrado menos comisión: lo que el club le va a deber a la disciplina." fuerte />
                   <Cifra
-                    etiqueta="Deuda con el club"
-                    valor={p.deuda}
-                    texto="Lo que la disciplina le debe al club: cuotas cobradas en su cuenta y pedidos de tienda a cuenta corriente."
-                    alerta={p.deuda > 0}
+                    etiqueta="Deuda de la disciplina"
+                    valor={deudas[Number(discId)] ?? p.deuda}
+                    texto="Referencia: lo que la disciplina le debe al club. Se puede compensar al pagar la liquidación."
+                    alerta={(deudas[Number(discId)] ?? p.deuda) > 0}
                   />
                 </div>
                 {p.yaLiquidado && <Aviso titulo="Ese período ya se liquidó a la disciplina (total o parcialmente)">Elegí fechas posteriores a la última liquidación o anulala primero.</Aviso>}
 
                 {puedeOperar && p.importe > 0 && !p.yaLiquidado && (
-                  <div className="grid gap-4 rounded-2xl border border-bordo-100 bg-bordo-50/30 p-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <Campo etiqueta="Compensar de su deuda ($)" ayuda={`Máximo ${formatImporte(maxComp)}: el menor entre lo liquidado y la deuda.`}>
-                        <input inputMode="decimal" value={compensar} onChange={(e) => setCompensar(e.target.value.replace(/[^\d.,]/g, ""))} className={cn(claseControl, "text-right tabular-nums")} />
-                      </Campo>
+                  <div className="grid grid-cols-1 gap-4 rounded-2xl border border-bordo-100 bg-bordo-50/30 p-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-[10rem_minmax(0,1fr)]">
                       <Campo etiqueta="Fecha">
-                        <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={claseControl} />
+                        <input type="date" value={fecha} max={hoy} onChange={(e) => setFecha(e.target.value)} className={claseControl} />
                       </Campo>
-                      <AnimatePresence initial={false}>
-                        {transferir > 0 && (
-                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="sm:col-span-2">
-                            <Campo etiqueta="Se transfiere desde">
-                              <select value={cuentaId} onChange={(e) => setCuentaId(e.target.value)} className={claseControl}>
-                                {cuentas.map((c) => (
-                                  <option key={c.id} value={c.id}>
-                                    {c.codigo} · {c.nombre}
-                                  </option>
-                                ))}
-                              </select>
-                            </Campo>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                      <AnimatePresence initial={false}>
-                        {montoComp > 0 && planesDisc.length > 0 && (
-                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="sm:col-span-2">
-                            <Campo
-                              etiqueta="Imputar a un plan de pago"
-                              ayuda={
-                                planElegido
-                                  ? `Lo compensado se aplica a las cuotas más viejas del plan (saldo ${formatImporte(planElegido.saldo)}${planElegido.saldo_vencido > 0 ? `, ${formatImporte(planElegido.saldo_vencido)} vencido` : ""}).`
-                                  : "Opcional: lo compensado baja la deuda igual; elegí un plan para que cuente como pago de sus cuotas."
-                              }
-                            >
-                              <select value={planId} onChange={(e) => setPlanId(e.target.value ? Number(e.target.value) : "")} className={claseControl}>
-                                <option value="">No imputar a un plan</option>
-                                {planesDisc.map((pl) => (
-                                  <option key={pl.id} value={pl.id}>
-                                    {pl.descripcion} · saldo {formatImporte(pl.saldo)}
-                                  </option>
-                                ))}
-                              </select>
-                            </Campo>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                      <Campo etiqueta="Notas" className="sm:col-span-2">
+                      <Campo etiqueta="Notas">
                         <input value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Opcional" className={claseControl} maxLength={500} />
                       </Campo>
                       {disc?.datos_transferencia && <Explicacion className="sm:col-span-2">Datos para la transferencia: {disc.datos_transferencia}</Explicacion>}
                     </div>
                     <div className="space-y-2 rounded-xl border border-linea bg-white p-3 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">A liquidar</span>
-                        <span className="tabular-nums">{formatImporte(p.importe)}</span>
+                      <div className="flex items-baseline justify-between">
+                        <span className="font-medium">El club le va a deber</span>
+                        <ImporteAnimado valor={p.importe} moneda="UYU" className="font-heading text-lg text-bordo-800" />
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Compensado</span>
-                        <ImporteAnimado valor={-montoComp} />
-                      </div>
-                      <div className="flex items-baseline justify-between border-t border-linea pt-2">
-                        <span className="font-medium">Se transfiere</span>
-                        <ImporteAnimado valor={transferir} moneda="UYU" className="font-heading text-lg text-bordo-800" />
-                      </div>
-                      <Explicacion>Gasto de la disciplina (5.2.09) contra su deuda y el banco.</Explicacion>
+                      <Explicacion>Gasto de la disciplina (5.2.09) contra Liquidaciones a pagar (2.1.07.02). El pago se registra después.</Explicacion>
                       <Boton className="w-full" disabled={errores.length > 0} onClick={() => setConfirmar(true)}>
                         <Send className="size-4" />
                         Liquidar
@@ -254,7 +189,30 @@ export function DisciplinasVista({
         </div>
       </Panel>
 
-      <Panel titulo="Configuración por disciplina" icono={Settings2} delay={0.08}>
+      <Panel
+        titulo="Liquidaciones"
+        icono={History}
+        delay={0.08}
+        accion={
+          pendientes.length > 0 ? (
+            <span className="text-xs text-amber-700">
+              {pendientes.length} pendiente{pendientes.length === 1 ? "" : "s"} de pago · {formatImporte(totalPendiente, "UYU")}
+            </span>
+          ) : undefined
+        }
+      >
+        <ListaLiquidaciones
+          liquidaciones={liquidaciones}
+          cuentas={cuentas}
+          cuentaDefecto={cuentaDefecto}
+          planes={planesPago}
+          deudas={deudas}
+          hoy={hoy}
+          puedeOperar={puedeOperar}
+        />
+      </Panel>
+
+      <Panel titulo="Configuración por disciplina" icono={Settings2} delay={0.12}>
         <ul className="divide-y divide-linea">
           {disciplinas.map((d, i) => (
             <motion.li
@@ -269,8 +227,12 @@ export function DisciplinasVista({
                 <Pastilla tono={d.configurada ? "info" : "neutro"}>{d.porcentaje}% comisión</Pastilla>
               </div>
               <div className="col-span-2 truncate text-xs text-muted-foreground sm:col-span-1">{d.datos_transferencia ?? "Sin datos de transferencia"}</div>
-              <div className={cn("text-xs tabular-nums sm:text-right sm:text-sm", (d.deuda ?? 0) > 0 && "text-rose-700")}>
-                {d.deuda == null ? "" : d.deuda > 0 ? `Debe ${formatImporte(d.deuda)}` : <span className="text-muted-foreground">Sin deuda</span>}
+              <div className={cn("text-xs tabular-nums sm:text-right sm:text-sm", (deudas[d.id] ?? d.deuda ?? 0) > 0 && "text-rose-700")}>
+                {(deudas[d.id] ?? d.deuda) == null
+                  ? ""
+                  : (deudas[d.id] ?? d.deuda ?? 0) > 0
+                    ? `Debe ${formatImporte(deudas[d.id] ?? d.deuda ?? 0)}`
+                    : <span className="text-muted-foreground">Sin deuda</span>}
               </div>
               <div className="flex justify-end">
                 {puedeOperar && (
@@ -293,52 +255,6 @@ export function DisciplinasVista({
         </div>
       </Panel>
 
-      <Panel titulo="Liquidaciones" icono={History} delay={0.12}>
-        {liquidaciones.length === 0 ? (
-          <div className="p-4">
-            <Vacio icono={Receipt} titulo="Todavía no se liquidó a ninguna disciplina" />
-          </div>
-        ) : (
-          <ul className="divide-y divide-linea">
-            {liquidaciones.map((l, i) => (
-              <motion.li
-                key={l.id}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ ...easeSmooth, delay: Math.min(i, 10) * 0.03 }}
-                className={cn("grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-4 py-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_9rem_auto]", l.estado === "anulada" && "opacity-60")}
-              >
-                <div className="min-w-0">
-                  <div className="truncate font-medium">{l.disciplina}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {formatFecha(l.desde)} – {formatFecha(l.hasta)}
-                  </div>
-                </div>
-                <div className="col-span-2 row-start-2 text-xs text-muted-foreground sm:col-span-1 sm:row-start-auto">
-                  Cobrado {formatImporte(l.cobrado)} · comisión {formatImporte(l.comision)} · compensado {formatImporte(l.compensado)}
-                  {l.notas && <div className="truncate">{l.notas}</div>}
-                  {l.motivo_anulacion && <div className="text-rose-700">Anulada: {l.motivo_anulacion}</div>}
-                </div>
-                <div className="text-right">
-                  <div className="font-heading tabular-nums">{formatImporte(l.transferido, "UYU")}</div>
-                  <div className="text-[11px] text-muted-foreground">transferido el {formatFecha(l.fecha)}</div>
-                </div>
-                <div className="col-span-2 flex flex-wrap items-center justify-end gap-2 sm:col-span-1">
-                  <BadgeEstado estado={l.estado} />
-                  <LinkAsiento id={l.asiento_id} />
-                  {puedeOperar && l.estado === "vigente" && (
-                    <Boton variante="peligro" className="h-8 px-3 text-xs" onClick={() => setAnular(l)}>
-                      <Ban className="size-3.5" />
-                      Anular
-                    </Boton>
-                  )}
-                </div>
-              </motion.li>
-            ))}
-          </ul>
-        )}
-      </Panel>
-
       {p && disc && (
         <DialogoAccion
           open={confirmar}
@@ -347,10 +263,9 @@ export function DisciplinasVista({
           titulo={`Liquidar a ${disc.nombre}`}
           descripcion={
             <span>
-              Del {formatFecha(desde)} al {formatFecha(hasta)}: {formatImporte(p.importe, "UYU")} a liquidar,{" "}
-              {formatImporte(montoComp, "UYU")} compensados de su deuda
-              {planElegido ? ` (imputados a "${planElegido.descripcion}")` : ""} y {formatImporte(transferir, "UYU")} transferidos. Después no
-              se pueden registrar cobros de la disciplina con fecha dentro del período.
+              Del {formatFecha(desde)} al {formatFecha(hasta)}: el club le va a deber {formatImporte(p.importe, "UYU")} a la disciplina. El pago
+              (transferencia y/o compensación) se registra después con &quot;Pagar&quot;. No se pueden registrar cobros de la disciplina con fecha
+              dentro del período.
             </span>
           }
           textoAccion="Liquidar"
@@ -358,37 +273,20 @@ export function DisciplinasVista({
           alTerminar={() => {
             setPrevia(null);
             setNotas("");
-            setPlanId("");
             router.refresh();
           }}
           ejecutar={async () => {
-            const r = await liquidarDisciplina({
-              disciplina_id: disc.id,
-              desde,
-              hasta,
-              fecha,
-              compensar: montoComp,
-              cuenta_id: transferir > 0 ? cuentaId || null : null,
-              notas: notas.trim() || null,
-              plan_id: planElegido?.id ?? null,
-            });
+            const r = await liquidarDisciplina({ disciplina_id: disc.id, desde, hasta, fecha, notas: notas.trim() || null });
             return r.ok ? { ok: true } : r;
           }}
         />
       )}
 
       {editar && <EditarDisciplina key={editar.id} disciplina={editar} onClose={() => setEditar(null)} />}
-
-      <DialogoAnular
-        open={!!anular}
-        onOpenChange={(o) => !o && setAnular(null)}
-        titulo={`Anular la liquidación a ${anular?.disciplina ?? ""}`}
-        descripcion="Se revierte el asiento: la deuda compensada vuelve a la disciplina y el período queda libre para liquidarse de nuevo."
-        anular={(motivo) => anularLiquidacionDisciplina({ id: anular!.id, motivo })}
-      />
     </div>
   );
 }
+
 
 function Cifra({
   etiqueta,

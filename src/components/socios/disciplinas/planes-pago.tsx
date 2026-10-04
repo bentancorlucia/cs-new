@@ -188,8 +188,8 @@ export function PlanesPagoVista({
         )}
         <div className="border-t border-linea px-4 py-2">
           <Explicacion>
-            El plan no genera asientos: la deuda ya está en la cuenta corriente desde la venta. Los pagos de la disciplina y lo compensado en las
-            liquidaciones se imputan a las cuotas, de la más vieja a la más nueva.
+            El plan no genera asientos: la deuda ya está en la cuenta corriente desde la venta. Los pagos de la disciplina y lo que se compensa al
+            pagarle una liquidación se imputan a las cuotas, de la más vieja a la más nueva.
           </Explicacion>
         </div>
       </Panel>
@@ -269,7 +269,11 @@ function DetallePlan({
                     <ul className="mt-0.5 space-y-0.5 text-[11px] text-muted-foreground">
                       {c.imputaciones.map((a) => (
                         <li key={a.id} className={cn(a.anulada && "line-through opacity-70")}>
-                          {formatFecha(a.fecha)} · {a.cobro_id ? "pago de la disciplina" : `liquidación Nº ${a.liquidacion_id}`} · {formatImporte(a.importe)}
+                          {formatFecha(a.fecha)} · {a.cobro_id
+                            ? "pago de la disciplina"
+                            : a.pago_liquidacion_id
+                              ? `compensado al pagar una liquidación (pago Nº ${a.pago_liquidacion_id})`
+                              : `liquidación Nº ${a.liquidacion_id}`} · {formatImporte(a.importe)}
                           {a.anulada && " (anulado)"}
                         </li>
                       ))}

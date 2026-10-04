@@ -1,5 +1,5 @@
 import type { Database as DbPublico } from "@/types/database";
-import { leerTodo, r2, type ClientePadron, type ClienteSocios } from "./cuotas";
+import { leerTodo, listarLiquidacionesDisciplina, r2, type ClientePadron, type ClienteSocios, type LiquidacionDisciplinaLista } from "./cuotas";
 
 /**
  * Lecturas de Disciplinas (secretaría y tesorería): ficha, socios, cuenta
@@ -70,7 +70,10 @@ export type TipoMovimiento =
   | "devolucion_tienda"
   | "cuota_cobrada"
   | "liquidacion"
+  | "pago_liquidacion"
+  | "compensacion"
   | "pago"
+  | "manual"
   | "anulacion"
   | "otro";
 
@@ -80,21 +83,42 @@ export const NOMBRE_TIPO_MOVIMIENTO: Record<TipoMovimiento, string> = {
   devolucion_tienda: "Devolución",
   cuota_cobrada: "Cuota cobrada",
   liquidacion: "Liquidación",
+  pago_liquidacion: "Pago de liquidación",
+  compensacion: "Compensación",
   pago: "Pago al club",
+  manual: "Asiento manual",
   anulacion: "Anulación",
   otro: "Otro",
 };
 
 export const AYUDA_TIPO_MOVIMIENTO: Record<TipoMovimiento, string> = {
   saldo_inicial: "Saldo con el que arrancó la cuenta.",
-  compra_tienda: "Pedido de la tienda a cuenta corriente: aumenta la deuda.",
-  devolucion_tienda: "Devolución o cancelación de un pedido: baja la deuda.",
-  cuota_cobrada: "Un socio pagó su cuota en la cuenta de la disciplina: el dinero es del club, aumenta la deuda.",
-  liquidacion: "Compensación de la deuda en una liquidación de cuotas.",
+  compra_tienda: "Pedido de la tienda a cuenta corriente: aumenta lo que la disciplina le debe al club.",
+  devolucion_tienda: "Devolución o cancelación de un pedido: baja lo que la disciplina debe.",
+  cuota_cobrada: "Un socio pagó su cuota en la cuenta de la disciplina: el dinero es del club, aumenta lo que la disciplina debe.",
+  liquidacion: "Se le liquidaron las cuotas cobradas: el club pasa a deberle a la disciplina.",
+  pago_liquidacion: "El club pagó una liquidación (por transferencia y/o compensación): baja lo que el club le debe.",
+  compensacion: "Parte del pago de una liquidación se descontó de lo que la disciplina le debía al club.",
   pago: "La disciplina le pagó al club.",
+  manual: "Préstamos u otros movimientos cargados como asiento manual en Contabilidad.",
   anulacion: "Contra-asiento de un movimiento anulado.",
-  otro: "Asiento manual u otro origen.",
+  otro: "Otro origen.",
 };
+
+/** De qué lado está el movimiento: lo que la disciplina le debe al club (1.1.04.03) o lo que el club le debe (2.1.07.02). */
+export type CuentaMovimiento = "disciplina_debe" | "club_debe";
+
+export const NOMBRE_CUENTA_MOVIMIENTO: Record<CuentaMovimiento, string> = {
+  disciplina_debe: "Debe la disciplina",
+  club_debe: "Le debe el club",
+};
+
+/** Saldo neto en palabras: + la disciplina le debe al club, − el club le debe a la disciplina. */
+export function textoSaldoNeto(neto: number): string {
+  if (neto > 0.004) return "La disciplina le debe al club";
+  if (neto < -0.004) return "El club le debe a la disciplina";
+  return "Cuenta saldada";
+}
 
 export const NOMBRE_SITUACION_PLAN: Record<string, string> = {
   al_dia: "Al día",
@@ -108,6 +132,7 @@ export const NOMBRE_SITUACION_CUOTA: Record<string, string> = {
   vencida: "Vencida",
   parcial: "Pago parcial",
   pendiente: "Pendiente",
+  cancelada: "Plan cancelado",
 };
 
 export const NOMBRE_ESTADO_PEDIDO: Record<string, string> = {
@@ -141,8 +166,12 @@ export interface DisciplinaLista {
   planesVigentes: number;
   /** Saldo vencido de los planes vigentes. */
   saldoVencidoPlanes: number;
-  /** Deuda con el club (+ debe la disciplina). null si quien mira no es tesorería. */
+  /** Saldo neto de la cuenta corriente (+ debe la disciplina, − le debe el club). null si quien mira no es tesorería. */
   saldo: number | null;
+  /** Lo que la disciplina le debe al club (1.1.04.03). */
+  debeAlClub: number | null;
+  /** Lo que el club le debe a la disciplina (liquidaciones a pagar, 2.1.07.02). */
+  clubLeDebe: number | null;
   ultimoMovimiento: string | null;
 }
 
@@ -199,6 +228,8 @@ export async function listarDisciplinasGestion(
     planesVigentes: planesPor.get(d.id)?.n ?? 0,
     saldoVencidoPlanes: planesPor.get(d.id)?.vencido ?? 0,
     saldo: conSaldos ? r2(num(saldoPor.get(d.id)?.saldo)) : null,
+    debeAlClub: conSaldos ? r2(num(saldoPor.get(d.id)?.debe_al_club)) : null,
+    clubLeDebe: conSaldos ? r2(num(saldoPor.get(d.id)?.club_le_debe)) : null,
     ultimoMovimiento: saldoPor.get(d.id)?.ultimo_movimiento ?? null,
   }));
 }
@@ -215,6 +246,7 @@ export interface MovimientoCuenta {
   numero: number | null;
   tipo: TipoMovimiento;
   descripcion: string;
+  cuenta: CuentaMovimiento;
   debe: number;
   haber: number;
   saldo: number;
@@ -232,6 +264,7 @@ export async function cuentaCorrienteDisciplina(so: ClienteSocios, disciplina: n
     numero: f.numero ?? null,
     tipo: (f.tipo in NOMBRE_TIPO_MOVIMIENTO ? f.tipo : "otro") as TipoMovimiento,
     descripcion: f.descripcion ?? "",
+    cuenta: f.cuenta === "club_debe" ? "club_debe" : "disciplina_debe",
     debe: num(f.debe),
     haber: num(f.haber),
     saldo: num(f.saldo),
@@ -275,6 +308,7 @@ export interface ImputacionCuota {
   anulada: boolean;
   cobro_id: number | null;
   liquidacion_id: number | null;
+  pago_liquidacion_id: number | null;
 }
 
 export interface CuotaPlan {
@@ -316,57 +350,58 @@ export interface PlanPago {
 }
 
 /**
- * Planes con cuotas, pedidos e imputaciones, y los saldos calculados.
- *
- * Replica las vistas `socios.plan_pago_cuotas_saldo` y
- * `socios.planes_pago_resumen` en vez de leerlas: las vistas son
- * security_invoker y llaman a `contabilidad._hoy()`, que solo puede ejecutar
- * postgres, así que con cuotas cargadas fallan con 42501 para cualquier
- * usuario (y para service_role). Misma regla: pagada si no tiene saldo,
- * vencida si venció antes de hoy, parcial si tiene algo pagado.
+ * Planes con cuotas, pedidos e imputaciones. Los saldos y la situación salen
+ * de las vistas `socios.planes_pago_resumen` y `socios.plan_pago_cuotas_saldo`
+ * (las cuotas impagas de un plan cancelado figuran "cancelada"). `hoy` queda
+ * por compatibilidad: la fecha la pone la base.
  */
 export async function leerPlanesPago(
   so: ClienteSocios,
-  hoy: string,
+  _hoy: string,
   filtro: { disciplina?: number; soloVigentes?: boolean } = {}
 ): Promise<PlanPago[]> {
-  let q = so.from("planes_pago").select("*");
+  let q = so.from("planes_pago_resumen").select("*");
   if (filtro.disciplina) q = q.eq("disciplina_id", filtro.disciplina);
   if (filtro.soloVigentes) q = q.eq("estado", "vigente");
   const planes = exigir(await q.order("created_at", { ascending: false }).order("id", { ascending: false }));
-  const ids = planes.map((p) => p.id);
+  const ids = planes.map((p) => p.id as number);
   if (ids.length === 0) return [];
   const [cuotas, pedidos] = await Promise.all([
-    porIds(ids, (lote) => so.from("plan_pago_cuotas").select("*").in("plan_id", lote)),
+    porIds(ids, (lote) => so.from("plan_pago_cuotas_saldo").select("*").in("plan_id", lote)),
     porIds(ids, (lote) => so.from("plan_pago_pedidos").select("*").in("plan_id", lote)),
   ]);
   const aplicaciones = await porIds(
-    cuotas.map((c) => c.id),
+    cuotas.map((c) => c.id as number),
     (lote) => so.from("plan_pago_aplicaciones").select("*").in("cuota_id", lote)
   );
   const apPorCuota = new Map<number, ImputacionCuota[]>();
   for (const a of aplicaciones.sort((x, y) => x.fecha.localeCompare(y.fecha) || x.id - y.id)) {
     const l = apPorCuota.get(a.cuota_id) ?? [];
-    l.push({ id: a.id, fecha: a.fecha, importe: num(a.importe), anulada: a.anulada, cobro_id: a.cobro_id, liquidacion_id: a.liquidacion_id });
+    l.push({
+      id: a.id,
+      fecha: a.fecha,
+      importe: num(a.importe),
+      anulada: a.anulada,
+      cobro_id: a.cobro_id,
+      liquidacion_id: a.liquidacion_id,
+      pago_liquidacion_id: a.pago_liquidacion_id,
+    });
     apPorCuota.set(a.cuota_id, l);
   }
   const cuotasPor = new Map<number, CuotaPlan[]>();
   for (const c of cuotas) {
-    const imputaciones = apPorCuota.get(c.id) ?? [];
-    const pagado = r2(imputaciones.filter((a) => !a.anulada).reduce((s, a) => s + a.importe, 0));
-    const saldo = r2(num(c.importe) - pagado);
-    const l = cuotasPor.get(c.plan_id) ?? [];
+    const l = cuotasPor.get(c.plan_id as number) ?? [];
     l.push({
-      id: c.id,
-      numero: c.numero,
-      vencimiento: c.vencimiento,
+      id: c.id as number,
+      numero: num(c.numero),
+      vencimiento: c.vencimiento ?? "",
       importe: num(c.importe),
-      pagado,
-      saldo,
-      situacion: saldo <= 0 ? "pagada" : c.vencimiento < hoy ? "vencida" : pagado > 0 ? "parcial" : "pendiente",
-      imputaciones,
+      pagado: num(c.pagado),
+      saldo: num(c.saldo),
+      situacion: c.situacion ?? "pendiente",
+      imputaciones: apPorCuota.get(c.id as number) ?? [],
     });
-    cuotasPor.set(c.plan_id, l);
+    cuotasPor.set(c.plan_id as number, l);
   }
   const pedidosPor = new Map<number, PedidoDePlan[]>();
   for (const p of pedidos) {
@@ -375,32 +410,27 @@ export async function leerPlanesPago(
     pedidosPor.set(p.plan_id, l);
   }
   return planes
-    .map((p) => {
-      const detalle = (cuotasPor.get(p.id) ?? []).sort((a, b) => a.numero - b.numero);
-      const vencidas = detalle.filter((c) => c.situacion === "vencida");
-      const saldo = r2(detalle.reduce((s, c) => s + c.saldo, 0));
-      return {
-        id: p.id,
-        disciplina_id: p.disciplina_id,
-        descripcion: p.descripcion,
-        importe_total: num(p.importe_total),
-        notas: p.notas,
-        estado: p.estado,
-        motivo_cancelacion: p.motivo_cancelacion,
-        cancelado_at: p.cancelado_at,
-        created_at: p.created_at,
-        pagado: r2(detalle.reduce((s, c) => s + c.pagado, 0)),
-        saldo,
-        cuotas: detalle.length,
-        cuotas_pagadas: detalle.filter((c) => c.situacion === "pagada").length,
-        cuotas_vencidas: vencidas.length,
-        saldo_vencido: r2(vencidas.reduce((s, c) => s + c.saldo, 0)),
-        proximo_vencimiento: detalle.find((c) => c.saldo > 0)?.vencimiento ?? null,
-        situacion: p.estado === "cancelado" ? "cancelado" : saldo <= 0 ? "cumplido" : vencidas.length > 0 ? "atrasado" : "al_dia",
-        pedidos: pedidosPor.get(p.id) ?? [],
-        detalle,
-      };
-    })
+    .map((p) => ({
+      id: p.id as number,
+      disciplina_id: p.disciplina_id as number,
+      descripcion: p.descripcion ?? "",
+      importe_total: num(p.importe_total),
+      notas: p.notas,
+      estado: p.estado ?? "vigente",
+      motivo_cancelacion: p.motivo_cancelacion,
+      cancelado_at: p.cancelado_at,
+      created_at: p.created_at ?? "",
+      pagado: num(p.pagado),
+      saldo: num(p.saldo),
+      cuotas: num(p.cuotas),
+      cuotas_pagadas: num(p.cuotas_pagadas),
+      cuotas_vencidas: num(p.cuotas_vencidas),
+      saldo_vencido: num(p.saldo_vencido),
+      proximo_vencimiento: p.proximo_vencimiento,
+      situacion: p.situacion ?? "al_dia",
+      pedidos: pedidosPor.get(p.id as number) ?? [],
+      detalle: (cuotasPor.get(p.id as number) ?? []).sort((x, y) => x.numero - y.numero),
+    }))
     .sort((a, b) => Number(b.estado === "vigente") - Number(a.estado === "vigente"));
 }
 
@@ -444,46 +474,11 @@ export async function pagosDisciplina(so: ClienteSocios, disciplina: number, pla
 // Liquidaciones de la disciplina
 // ------------------------------------------------------------
 
-export interface LiquidacionDeDisciplina {
-  id: number;
-  desde: string;
-  hasta: string;
-  fecha: string;
-  cobrado: number;
-  comision: number;
-  importe: number;
-  compensado: number;
-  transferido: number;
-  estado: string;
-  notas: string | null;
-  motivo_anulacion: string | null;
-  asiento_id: string;
-}
+export type LiquidacionDeDisciplina = LiquidacionDisciplinaLista;
 
-export async function liquidacionesDeDisciplina(so: ClienteSocios, disciplina: number): Promise<LiquidacionDeDisciplina[]> {
-  const filas = exigir(
-    await so
-      .from("liquidaciones_disciplina")
-      .select("*")
-      .eq("disciplina_id", disciplina)
-      .order("hasta", { ascending: false })
-      .order("id", { ascending: false })
-  );
-  return filas.map((l) => ({
-    id: l.id,
-    desde: l.desde,
-    hasta: l.hasta,
-    fecha: l.fecha,
-    cobrado: num(l.cobrado),
-    comision: num(l.comision),
-    importe: num(l.importe),
-    compensado: num(l.compensado),
-    transferido: num(l.transferido),
-    estado: l.estado,
-    notas: l.notas,
-    motivo_anulacion: l.motivo_anulacion,
-    asiento_id: l.asiento_id,
-  }));
+/** Liquidaciones de la disciplina con su saldo pendiente y sus pagos. */
+export function liquidacionesDeDisciplina(so: ClienteSocios, padron: ClientePadron, disciplina: number): Promise<LiquidacionDeDisciplina[]> {
+  return listarLiquidacionesDisciplina(so, padron, disciplina);
 }
 
 // ------------------------------------------------------------
@@ -733,4 +728,10 @@ export async function sociosDeDisciplina(
   }
 
   return { vigentes, inscripciones, categorias, porMes: [...porMes.values()] };
+}
+
+/** Lo que cada disciplina le debe al club (1.1.04.03), tope de lo que se compensa al pagar una liquidación. */
+export async function deudasDisciplinas(so: ClienteSocios): Promise<Record<number, number>> {
+  const filas = exigir(await so.rpc("saldos_disciplinas"));
+  return Object.fromEntries(filas.map((f) => [f.disciplina_id, r2(num(f.debe_al_club))]));
 }

@@ -12,6 +12,8 @@ import { Boton, EncabezadoPagina, Explicacion, Filtros, NumeroAnimado, Pastilla,
 import { DialogoDisciplina, type DatosDisciplina } from "./form-disciplina";
 import { Cifra, ImporteContador, claseSaldo } from "./ui";
 
+const textoNeto = (neto: number) => (neto > 0.004 ? "La disciplina debe" : neto < -0.004 ? "El club le debe" : "Cuenta saldada");
+
 type Filtro = "activas" | "todas";
 
 export function ListaDisciplinas({
@@ -50,7 +52,8 @@ export function ListaDisciplinas({
   const activas = disciplinas.filter((d) => d.activa);
   const totalSocios = activas.reduce((s, d) => s + d.socios, 0);
   const totalPlanes = disciplinas.reduce((s, d) => s + d.planesVigentes, 0);
-  const deudaTotal = disciplinas.reduce((s, d) => s + Math.max(0, d.saldo ?? 0), 0);
+  const deudaTotal = disciplinas.reduce((s, d) => s + (d.debeAlClub ?? 0), 0);
+  const clubDebeTotal = disciplinas.reduce((s, d) => s + (d.clubLeDebe ?? 0), 0);
   const vencidoPlanes = disciplinas.reduce((s, d) => s + d.saldoVencidoPlanes, 0);
 
   return (
@@ -77,7 +80,12 @@ export function ListaDisciplinas({
         </Cifra>
         {verTesoreria && (
           <>
-            <Cifra etiqueta="Deuda con el club" tono={deudaTotal > 0 ? "alerta" : "neutro"} delay={0.08} detalle="Suma de lo que deben las disciplinas">
+            <Cifra
+              etiqueta="Deben al club"
+              tono={deudaTotal > 0 ? "alerta" : "neutro"}
+              delay={0.08}
+              detalle={clubDebeTotal > 0 ? `El club les debe ${formatImporte(clubDebeTotal, "UYU")} por liquidaciones` : "El club no les debe liquidaciones"}
+            >
               <ImporteContador valor={deudaTotal} moneda="UYU" />
             </Cifra>
             <Cifra
@@ -164,14 +172,20 @@ export function ListaDisciplinas({
                       </div>
                     </div>
                     {d.saldo !== null && (
-                      <div className={cn("rounded-xl px-3 py-2", d.saldo > 0 ? "bg-rose-50/70" : "bg-superficie/70")}>
-                        <div className="text-[10px] uppercase tracking-editorial text-muted-foreground">{d.saldo < 0 ? "A favor" : "Debe al club"}</div>
+                      <div className={cn("min-w-0 rounded-xl px-3 py-2", d.saldo > 0.004 ? "bg-rose-50/70" : d.saldo < -0.004 ? "bg-amber-50/80" : "bg-superficie/70")}>
+                        <div className="truncate text-[10px] uppercase tracking-editorial text-muted-foreground">{textoNeto(d.saldo)}</div>
                         <div className={cn("truncate font-heading text-lg", claseSaldo(d.saldo))}>
                           <ImporteContador valor={Math.abs(d.saldo)} />
                         </div>
                       </div>
                     )}
                   </div>
+                  {d.saldo !== null && ((d.debeAlClub ?? 0) !== 0 || (d.clubLeDebe ?? 0) !== 0) && (
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] tabular-nums">
+                      <span className="text-rose-700">Debe al club {formatImporte(d.debeAlClub ?? 0)}</span>
+                      <span className="text-amber-700">El club le debe {formatImporte(d.clubLeDebe ?? 0)}</span>
+                    </div>
+                  )}
 
                   {d.saldoVencidoPlanes > 0 && (
                     <div className="flex items-center gap-1.5 text-xs text-rose-700">
@@ -220,8 +234,8 @@ export function ListaDisciplinas({
 
       {verTesoreria && (
         <Explicacion>
-          Debe al club: saldo de Fondos en poder de disciplinas (compras de la tienda a cuenta y cuotas cobradas en la cuenta de la disciplina, menos
-          pagos y compensaciones).
+          Saldo neto de cada disciplina: lo que le debe al club (compras de la tienda a cuenta, cuotas cobradas en su cuenta y préstamos, menos sus
+          pagos y compensaciones) contra lo que el club le debe por liquidaciones de cuotas pendientes de pago.
         </Explicacion>
       )}
 

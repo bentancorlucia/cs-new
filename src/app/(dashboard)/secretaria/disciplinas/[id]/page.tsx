@@ -66,7 +66,7 @@ export default async function DisciplinaPage({ params, searchParams }: { params:
       const [movimientos, planes, liquidaciones, pedidos, cuentas, defecto] = await Promise.all([
         cuentaCorrienteDisciplina(so, disciplinaId),
         planesPagoDisciplina(so, disciplinaId, hoy),
-        liquidacionesDeDisciplina(so, disciplinaId),
+        liquidacionesDeDisciplina(so, padron, disciplinaId),
         pedidosDeDisciplina(admin, so, disciplinaId),
         cuentasDisponibilidad(conta),
         cuentasPorDefecto(conta),

@@ -10,7 +10,7 @@ import {
   cuentasPorDefecto,
   listarLiquidacionesDisciplina,
 } from "@/lib/socios/cuotas";
-import { planesVigentesConSaldo } from "@/lib/socios/disciplinas";
+import { deudasDisciplinas, planesVigentesConSaldo } from "@/lib/socios/disciplinas";
 import { hoyUruguay } from "@/lib/contabilidad/formato";
 import { DisciplinasVista } from "@/components/socios/cuotas/disciplinas";
 
@@ -21,12 +21,13 @@ export default async function DisciplinasCuotasPage() {
   const permisos = await permisosCuotas();
   if (!permisos.verTesoreria) redirect("/cuotas");
   const [db, padron, conta] = await Promise.all([createSociosClient(), createServerClient(), createContabilidadClient()]);
-  const [disciplinas, liquidaciones, cuentas, defecto, planesPago] = await Promise.all([
+  const [disciplinas, liquidaciones, cuentas, defecto, planesPago, deudas] = await Promise.all([
     cobranzaDisciplinas(db, padron, conta),
     listarLiquidacionesDisciplina(db, padron),
     cuentasDisponibilidad(conta),
     cuentasPorDefecto(conta),
     planesVigentesConSaldo(db, hoyUruguay()).catch(() => []),
+    deudasDisciplinas(db).catch(() => ({}) as Record<number, number>),
   ]);
   return (
     <DisciplinasVista
@@ -35,6 +36,7 @@ export default async function DisciplinasCuotasPage() {
       cuentas={cuentas}
       cuentaDefecto={defecto.banco}
       planesPago={planesPago}
+      deudas={deudas}
       hoy={hoyUruguay()}
       puedeOperar={permisos.puedeTesoreria}
     />

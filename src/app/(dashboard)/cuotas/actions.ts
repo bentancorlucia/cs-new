@@ -436,14 +436,11 @@ const liquidarSchema = z
     desde: fecha,
     hasta: fecha,
     fecha,
-    compensar: z.number().min(0, "Lo compensado no puede ser negativo"),
-    cuenta_id: z.uuid().nullish(),
     notas: z.string().trim().max(500).nullish(),
-    plan_id: id.nullish(),
   })
-  .refine((d) => d.hasta >= d.desde, { message: "El período está al revés" })
-  .refine((d) => !d.plan_id || d.compensar > 0, { message: "Para imputar a un plan de pago hay que compensar parte de la deuda" });
+  .refine((d) => d.hasta >= d.desde, { message: "El período está al revés" });
 
+/** Liquidar genera la deuda del club con la disciplina; el pago va aparte (pagarLiquidacion). */
 export async function liquidarDisciplina(input: z.input<typeof liquidarSchema>): Promise<Resultado<number>> {
   try {
     await exigir("puedeTesoreria");
@@ -456,15 +453,71 @@ export async function liquidarDisciplina(input: z.input<typeof liquidarSchema>):
       p_desde: d.desde,
       p_hasta: d.hasta,
       p_fecha: d.fecha,
-      p_compensar: d.compensar,
-      p_cuenta: nulo(d.cuenta_id),
       p_notas: nulo(d.notas || null),
-      p_plan: nulo(d.plan_id),
     });
     if (error) return { ok: false, error: mensajeError(error) };
     revalidar();
-    if (d.plan_id) revalidatePath(`/secretaria/disciplinas/${d.disciplina_id}`);
+    revalidatePath(`/secretaria/disciplinas/${d.disciplina_id}`);
     return { ok: true, data };
+  } catch (e) {
+    return fallo(e);
+  }
+}
+
+const pagarSchema = z
+  .object({
+    liquidacion_id: id,
+    disciplina_id: id,
+    fecha,
+    transferir: z.number().min(0, "Lo transferido no puede ser negativo").max(100_000_000),
+    cuenta_id: z.uuid().nullish(),
+    compensar: z.number().min(0, "Lo compensado no puede ser negativo").max(100_000_000),
+    plan_id: id.nullish(),
+    referencia: z.string().trim().max(120).nullish(),
+    notas: z.string().trim().max(500).nullish(),
+  })
+  .refine((d) => d.transferir + d.compensar > 0, { message: "Indicá cuánto se transfiere y/o cuánto se compensa" })
+  .refine((d) => d.transferir === 0 || !!d.cuenta_id, { message: "Elegí la cuenta desde la que se transfiere" })
+  .refine((d) => !d.plan_id || d.compensar > 0, { message: "Para imputar a un plan de pago hay que compensar parte de la deuda" });
+
+/** Pago (total o parcial) de una liquidación: transferencia y/o compensación de la deuda de la disciplina. */
+export async function pagarLiquidacion(input: z.input<typeof pagarSchema>): Promise<Resultado<number>> {
+  try {
+    await exigir("puedeTesoreria");
+    const p = pagarSchema.safeParse(input);
+    if (!p.success) return invalido(p.error.issues);
+    const d = p.data;
+    const db = await createSociosClient();
+    const { data, error } = await db.rpc("pagar_liquidacion_disciplina", {
+      p_liquidacion: d.liquidacion_id,
+      p_fecha: d.fecha,
+      p_transferir: d.transferir,
+      p_cuenta: nulo(d.transferir > 0 ? d.cuenta_id : null),
+      p_compensar: d.compensar,
+      p_plan: nulo(d.compensar > 0 ? d.plan_id : null),
+      p_referencia: nulo(d.referencia || null),
+      p_notas: nulo(d.notas || null),
+    });
+    if (error) return { ok: false, error: mensajeError(error) };
+    revalidar();
+    revalidatePath(`/secretaria/disciplinas/${d.disciplina_id}`);
+    return { ok: true, data };
+  } catch (e) {
+    return fallo(e);
+  }
+}
+
+export async function anularPagoLiquidacion(input: z.input<typeof anularSchema>): Promise<Resultado> {
+  try {
+    await exigir("puedeTesoreria");
+    const p = anularSchema.safeParse(input);
+    if (!p.success) return invalido(p.error.issues);
+    const db = await createSociosClient();
+    const { error } = await db.rpc("anular_pago_liquidacion", { p_pago: p.data.id, p_motivo: p.data.motivo });
+    if (error) return { ok: false, error: mensajeError(error) };
+    revalidar();
+    revalidatePath("/secretaria/disciplinas", "layout");
+    return { ok: true, data: undefined };
   } catch (e) {
     return fallo(e);
   }
@@ -482,6 +535,7 @@ export async function anularLiquidacionDisciplina(input: z.input<typeof anularSc
     });
     if (error) return { ok: false, error: mensajeError(error) };
     revalidar();
+    revalidatePath("/secretaria/disciplinas", "layout");
     return { ok: true, data: undefined };
   } catch (e) {
     return fallo(e);

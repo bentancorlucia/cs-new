@@ -1,7 +1,7 @@
 -- Socios: cobros, saldo a favor, débito Visa, notas de crédito y
 -- liquidación a las disciplinas.
 BEGIN;
-SELECT plan(35);
+SELECT plan(39);
 
 DO $$ BEGIN PERFORM contabilidad.crear_ejercicio(2026); END $$;
 CREATE FUNCTION pg_temp.saldo(p_codigo text) RETURNS numeric LANGUAGE sql AS $$
@@ -90,13 +90,22 @@ SELECT throws_like($$ SELECT socios.anular_cobro((SELECT id FROM socios.cobros W
 -- ---------- Liquidación a hockey (marzo y abril)
 SELECT is((SELECT importe FROM socios.previsualizar_liquidacion_disciplina(7, '2026-03-01', '2026-04-30')),
           2970.00::numeric, 'le corresponde lo cobrado de sus cuotas menos su parte de la comisión');
-SELECT throws_like($$ SELECT socios.liquidar_disciplina(7, '2026-03-01', '2026-04-30', '2026-05-05', 2600) $$,
-                   '%deuda de la disciplina%', 'no se compensa más que su deuda');
-CREATE TEMP TABLE liq AS SELECT socios.liquidar_disciplina(7, '2026-03-01', '2026-04-30', '2026-05-05', 2500) AS id;
-SELECT is((SELECT transferido FROM socios.liquidaciones_disciplina WHERE id = (SELECT id FROM liq)), 470.00::numeric,
-          'se transfiere la diferencia');
-SELECT is((SELECT deuda_disciplina FROM socios.previsualizar_liquidacion_disciplina(7, '2026-05-01', '2026-05-31')),
-          0.00::numeric, 'la deuda de la disciplina queda compensada');
+CREATE TEMP TABLE liq AS SELECT socios.liquidar_disciplina(7, '2026-03-01', '2026-04-30', '2026-05-05') AS id;
+SELECT is((SELECT club_le_debe FROM socios.saldos_disciplinas() WHERE disciplina_id = 7), 2970.00::numeric,
+          'la liquidación es deuda del club con la disciplina');
+SELECT is((SELECT saldo FROM socios.liquidaciones_disciplina_saldo WHERE id = (SELECT id FROM liq)), 2970.00::numeric,
+          'pendiente de pago');
+SELECT throws_like($$ SELECT socios.pagar_liquidacion_disciplina((SELECT id FROM liq), '2026-05-06', 0, NULL, 2600) $$,
+                   '%le debe al club%', 'no se compensa más que la deuda de la disciplina');
+DO $$ BEGIN PERFORM socios.pagar_liquidacion_disciplina((SELECT id FROM liq), '2026-05-06', 470, NULL, 2500); END $$;
+SELECT is((SELECT saldo FROM socios.liquidaciones_disciplina_saldo WHERE id = (SELECT id FROM liq)), 0.00::numeric,
+          'pagada: se transfiere la diferencia y se compensa la deuda');
+SELECT is((SELECT saldo FROM socios.saldos_disciplinas() WHERE disciplina_id = 7), 0.00::numeric,
+          'la cuenta corriente queda en cero');
+SELECT throws_like($$ SELECT socios.pagar_liquidacion_disciplina((SELECT id FROM liq), '2026-05-06', 1) $$,
+                   '%más que el saldo%', 'no se paga dos veces');
+SELECT throws_like($$ SELECT socios.anular_liquidacion_disciplina((SELECT id FROM liq), 'Prueba') $$,
+                   '%tiene pagos%', 'una liquidación pagada no se anula sin anular el pago');
 SELECT is((SELECT sum(l.debe) FROM contabilidad.lineas l JOIN contabilidad.cuentas c ON c.id = l.cuenta_id
            WHERE c.codigo = '5.2.09'), 2970.00::numeric, 'lo liquidado es gasto de la disciplina');
 SELECT throws_like($$ SELECT socios.liquidar_disciplina(7, '2026-04-01', '2026-05-31', '2026-06-05') $$,

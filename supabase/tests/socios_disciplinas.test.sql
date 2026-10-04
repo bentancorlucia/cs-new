@@ -1,6 +1,6 @@
 -- Disciplinas: cuenta corriente, pagos al club y planes de pago.
 BEGIN;
-SELECT plan(24);
+SELECT plan(26);
 
 DO $$ BEGIN PERFORM contabilidad.crear_ejercicio(extract(year FROM contabilidad._hoy())::int); END $$;
 CREATE FUNCTION pg_temp.cta(p text) RETURNS uuid LANGUAGE sql AS $$ SELECT id FROM contabilidad.cuentas WHERE codigo = p $$;
@@ -30,6 +30,14 @@ SELECT is((SELECT string_agg(DISTINCT tipo, ',') FROM socios.cuenta_corriente_di
 SELECT is(pg_temp.cc_saldo(), 3000.00::numeric, 'hockey debe 3000');
 SELECT is((SELECT pedido_id FROM socios.cuenta_corriente_disciplina(7) ORDER BY numero LIMIT 1), 9701, 'con el pedido');
 SELECT is((SELECT saldo FROM socios.saldos_disciplinas() WHERE disciplina_id = 13), 500.00::numeric, 'saldo de rugby en la lista');
+
+-- ---------- Préstamo del club: asiento manual sobre la cuenta de la disciplina
+DO $$ BEGIN PERFORM contabilidad.guardar_asiento(NULL, pg_temp.hoy(), 'Préstamo a hockey para el torneo', jsonb_build_array(
+  jsonb_build_object('cuenta_id', pg_temp.cta('1.1.04.03'), 'lado', 'debe', 'importe', 400, 'disciplina_id', 7),
+  jsonb_build_object('cuenta_id', pg_temp.cta('1.1.01.05'), 'lado', 'haber', 'importe', 400)), true); END $$;
+SELECT is((SELECT tipo FROM socios.cuenta_corriente_disciplina(7) WHERE debe = 400), 'manual', 'el préstamo figura como asiento manual');
+SELECT is(pg_temp.cc_saldo(), 3400.00::numeric, 'y suma a la deuda de la disciplina');
+DO $$ BEGIN PERFORM contabilidad.revertir_asiento((SELECT asiento_id FROM socios.cuenta_corriente_disciplina(7) WHERE debe = 400), 'Prueba'); END $$;
 
 -- ---------- Plan de pago
 SELECT throws_like($$ SELECT socios.crear_plan_pago(7, ARRAY[9701, 9702], '[{"vencimiento": "2030-01-10", "importe": 1000}]') $$,

@@ -998,32 +998,13 @@ export async function cobranzaDisciplinas(
     db.from("disciplinas_cobranza").select("*"),
     db.from("liquidaciones_disciplina").select("disciplina_id, hasta").eq("estado", "vigente"),
   ]);
+  // Lo que cada disciplina le debe al club: la misma regla que la base
+  // (saldos_disciplinas, solo tesorería y Comisión Fiscal).
   let deudas: Map<number, number> | null = null;
   if (conta) {
-    const { data: param } = await conta
-      .from("parametros_cuentas")
-      .select("cuenta_id")
-      .eq("proceso", "socios")
-      .eq("rol", "disciplinas")
-      .maybeSingle();
-    if (param) {
-      const lineas = await leerTodo((a, b) =>
-        conta
-          .from("lineas")
-          .select("disciplina_id, debe, haber, asientos!inner(estado)")
-          .eq("cuenta_id", param.cuenta_id)
-          .eq("asientos.estado", "confirmado")
-          .not("disciplina_id", "is", null)
-          .order("id")
-          .range(a, b)
-      ).catch(() => null);
-      if (lineas) {
-        deudas = new Map();
-        for (const l of lineas) {
-          if (l.disciplina_id == null) continue;
-          deudas.set(l.disciplina_id, r2((deudas.get(l.disciplina_id) ?? 0) + num(l.debe) - num(l.haber)));
-        }
-      }
+    const { data: saldos, error: errorSaldos } = await db.rpc("saldos_disciplinas");
+    if (!errorSaldos) {
+      deudas = new Map((saldos ?? []).map((f) => [f.disciplina_id, r2(num(f.debe_al_club))]));
     }
   }
   const cfg = new Map((config.data ?? []).map((c) => [c.disciplina_id, c]));
@@ -1047,6 +1028,19 @@ export async function cobranzaDisciplinas(
     });
 }
 
+export interface PagoLiquidacion {
+  id: number;
+  fecha: string;
+  transferido: number;
+  cuenta_id: string | null;
+  compensado: number;
+  referencia: string | null;
+  notas: string | null;
+  estado: string;
+  motivo_anulacion: string | null;
+  asiento_id: string;
+}
+
 export interface LiquidacionDisciplinaLista {
   id: number;
   disciplina_id: number;
@@ -1056,39 +1050,77 @@ export interface LiquidacionDisciplinaLista {
   fecha: string;
   cobrado: number;
   comision: number;
+  /** Lo liquidado: deuda del club con la disciplina (2.1.07.02). */
   importe: number;
-  compensado: number;
+  /** Pagado hasta hoy (pagos vigentes). */
   transferido: number;
+  compensado: number;
+  /** Pendiente de pago (0 si está anulada). */
+  saldo: number;
   notas: string | null;
   estado: string;
   motivo_anulacion: string | null;
   asiento_id: string;
+  pagos: PagoLiquidacion[];
 }
 
-export async function listarLiquidacionesDisciplina(db: ClienteSocios, padron: ClientePadron): Promise<LiquidacionDisciplinaLista[]> {
+/**
+ * Liquidaciones a disciplinas con lo pagado y el saldo pendiente
+ * (`liquidaciones_disciplina_saldo`) y sus pagos (`pagos_liquidacion`).
+ */
+export async function listarLiquidacionesDisciplina(
+  db: ClienteSocios,
+  padron: ClientePadron,
+  disciplina?: number
+): Promise<LiquidacionDisciplinaLista[]> {
   const [liqs, disciplinas] = await Promise.all([
-    leerTodo((a, b) =>
-      db.from("liquidaciones_disciplina").select("*").order("hasta", { ascending: false }).order("id", { ascending: false }).range(a, b)
-    ),
+    leerTodo((a, b) => {
+      let q = db.from("liquidaciones_disciplina_saldo").select("*");
+      if (disciplina) q = q.eq("disciplina_id", disciplina);
+      return q.order("hasta", { ascending: false }).order("id", { ascending: false }).range(a, b);
+    }),
     leerDisciplinas(padron),
   ]);
+  const pagos = await porIds(
+    liqs.map((l) => l.id as number),
+    (lote, a, b) => db.from("pagos_liquidacion").select("*").in("liquidacion_id", lote).order("id").range(a, b)
+  );
+  const pagosPor = new Map<number, PagoLiquidacion[]>();
+  for (const p of pagos.sort((x, y) => y.fecha.localeCompare(x.fecha) || y.id - x.id)) {
+    const l = pagosPor.get(p.liquidacion_id) ?? [];
+    l.push({
+      id: p.id,
+      fecha: p.fecha,
+      transferido: num(p.transferido),
+      cuenta_id: p.cuenta_id,
+      compensado: num(p.compensado),
+      referencia: p.referencia,
+      notas: p.notas,
+      estado: p.estado,
+      motivo_anulacion: p.motivo_anulacion,
+      asiento_id: p.asiento_id,
+    });
+    pagosPor.set(p.liquidacion_id, l);
+  }
   const disc = new Map(disciplinas.map((d) => [d.id, d.nombre]));
   return liqs.map((l) => ({
-    id: l.id,
-    disciplina_id: l.disciplina_id,
-    disciplina: disc.get(l.disciplina_id) ?? `Disciplina ${l.disciplina_id}`,
-    desde: l.desde,
-    hasta: l.hasta,
-    fecha: l.fecha,
+    id: l.id as number,
+    disciplina_id: l.disciplina_id as number,
+    disciplina: disc.get(l.disciplina_id as number) ?? `Disciplina ${l.disciplina_id}`,
+    desde: l.desde ?? "",
+    hasta: l.hasta ?? "",
+    fecha: l.fecha ?? "",
     cobrado: num(l.cobrado),
     comision: num(l.comision),
     importe: num(l.importe),
-    compensado: num(l.compensado),
     transferido: num(l.transferido),
+    compensado: num(l.compensado),
+    saldo: r2(num(l.saldo)),
     notas: l.notas,
-    estado: l.estado,
+    estado: l.estado ?? "vigente",
     motivo_anulacion: l.motivo_anulacion,
-    asiento_id: l.asiento_id,
+    asiento_id: l.asiento_id ?? "",
+    pagos: pagosPor.get(l.id as number) ?? [],
   }));
 }
 

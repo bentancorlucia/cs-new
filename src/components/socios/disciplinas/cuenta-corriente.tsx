@@ -10,14 +10,18 @@ import { formatFecha, formatImporte } from "@/lib/contabilidad/formato";
 import { r2 } from "@/lib/socios/cuotas";
 import {
   AYUDA_TIPO_MOVIMIENTO,
+  NOMBRE_CUENTA_MOVIMIENTO,
   NOMBRE_TIPO_MOVIMIENTO,
+  type MovimientoCuenta,
   type PagoDisciplina,
   type TipoMovimiento,
 } from "@/lib/socios/disciplinas";
+import { ListaLiquidaciones } from "@/components/socios/cuotas/liquidaciones";
 import {
   BadgeEstado,
   Boton,
   BotonLink,
+  Pastilla,
   Campo,
   DialogoAccion,
   DialogoAnular,
@@ -31,7 +35,43 @@ import {
 import { anularPagoDisciplina, registrarPagoDisciplina } from "@/app/(dashboard)/secretaria/disciplinas/actions";
 import type { DatosDisciplina } from "./form-disciplina";
 import type { DatosTesoreria } from "./detalle";
-import { BadgeTipoMovimiento, Cifra, FlechaMovimiento, ImporteContador, aNumero, claseSaldo, exportarExcel } from "./ui";
+import { BadgeTipoMovimiento, CLASE_CUENTA, Cifra, ImporteContador, SaldoNeto, aNumero, claseSaldo, exportarExcel } from "./ui";
+
+/** Efecto del movimiento en su cuenta: + aumenta lo que debe la disciplina (1.1.04.03) o lo que le debe el club (2.1.07.02). */
+export function importeEnCuenta(m: Pick<MovimientoCuenta, "cuenta" | "debe" | "haber">) {
+  return r2(m.cuenta === "club_debe" ? m.haber - m.debe : m.debe - m.haber);
+}
+
+/** Saldos por cuenta a partir de los movimientos. */
+export function saldosCuenta(movimientos: MovimientoCuenta[]) {
+  let debeDisciplina = 0;
+  let debeClub = 0;
+  for (const m of movimientos) {
+    if (m.cuenta === "club_debe") debeClub += m.haber - m.debe;
+    else debeDisciplina += m.debe - m.haber;
+  }
+  return { debeDisciplina: r2(debeDisciplina), debeClub: r2(debeClub), neto: r2(debeDisciplina - debeClub) };
+}
+
+function Monto({ valor, className }: { valor: number; className?: string }) {
+  if (Math.abs(valor) < 0.005) return <span className={className} />;
+  return (
+    <span className={cn("tabular-nums", className)}>
+      {valor > 0 ? "+" : "−"}
+      {formatImporte(Math.abs(valor))}
+    </span>
+  );
+}
+
+/** Saldo neto corto para las filas: "Debe 1.000,00" / "Le deben 1.000,00". */
+function NetoFila({ neto, className }: { neto: number; className?: string }) {
+  const abs = Math.abs(neto);
+  return (
+    <span className={cn("tabular-nums", claseSaldo(neto), className)}>
+      {abs < 0.005 ? "0,00" : `${neto > 0 ? "Debe" : "Le deben"} ${formatImporte(abs)}`}
+    </span>
+  );
+}
 
 const PAGINA = 60;
 
@@ -54,15 +94,26 @@ export function CuentaCorrienteVista({
   const [pagar, setPagar] = useState(false);
   const [anular, setAnular] = useState<PagoDisciplina | null>(null);
 
+  const planesVigentes = datos.planes
+    .filter((p) => p.estado === "vigente" && p.saldo > 0)
+    .map((p) => ({
+      id: p.id,
+      disciplina_id: disciplina.id,
+      descripcion: p.descripcion,
+      saldo: p.saldo,
+      saldo_vencido: p.saldo_vencido,
+      proximo_vencimiento: p.proximo_vencimiento,
+    }));
+  const pendienteLiq = r2(liquidaciones.filter((l) => l.estado === "vigente").reduce((s, l) => s + l.saldo, 0));
   const numeroPedido = useMemo(() => new Map(pedidos.map((p) => [p.id, p.numero])), [pedidos]);
   const nombreCuenta = useMemo(() => new Map(cuentas.map((c) => [c.id, `${c.codigo} · ${c.nombre}`])), [cuentas]);
 
-  const saldo = movimientos.at(-1)?.saldo ?? 0;
+  const { debeDisciplina, debeClub, neto: saldo } = saldosCuenta(movimientos);
   const enRango = movimientos.filter((m) => (!desde || m.fecha >= desde) && (!hasta || m.fecha <= hasta));
   const filtrados = enRango.filter((m) => tipo === "todos" || m.tipo === tipo);
   const saldoInicial = desde ? ([...movimientos].reverse().find((m) => m.fecha < desde)?.saldo ?? 0) : null;
-  const totalDebe = r2(filtrados.reduce((s, m) => s + m.debe, 0));
-  const totalHaber = r2(filtrados.reduce((s, m) => s + m.haber, 0));
+  const totalDisciplina = r2(filtrados.filter((m) => m.cuenta === "disciplina_debe").reduce((s, m) => s + importeEnCuenta(m), 0));
+  const totalClub = r2(filtrados.filter((m) => m.cuenta === "club_debe").reduce((s, m) => s + importeEnCuenta(m), 0));
   const visibles = filtrados.slice(Math.max(0, filtrados.length - mostrar));
   const hayFiltro = tipo !== "todos" || !!desde || !!hasta;
 
@@ -73,23 +124,24 @@ export function CuentaCorrienteVista({
       await exportarExcel(
         `cuenta-corriente-${disciplina.slug}-${hoy}.xlsx`,
         "Cuenta corriente",
-        ["Fecha", "Asiento", "Tipo", "Descripción", "Pedido", "Debe", "Haber", "Saldo"],
+        ["Fecha", "Asiento", "Tipo", "Cuenta", "Descripción", "Pedido", "Debe la disciplina", "Le debe el club", "Saldo neto (+ debe la disciplina)"],
         [
-          ...(saldoInicial !== null ? [[formatFecha(desde), "", "Saldo anterior", "", "", null, null, saldoInicial]] : []),
+          ...(saldoInicial !== null ? [[formatFecha(desde), "", "Saldo anterior", "", "", "", null, null, saldoInicial]] : []),
           ...filtrados.map((m) => [
             formatFecha(m.fecha),
             m.numero ?? "",
             NOMBRE_TIPO_MOVIMIENTO[m.tipo],
+            NOMBRE_CUENTA_MOVIMIENTO[m.cuenta],
             m.descripcion,
             m.pedido_id ? (numeroPedido.get(m.pedido_id) ?? m.pedido_id) : "",
-            m.debe || null,
-            m.haber || null,
+            m.cuenta === "disciplina_debe" ? importeEnCuenta(m) : null,
+            m.cuenta === "club_debe" ? importeEnCuenta(m) : null,
             m.saldo,
           ]),
           [],
-          ["", "", "", "Totales", "", totalDebe, totalHaber, filtrados.at(-1)?.saldo ?? saldo],
+          ["", "", "", "", "Totales", "", totalDisciplina, totalClub, filtrados.at(-1)?.saldo ?? saldo],
         ],
-        [11, 9, 18, 48, 12, 14, 14, 14]
+        [11, 9, 20, 18, 48, 12, 16, 16, 18]
       );
     } catch {
       toast.error("No se pudo armar el Excel");
@@ -99,14 +151,14 @@ export function CuentaCorrienteVista({
   return (
     <>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Cifra etiqueta={saldo < 0 ? "Saldo a favor de la disciplina" : "Debe al club"} tono={saldo > 0 ? "alerta" : saldo < 0 ? "bueno" : "neutro"} icono={BookOpen}>
-          <ImporteContador valor={Math.abs(saldo)} moneda="UYU" />
+        <Cifra etiqueta="Debe la disciplina" tono={debeDisciplina > 0 ? "alerta" : "neutro"} icono={BookOpen} detalle="Compras, cuotas cobradas en su cuenta y préstamos (1.1.04.03)">
+          <ImporteContador valor={debeDisciplina} moneda="UYU" />
         </Cifra>
-        <Cifra etiqueta={hayFiltro ? "Debe (filtrado)" : "Total debe"} delay={0.04} detalle="Compras y cuotas cobradas en su cuenta">
-          <ImporteContador valor={totalDebe} />
+        <Cifra etiqueta="Le debe el club" tono={debeClub > 0 ? "dorado" : "neutro"} delay={0.04} detalle="Liquidaciones pendientes de pago (2.1.07.02)">
+          <ImporteContador valor={debeClub} moneda="UYU" className={debeClub > 0 ? "text-amber-700" : undefined} />
         </Cifra>
-        <Cifra etiqueta={hayFiltro ? "Haber (filtrado)" : "Total haber"} delay={0.08} detalle="Pagos, compensaciones y devoluciones">
-          <ImporteContador valor={totalHaber} />
+        <Cifra etiqueta="Neto" delay={0.08} detalle="Lo que debe la disciplina menos lo que le debe el club">
+          <SaldoNeto neto={saldo} />
         </Cifra>
       </div>
 
@@ -177,12 +229,12 @@ export function CuentaCorrienteVista({
           </div>
         ) : (
           <div>
-            <div className="hidden grid-cols-[6rem_minmax(0,1fr)_7.5rem_7.5rem_8.5rem] gap-3 border-b border-linea bg-superficie/50 px-4 py-2 text-[10px] font-medium uppercase tracking-editorial text-muted-foreground md:grid">
+            <div className="hidden grid-cols-[6rem_minmax(0,1fr)_8rem_8rem_9.5rem] gap-3 border-b border-linea bg-superficie/50 px-4 py-2 text-[10px] font-medium uppercase tracking-editorial text-muted-foreground md:grid">
               <span>Fecha</span>
               <span>Movimiento</span>
-              <span className="text-right">Debe</span>
-              <span className="text-right">Haber</span>
-              <span className="text-right">Saldo</span>
+              <span className="text-right text-rose-700">Debe la disciplina</span>
+              <span className="text-right text-amber-700">Le debe el club</span>
+              <span className="text-right">Saldo neto</span>
             </div>
             {filtrados.length > visibles.length && (
               <div className="border-b border-linea px-4 py-2 text-center">
@@ -192,9 +244,9 @@ export function CuentaCorrienteVista({
               </div>
             )}
             {saldoInicial !== null && visibles.length === filtrados.length && (
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b border-linea bg-superficie/40 px-4 py-2 text-xs text-muted-foreground md:grid-cols-[6rem_minmax(0,1fr)_7.5rem_7.5rem_8.5rem]">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b border-linea bg-superficie/40 px-4 py-2 text-xs text-muted-foreground md:grid-cols-[6rem_minmax(0,1fr)_8rem_8rem_9.5rem]">
                 <span className="md:col-span-4">Saldo al {formatFecha(desde)}</span>
-                <span className={cn("text-right font-medium tabular-nums", claseSaldo(saldoInicial))}>{formatImporte(saldoInicial)}</span>
+                <NetoFila neto={saldoInicial} className="text-right font-medium" />
               </div>
             )}
             <ul className="divide-y divide-linea">
@@ -207,7 +259,7 @@ export function CuentaCorrienteVista({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.3, delay: Math.min(i, 20) * 0.015 }}
-                    className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 px-4 py-2.5 text-sm transition-colors hover:bg-superficie/40 md:grid-cols-[6rem_minmax(0,1fr)_7.5rem_7.5rem_8.5rem] md:items-center"
+                    className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 px-4 py-2.5 text-sm transition-colors hover:bg-superficie/40 md:grid-cols-[6rem_minmax(0,1fr)_8rem_8rem_9.5rem] md:items-center"
                   >
                     <div className="text-xs tabular-nums text-muted-foreground md:text-sm md:text-foreground">
                       {formatFecha(m.fecha)}
@@ -231,15 +283,17 @@ export function CuentaCorrienteVista({
                       </div>
                     </div>
                     <div className="col-start-2 row-span-2 row-start-1 flex flex-col items-end justify-center gap-0.5 md:hidden">
-                      <span className={cn("inline-flex items-center gap-1 tabular-nums", m.debe > 0 ? "text-rose-700" : "text-emerald-700")}>
-                        <FlechaMovimiento debe={m.debe > 0} />
-                        {formatImporte(m.debe > 0 ? m.debe : m.haber)}
-                      </span>
-                      <span className={cn("text-[11px] tabular-nums", claseSaldo(m.saldo))}>Saldo {formatImporte(m.saldo)}</span>
+                      <span className={cn("text-[10px]", CLASE_CUENTA[m.cuenta])}>{NOMBRE_CUENTA_MOVIMIENTO[m.cuenta]}</span>
+                      <Monto valor={importeEnCuenta(m)} className={CLASE_CUENTA[m.cuenta]} />
+                      <NetoFila neto={m.saldo} className="text-[11px]" />
                     </div>
-                    <span className="hidden text-right tabular-nums md:block">{m.debe ? formatImporte(m.debe) : ""}</span>
-                    <span className="hidden text-right tabular-nums md:block">{m.haber ? formatImporte(m.haber) : ""}</span>
-                    <span className={cn("hidden text-right font-medium tabular-nums md:block", claseSaldo(m.saldo))}>{formatImporte(m.saldo)}</span>
+                    <span className="hidden text-right md:block">
+                      {m.cuenta === "disciplina_debe" && <Monto valor={importeEnCuenta(m)} className="text-rose-700" />}
+                    </span>
+                    <span className="hidden text-right md:block">
+                      {m.cuenta === "club_debe" && <Monto valor={importeEnCuenta(m)} className="text-amber-700" />}
+                    </span>
+                    <NetoFila neto={m.saldo} className="hidden text-right font-medium md:block" />
                   </motion.li>
                 ))}
               </AnimatePresence>
@@ -247,7 +301,11 @@ export function CuentaCorrienteVista({
           </div>
         )}
         <div className="border-t border-linea px-4 py-2">
-          <Explicacion>Saldo positivo: lo que la disciplina le debe al club. Sale de la cuenta Fondos en poder de disciplinas con el auxiliar de la disciplina.</Explicacion>
+          <Explicacion>
+            Dos cuentas con el auxiliar de la disciplina: lo que ella le debe al club (Fondos en poder de disciplinas, 1.1.04.03) y lo que el club le debe
+            por liquidaciones (2.1.07.02). El saldo neto las compensa: &quot;Debe&quot; = la disciplina le debe al club; &quot;Le deben&quot; = el club le
+            debe a la disciplina.
+          </Explicacion>
         </div>
       </Panel>
 
@@ -305,49 +363,25 @@ export function CuentaCorrienteVista({
         icono={Sigma}
         delay={0.14}
         accion={
-          <BotonLink href="/cuotas/disciplinas" variante="secundario" className="h-8 px-3 text-xs">
-            <Receipt className="size-3.5" />
-            Liquidación a disciplinas
-          </BotonLink>
+          <div className="flex flex-wrap items-center gap-2">
+            {pendienteLiq > 0 && <Pastilla tono="info">Pendiente de pago {formatImporte(pendienteLiq)}</Pastilla>}
+            <BotonLink href="/cuotas/disciplinas" variante="secundario" className="h-8 px-3 text-xs">
+              <Receipt className="size-3.5" />
+              Liquidar
+            </BotonLink>
+          </div>
         }
       >
-        {liquidaciones.length === 0 ? (
-          <p className="p-4 text-xs text-muted-foreground">Todavía no se le liquidaron cuotas a la disciplina.</p>
-        ) : (
-          <ul className="divide-y divide-linea">
-            {liquidaciones.map((l, i) => (
-              <motion.li
-                key={l.id}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: Math.min(i, 10) * 0.03 }}
-                className={cn(
-                  "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-4 py-3 sm:grid-cols-[11rem_minmax(0,1fr)_9rem_auto]",
-                  l.estado === "anulada" && "opacity-60"
-                )}
-              >
-                <div className="text-sm">
-                  <div className="font-medium tabular-nums">
-                    {formatFecha(l.desde)} – {formatFecha(l.hasta)}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground">Liquidada el {formatFecha(l.fecha)}</div>
-                </div>
-                <div className="col-span-2 row-start-2 text-xs text-muted-foreground sm:col-span-1 sm:row-start-auto">
-                  Cobrado {formatImporte(l.cobrado)} · comisión {formatImporte(l.comision)} · compensado {formatImporte(l.compensado)}
-                  {l.motivo_anulacion && <div className="text-rose-700">Anulada: {l.motivo_anulacion}</div>}
-                </div>
-                <div className="text-right">
-                  <div className="font-heading tabular-nums">{formatImporte(l.transferido, "UYU")}</div>
-                  <div className="text-[11px] text-muted-foreground">transferido</div>
-                </div>
-                <div className="col-span-2 flex flex-wrap items-center justify-end gap-2 sm:col-span-1">
-                  <BadgeEstado estado={l.estado} />
-                  <LinkAsiento id={l.asiento_id} />
-                </div>
-              </motion.li>
-            ))}
-          </ul>
-        )}
+        <ListaLiquidaciones
+          liquidaciones={liquidaciones}
+          cuentas={cuentas}
+          cuentaDefecto={datos.cuentaDefecto}
+          planes={planesVigentes}
+          deudas={{ [disciplina.id]: debeDisciplina }}
+          hoy={hoy}
+          puedeOperar={puedeTesoreria}
+          conDisciplina={false}
+        />
       </Panel>
 
       {pagar && (
@@ -355,7 +389,7 @@ export function CuentaCorrienteVista({
           disciplina={disciplina}
           datos={datos}
           hoy={hoy}
-          deuda={saldo}
+          deuda={debeDisciplina}
           onClose={() => setPagar(false)}
         />
       )}
