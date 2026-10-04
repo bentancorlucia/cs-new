@@ -61,6 +61,19 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"cobros_disciplina": {
+                  Row: {
+                    "anulado_at": string | null,"anulado_por": string | null,"asiento_id": string,"creado_por": string | null,"created_at": string,"cuenta_id": string,"disciplina_id": number,"estado": string,"fecha": string,"id": number,"importe": number,"motivo_anulacion": string | null,"notas": string | null,"referencia": string | null
+                  }
+                  Insert: {
+                    "anulado_at"?: string | null,"anulado_por"?: string | null,"asiento_id": string,"creado_por"?: string | null,"created_at"?: string,"cuenta_id": string,"disciplina_id": number,"estado"?: string,"fecha": string,"id"?: never,"importe": number,"motivo_anulacion"?: string | null,"notas"?: string | null,"referencia"?: string | null
+                  }
+                  Update: {
+                    "anulado_at"?: string | null,"anulado_por"?: string | null,"asiento_id"?: string,"creado_por"?: string | null,"created_at"?: string,"cuenta_id"?: string,"disciplina_id"?: number,"estado"?: string,"fecha"?: string,"id"?: never,"importe"?: number,"motivo_anulacion"?: string | null,"notas"?: string | null,"referencia"?: string | null
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"config": {
                   Row: {
                     "baja_con_deuda": string,"centro_club_id": string | null,"cobrar_mes_alta": boolean,"dia_vencimiento": number,"id": boolean,"mes_cuota_anual": number,"tolerancia_cuotas": number,"tolerancia_debito": number,"updated_at": string,"updated_by": string | null
@@ -290,6 +303,93 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"plan_pago_aplicaciones": {
+                  Row: {
+                    "anulada": boolean,"cobro_id": number | null,"cuota_id": number,"fecha": string,"id": number,"importe": number,"liquidacion_id": number | null
+                  }
+                  Insert: {
+                    "anulada"?: boolean,"cobro_id"?: number | null,"cuota_id": number,"fecha": string,"id"?: never,"importe": number,"liquidacion_id"?: number | null
+                  }
+                  Update: {
+                    "anulada"?: boolean,"cobro_id"?: number | null,"cuota_id"?: number,"fecha"?: string,"id"?: never,"importe"?: number,"liquidacion_id"?: number | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "plan_pago_aplicaciones_cobro_id_fkey"
+      columns: ["cobro_id"]
+isOneToOne: false
+      referencedRelation: "cobros_disciplina"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "plan_pago_aplicaciones_cuota_id_fkey"
+      columns: ["cuota_id"]
+isOneToOne: false
+      referencedRelation: "plan_pago_cuotas"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "plan_pago_aplicaciones_cuota_id_fkey"
+      columns: ["cuota_id"]
+isOneToOne: false
+      referencedRelation: "plan_pago_cuotas_saldo"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "plan_pago_aplicaciones_liquidacion_id_fkey"
+      columns: ["liquidacion_id"]
+isOneToOne: false
+      referencedRelation: "liquidaciones_disciplina"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"plan_pago_cuotas": {
+                  Row: {
+                    "id": number,"importe": number,"numero": number,"plan_id": number,"vencimiento": string
+                  }
+                  Insert: {
+                    "id"?: never,"importe": number,"numero": number,"plan_id": number,"vencimiento": string
+                  }
+                  Update: {
+                    "id"?: never,"importe"?: number,"numero"?: number,"plan_id"?: number,"vencimiento"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "plan_pago_cuotas_plan_id_fkey"
+      columns: ["plan_id"]
+isOneToOne: false
+      referencedRelation: "planes_pago"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "plan_pago_cuotas_plan_id_fkey"
+      columns: ["plan_id"]
+isOneToOne: false
+      referencedRelation: "planes_pago_resumen"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"plan_pago_pedidos": {
+                  Row: {
+                    "importe": number,"pedido_id": number,"plan_id": number
+                  }
+                  Insert: {
+                    "importe": number,"pedido_id": number,"plan_id": number
+                  }
+                  Update: {
+                    "importe"?: number,"pedido_id"?: number,"plan_id"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "plan_pago_pedidos_plan_id_fkey"
+      columns: ["plan_id"]
+isOneToOne: false
+      referencedRelation: "planes_pago"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "plan_pago_pedidos_plan_id_fkey"
+      columns: ["plan_id"]
+isOneToOne: false
+      referencedRelation: "planes_pago_resumen"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"plan_precios": {
                   Row: {
                     "creado_por": string | null,"created_at": string,"id": number,"importe_anual": number | null,"importe_mensual": number,"plan_id": number,"vigente_desde": string
@@ -318,6 +418,19 @@ isOneToOne: false
                   }
                   Update: {
                     "activo"?: boolean,"created_at"?: string,"disciplina_id"?: number | null,"id"?: never,"nombre"?: string,"permite_anual"?: boolean,"tipo"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"planes_pago": {
+                  Row: {
+                    "cancelado_at": string | null,"cancelado_por": string | null,"creado_por": string | null,"created_at": string,"descripcion": string,"disciplina_id": number,"estado": string,"id": number,"importe_total": number,"motivo_cancelacion": string | null,"notas": string | null
+                  }
+                  Insert: {
+                    "cancelado_at"?: string | null,"cancelado_por"?: string | null,"creado_por"?: string | null,"created_at"?: string,"descripcion": string,"disciplina_id": number,"estado"?: string,"id"?: never,"importe_total": number,"motivo_cancelacion"?: string | null,"notas"?: string | null
+                  }
+                  Update: {
+                    "cancelado_at"?: string | null,"cancelado_por"?: string | null,"creado_por"?: string | null,"created_at"?: string,"descripcion"?: string,"disciplina_id"?: number,"estado"?: string,"id"?: never,"importe_total"?: number,"motivo_cancelacion"?: string | null,"notas"?: string | null
                   }
                   Relationships: [
                     
@@ -388,11 +501,40 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"plan_pago_cuotas_saldo": {
+                  Row: {
+                    "id": number | null,"importe": number | null,"numero": number | null,"pagado": number | null,"plan_id": number | null,"saldo": number | null,"situacion": string | null,"vencimiento": string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "plan_pago_cuotas_plan_id_fkey"
+      columns: ["plan_id"]
+isOneToOne: false
+      referencedRelation: "planes_pago"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "plan_pago_cuotas_plan_id_fkey"
+      columns: ["plan_id"]
+isOneToOne: false
+      referencedRelation: "planes_pago_resumen"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"planes_pago_resumen": {
+                  Row: {
+                    "cancelado_at": string | null,"cancelado_por": string | null,"creado_por": string | null,"created_at": string | null,"cuotas": number | null,"cuotas_pagadas": number | null,"cuotas_vencidas": number | null,"descripcion": string | null,"disciplina_id": number | null,"estado": string | null,"id": number | null,"importe_total": number | null,"motivo_cancelacion": string | null,"notas": string | null,"pagado": number | null,"proximo_vencimiento": string | null,"saldo": number | null,"saldo_vencido": number | null,"situacion": string | null
+                  }
+                  Relationships: [
+                    
+                  ]
                 }
           }
           Functions: {
             "_anular_aplicaciones_externas":
 { Args: { "p_cobros": (number)[],"p_fecha": string,"p_motivo": string }; Returns: undefined
+                           },
+"_aplicar_a_plan":
+{ Args: { "p_cobro": number,"p_disciplina": number,"p_fecha": string,"p_importe": number,"p_liquidacion": number,"p_plan": number }; Returns: number
                            },
 "_aplicar_saldo_a_favor":
 { Args: { "p_fecha": string,"p_persona": number }; Returns: number
@@ -439,6 +581,9 @@ isOneToOne: false
 "anular_cobro":
 { Args: { "p_cobro": number,"p_fecha"?: string,"p_motivo": string }; Returns: undefined
                            },
+"anular_cobro_disciplina":
+{ Args: { "p_cobro": number,"p_fecha"?: string,"p_motivo": string }; Returns: undefined
+                           },
 "anular_credito":
 { Args: { "p_credito": number,"p_fecha"?: string,"p_motivo": string }; Returns: undefined
                            },
@@ -466,9 +611,20 @@ isOneToOne: false
 "cambiar_plan":
 { Args: { "p_desde": string,"p_periodicidad"?: string,"p_plan_nuevo": number,"p_suscripcion": number }; Returns: number
                            },
+"cancelar_plan_pago":
+{ Args: { "p_motivo": string,"p_plan": number }; Returns: undefined
+                           },
 "control_contable":
 { Args: Record<PropertyKey, never>; Returns: {
               "concepto": string,"diferencia": number,"segun_contabilidad": number,"segun_socios": number
+            }[]
+                           },
+"crear_plan_pago":
+{ Args: { "p_cuotas": Json,"p_descripcion"?: string,"p_disciplina": number,"p_importe"?: number,"p_notas"?: string,"p_pedidos": (number)[] }; Returns: number
+                           },
+"cuenta_corriente_disciplina":
+{ Args: { "p_disciplina": number }; Returns: {
+              "asiento_id": string,"debe": number,"descripcion": string,"fecha": string,"haber": number,"numero": number,"origen_id": string,"origen_tipo": string,"pedido_id": number,"saldo": number,"tipo": string
             }[]
                            },
 "dar_baja":
@@ -498,7 +654,7 @@ isOneToOne: false
 { Args: { "p_desde": string,"p_periodicidad"?: string,"p_persona": number,"p_plan": number }; Returns: number
                            },
 "liquidar_disciplina":
-{ Args: { "p_compensar"?: number,"p_cuenta"?: string,"p_desde": string,"p_disciplina": number,"p_fecha": string,"p_hasta": string,"p_notas"?: string }; Returns: number
+{ Args: { "p_compensar"?: number,"p_cuenta"?: string,"p_desde": string,"p_disciplina": number,"p_fecha": string,"p_hasta": string,"p_notas"?: string,"p_plan"?: number }; Returns: number
                            },
 "precio_vigente":
 { Args: { "p_periodo": string,"p_plan": number }; Returns: {
@@ -541,8 +697,16 @@ isOneToOne: false
 "registrar_cobro":
 { Args: { "p_cuenta"?: string,"p_cuotas"?: (number)[],"p_disciplina"?: number,"p_fecha": string,"p_importe": number,"p_medio": string,"p_persona": number,"p_referencia"?: string }; Returns: number
                            },
+"registrar_cobro_disciplina":
+{ Args: { "p_cuenta"?: string,"p_disciplina": number,"p_fecha": string,"p_importe": number,"p_notas"?: string,"p_plan"?: number,"p_referencia"?: string }; Returns: number
+                           },
 "registrar_credito":
 { Args: { "p_cuotas": Json,"p_fecha": string,"p_motivo": string,"p_persona": number,"p_tipo": string }; Returns: number
+                           },
+"saldos_disciplinas":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "disciplina_id": number,"saldo": number,"ultimo_movimiento": string
+            }[]
                            },
 "sincronizar_vigencias":
 { Args: Record<PropertyKey, never>; Returns: number

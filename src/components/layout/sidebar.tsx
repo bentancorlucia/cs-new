@@ -156,6 +156,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/cuotas/disciplinas", label: "Liquidación a disciplinas", icon: Receipt, roles: ["super_admin", "tesorero", "comision_fiscal"] },
       { href: "/cuotas/morosidad", label: "Morosidad", icon: AlertTriangle },
       { href: "/secretaria/planes", label: "Planes y precios", icon: Tags, roles: ["tesorero", "comision_fiscal"] },
+      { href: "/secretaria/disciplinas", label: "Disciplinas", icon: Dumbbell, roles: ["tesorero", "comision_fiscal"] },
     ],
   },
   {
