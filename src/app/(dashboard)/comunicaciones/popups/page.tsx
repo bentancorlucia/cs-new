@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/roles";
+import { ROLES_LECTURA } from "@/lib/comunicaciones/server";
 import { Button } from "@/components/ui/button";
 import { PopupsTable } from "@/components/comunicaciones/popups/popups-table";
 import type { PopupRow } from "@/lib/popups/types";
@@ -9,7 +10,7 @@ import type { PopupRow } from "@/lib/popups/types";
 export const dynamic = "force-dynamic";
 
 export default async function PopupsPage() {
-  await requireRole(["super_admin", "secretaria"]);
+  await requireRole(ROLES_LECTURA);
   const supabase = createAdminClient();
 
   const { data } = await supabase

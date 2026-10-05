@@ -13,7 +13,7 @@ const TABS = [
   { href: "/comunicaciones/plantillas", etiqueta: "Plantillas", icono: FileText, gestion: true },
   { href: "/comunicaciones/bajas", etiqueta: "Bajas", icono: MailX, gestion: true },
   { href: "/comunicaciones/automatizaciones", etiqueta: "Automatizaciones", icono: Workflow, gestion: true },
-  { href: "/comunicaciones/popups", etiqueta: "Popups", icono: Megaphone, gestion: true },
+  { href: "/comunicaciones/popups", etiqueta: "Popups", icono: Megaphone },
   { href: "/comunicaciones/configuracion", etiqueta: "Configuración", icono: Settings, config: true },
 ];
 

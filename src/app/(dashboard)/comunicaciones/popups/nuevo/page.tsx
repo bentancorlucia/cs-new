@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { requireRole } from "@/lib/supabase/roles";
+import { ROLES_LECTURA } from "@/lib/comunicaciones/server";
 import { PopupForm } from "@/components/comunicaciones/popups/popup-form";
 
 export default async function NuevoPopupPage() {
-  await requireRole(["super_admin", "secretaria"]);
+  await requireRole(ROLES_LECTURA);
 
   return (
     <div>

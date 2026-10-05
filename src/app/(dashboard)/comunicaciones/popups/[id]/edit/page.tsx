@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/roles";
+import { ROLES_LECTURA } from "@/lib/comunicaciones/server";
 import { PopupForm } from "@/components/comunicaciones/popups/popup-form";
 import type { PopupRow } from "@/lib/popups/types";
 
@@ -13,7 +14,7 @@ export default async function EditPopupPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole(["super_admin", "secretaria"]);
+  await requireRole(ROLES_LECTURA);
   const { id } = await params;
 
   const supabase = createAdminClient();

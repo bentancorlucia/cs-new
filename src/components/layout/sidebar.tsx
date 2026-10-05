@@ -178,7 +178,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/comunicaciones/plantillas", label: "Plantillas", icon: FileSpreadsheet, roles: ["super_admin", "secretaria"] },
       { href: "/comunicaciones/bajas", label: "Bajas", icon: MailX, roles: ["super_admin", "secretaria"] },
       { href: "/comunicaciones/automatizaciones", label: "Automatizaciones", icon: Workflow, roles: ["super_admin", "secretaria"] },
-      { href: "/comunicaciones/popups", label: "Popups", icon: Megaphone, roles: ["super_admin", "secretaria"] },
+      { href: "/comunicaciones/popups", label: "Popups", icon: Megaphone },
       { href: "/comunicaciones/configuracion", label: "Configuración", icon: Settings, roles: ["super_admin", "secretaria", "tienda"] },
     ],
   },
