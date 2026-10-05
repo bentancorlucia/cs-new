@@ -21,6 +21,8 @@ const DASHBOARD_ROLES = [
   "eventos",
   "scanner",
   "tesorero",
+  "comision_fiscal",
+  "representante_disciplina",
   "socio",
   "no_socio",
 ];

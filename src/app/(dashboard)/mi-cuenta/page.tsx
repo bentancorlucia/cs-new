@@ -539,7 +539,12 @@ export default function MiCuentaPage() {
                 <div className="space-y-4">
                   {/* Carnet Digital — solo socios */}
                   {perfil.es_socio && (
-                    <motion.div variants={scaleIn} transition={springSmooth}>
+                    <motion.div
+                      variants={scaleIn}
+                      initial="hidden"
+                      animate="visible"
+                      transition={springSmooth}
+                    >
                       <Card className="border-bordo-200 bg-gradient-to-br from-bordo-800 to-bordo-950 text-white overflow-hidden">
                         <CardContent className="p-5 space-y-3">
                           <div className="flex items-center justify-between">
@@ -582,7 +587,12 @@ export default function MiCuentaPage() {
 
                   {/* Hacete socio — solo no socios */}
                   {!perfil.es_socio && (
-                    <motion.div variants={fadeInUp} transition={springSmooth}>
+                    <motion.div
+                      variants={fadeInUp}
+                      initial="hidden"
+                      animate="visible"
+                      transition={springSmooth}
+                    >
                       <Card className="border-dorado-300/50 bg-gradient-to-br from-dorado-50 to-dorado-100/50 overflow-hidden">
                         <CardContent className="p-5 space-y-4">
                           <div className="flex items-center gap-3">
