@@ -8,7 +8,9 @@ import {
   ArrowLeft,
   BookOpen,
   CalendarClock,
+  ClipboardCheck,
   Dumbbell,
+  Eye,
   History,
   LayoutDashboard,
   Mail,
@@ -16,6 +18,7 @@ import {
   Phone,
   Receipt,
   UserRound,
+  UserRoundCog,
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -28,16 +31,19 @@ import type {
   PlanPago,
   SociosDeDisciplina,
 } from "@/lib/socios/disciplinas";
-import type { CuentaDisponible } from "@/lib/socios/cuotas";
-import { Aviso, Boton, Explicacion, NumeroAnimado, Panel, Pastilla } from "@/components/socios/cuotas/ui";
+import { nombrePeriodo, type CuentaDisponible } from "@/lib/socios/cuotas";
+import type { CambioDebito, Representante } from "@/lib/socios/cambios-debito";
+import { Aviso, Boton, BotonLink, Explicacion, NumeroAnimado, Panel, Pastilla } from "@/components/socios/cuotas/ui";
 import { DialogoDisciplina, type DatosDisciplina } from "./form-disciplina";
 import { BadgeSituacionCuota, BadgeTipoMovimiento, CLASE_CUENTA, Cifra, ImporteContador, Pestanas, SaldoNeto } from "./ui";
 import { importeEnCuenta, saldosCuenta } from "./cuenta-corriente";
 import { CuentaCorrienteVista } from "./cuenta-corriente";
 import { PlanesPagoVista } from "./planes-pago";
 import { SociosVista } from "./socios";
+import { RepresentantesVista } from "./representantes";
+import { CambiosDisciplinaVista } from "./cambios";
 
-export type Pestana = "resumen" | "cuenta" | "planes" | "socios";
+export type Pestana = "resumen" | "cuenta" | "planes" | "socios" | "representantes" | "cambios";
 
 export interface DatosTesoreria {
   movimientos: MovimientoCuenta[];
@@ -60,6 +66,11 @@ export function DetalleDisciplina({
   puedeGestionar,
   verTesoreria,
   puedeTesoreria,
+  representantes = [],
+  errorRepresentantes = null,
+  cambios = [],
+  errorCambios = null,
+  puedeEditarRepresentantes = false,
 }: {
   disciplina: DatosDisciplina;
   socios: SociosDeDisciplina | null;
@@ -71,6 +82,12 @@ export function DetalleDisciplina({
   puedeGestionar: boolean;
   verTesoreria: boolean;
   puedeTesoreria: boolean;
+  representantes?: Representante[];
+  errorRepresentantes?: string | null;
+  cambios?: CambioDebito[];
+  errorCambios?: string | null;
+  /** Secretaría, tesorería y super_admin. */
+  puedeEditarRepresentantes?: boolean;
 }) {
   const [pestana, setPestana] = useState<Pestana>(pestanaInicial);
   const [editar, setEditar] = useState(false);
@@ -97,6 +114,13 @@ export function DetalleDisciplina({
         ]
       : []),
     { valor: "socios" as const, etiqueta: "Socios", icono: Users, cantidad: socios?.vigentes.length },
+    { valor: "representantes" as const, etiqueta: "Representantes", icono: UserRoundCog, cantidad: representantes.length },
+    {
+      valor: "cambios" as const,
+      etiqueta: "Cambios",
+      icono: ClipboardCheck,
+      cantidad: cambios.filter((c) => c.estado_debito === "pendiente").length || undefined,
+    },
   ];
 
   return (
@@ -140,12 +164,18 @@ export function DetalleDisciplina({
             </div>
           </div>
         </div>
-        {puedeGestionar && (
-          <Boton variante="secundario" onClick={() => setEditar(true)} className="w-full sm:w-auto">
-            <Pencil className="size-4" />
-            Editar disciplina
-          </Boton>
-        )}
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <BotonLink href={`/disciplina/${disciplina.id}`} variante="secundario" className="w-full justify-center sm:w-auto">
+            <Eye className="size-4" />
+            Ver como representante
+          </BotonLink>
+          {puedeGestionar && (
+            <Boton variante="secundario" onClick={() => setEditar(true)} className="w-full sm:w-auto">
+              <Pencil className="size-4" />
+              Editar disciplina
+            </Boton>
+          )}
+        </div>
       </motion.header>
 
       <Pestanas opciones={opciones} valor={pestana} onChange={cambiar} />
@@ -179,6 +209,15 @@ export function DetalleDisciplina({
             ) : (
               <Aviso titulo="No se pudieron leer los socios">{errorSocios}</Aviso>
             ))}
+          {pestana === "representantes" && (
+            <RepresentantesVista
+              disciplina={disciplina}
+              representantes={representantes}
+              error={errorRepresentantes}
+              puedeEditar={puedeEditarRepresentantes}
+            />
+          )}
+          {pestana === "cambios" && <CambiosDisciplinaVista cambios={cambios} error={errorCambios} />}
         </motion.div>
       </AnimatePresence>
 
@@ -258,11 +297,27 @@ function Resumen({
               delay={0.11}
               detalle={
                 ultimaLiq
-                  ? `Hasta el ${formatFecha(ultimaLiq.hasta)} · ${ultimaLiq.saldo > 0 ? `pendiente ${formatImporte(ultimaLiq.saldo, "UYU")}` : "pagada"}`
+                  ? `${nombrePeriodo(ultimaLiq.periodo)} · ${
+                      ultimaLiq.a_depositar > 0
+                        ? "a depositar por la disciplina"
+                        : ultimaLiq.saldo > 0
+                          ? `pendiente ${formatImporte(ultimaLiq.saldo, "UYU")}`
+                          : ultimaLiq.importe > 0
+                            ? "pagada"
+                            : "sin saldo"
+                    }`
                   : "Todavía no se le liquidó"
               }
             >
-              {ultimaLiq ? <ImporteContador valor={ultimaLiq.importe} moneda="UYU" /> : <span className="text-muted-foreground">—</span>}
+              {ultimaLiq ? (
+                <ImporteContador
+                  valor={ultimaLiq.a_depositar > 0 ? ultimaLiq.a_depositar : ultimaLiq.importe}
+                  moneda="UYU"
+                  className={ultimaLiq.a_depositar > 0 ? "text-rose-700" : undefined}
+                />
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              )}
             </Cifra>
           </>
         ) : (

@@ -1,7 +1,7 @@
 -- Socios: cobros, saldo a favor, débito Visa, notas de crédito y
 -- liquidación a las disciplinas.
 BEGIN;
-SELECT plan(39);
+SELECT plan(48);
 
 DO $$ BEGIN PERFORM contabilidad.crear_ejercicio(2026); END $$;
 CREATE FUNCTION pg_temp.saldo(p_codigo text) RETURNS numeric LANGUAGE sql AS $$
@@ -19,14 +19,16 @@ CREATE FUNCTION pg_temp.cuota(p_cedula text, p_tipo text, p_mes date) RETURNS bi
   SELECT id FROM socios.cuotas WHERE persona_id = pg_temp.p(p_cedula) AND tipo = p_tipo AND periodo_desde = p_mes
 $$;
 
-INSERT INTO socios.planes (nombre, tipo, disciplina_id) VALUES ('Cuota social', 'social', NULL), ('Hockey', 'disciplina', 7);
+INSERT INTO socios.planes (nombre, tipo, disciplina_id) VALUES ('Cuota social', 'social', NULL), ('Hockey', 'disciplina', 7),
+  ('Rugby', 'disciplina', 13);
 INSERT INTO socios.plan_precios (plan_id, vigente_desde, importe_mensual)
 SELECT id, '2026-01-01', CASE tipo WHEN 'social' THEN 1000 ELSE 1500 END FROM socios.planes;
 INSERT INTO socios.disciplinas_cobranza (disciplina_id, porcentaje_comision) VALUES (7, 50);
 DO $$
 DECLARE
   v_social integer := (SELECT id FROM socios.planes WHERE tipo = 'social');
-  v_hockey integer := (SELECT id FROM socios.planes WHERE tipo = 'disciplina');
+  v_hockey integer := (SELECT id FROM socios.planes WHERE nombre = 'Hockey');
+  v_rugby integer := (SELECT id FROM socios.planes WHERE nombre = 'Rugby');
 BEGIN
   PERFORM socios.alta_socio('{"cedula": "11111111", "nombre": "Ana", "apellido": "Visa"}', '2026-03-01',
     jsonb_build_array(jsonb_build_object('plan_id', v_social), jsonb_build_object('plan_id', v_hockey)),
@@ -36,6 +38,16 @@ BEGIN
   PERFORM socios.alta_socio('{"cedula": "33333333", "nombre": "Ceci", "apellido": "Hockey"}', '2026-03-01',
     jsonb_build_array(jsonb_build_object('plan_id', v_social), jsonb_build_object('plan_id', v_hockey)),
     '{"medio": "transferencia_disciplina", "disciplina_id": 7}');
+  -- Dani: débito que rebota. Eva: rugby, le paga a la disciplina y no lo registra nadie.
+  PERFORM socios.alta_socio('{"cedula": "44444444", "nombre": "Dani", "apellido": "Rebote"}', '2026-03-01',
+    jsonb_build_array(jsonb_build_object('plan_id', v_social), jsonb_build_object('plan_id', v_hockey)),
+    '{"medio": "debito_visa", "tarjeta_ultimos4": "4444"}');
+  PERFORM socios.alta_socio('{"cedula": "66666666", "nombre": "Eva", "apellido": "Rugby"}', '2026-03-01',
+    jsonb_build_array(jsonb_build_object('plan_id', v_social), jsonb_build_object('plan_id', v_rugby)),
+    '{"medio": "transferencia_disciplina", "disciplina_id": 13}');
+  PERFORM socios.alta_socio('{"cedula": "77777777", "nombre": "Fran", "apellido": "Rugby"}', '2026-03-01',
+    jsonb_build_array(jsonb_build_object('plan_id', v_social), jsonb_build_object('plan_id', v_rugby)),
+    '{"medio": "transferencia_disciplina", "disciplina_id": 13}');
   PERFORM socios.emitir_lote('2026-03-01');
 END $$;
 
@@ -65,55 +77,83 @@ SELECT is(pg_temp.saldo('2.1.04.01'), 0.00::numeric, 'y el adelanto queda en cer
 -- ---------- Pago en la cuenta de la disciplina
 DO $$ BEGIN PERFORM socios.registrar_cobro(pg_temp.p('33333333'), '2026-03-25', 'transferencia_disciplina', 2500,
   p_disciplina => 7); END $$;
-SELECT is((SELECT deuda_disciplina FROM socios.previsualizar_liquidacion_disciplina(7, '2026-03-01', '2026-04-30')),
+SELECT is((SELECT deuda_disciplina FROM socios.previsualizar_liquidacion_disciplina(7, '2026-03-01')),
           2500.00::numeric, 'lo que cobró la disciplina es deuda suya con el club');
 
--- ---------- Débito Visa de marzo
-CREATE TEMP TABLE visa AS SELECT socios.aplicar_liquidacion_visa('2026-03-01', '2026-04-10', 100,
+-- ---------- Débito Visa de marzo: comisión e IVA aparte; Dani rebota
+CREATE TEMP TABLE visa AS SELECT socios.aplicar_liquidacion_visa('2026-03-01', '2026-04-10', 80,
   jsonb_build_array(jsonb_build_object('persona_id', pg_temp.p('11111111'), 'importe', 2500)),
-  '[{"documento": "55555555", "importe": 1000, "motivo": "Tarjeta vencida"}]') AS id;
+  jsonb_build_array(jsonb_build_object('persona_id', pg_temp.p('44444444'), 'importe', 2500, 'motivo', 'Fondos insuficientes'),
+                    jsonb_build_object('documento', '55555555', 'importe', 1000, 'motivo', 'Tarjeta vencida')),
+  p_iva => 20) AS id;
 SELECT is((SELECT sum(saldo) FROM socios.cuotas_saldo WHERE persona_id = pg_temp.p('11111111') AND periodo_desde = '2026-03-01'),
           0.00::numeric, 'el débito cancela las cuotas de marzo');
-SELECT is(pg_temp.saldo('1.1.01.05'), 1500.00 + 2400.00, 'al banco entra el neto');
-SELECT is((SELECT importe FROM socios.liquidacion_visa_comisiones WHERE liquidacion_visa_id = (SELECT id FROM visa)
-           AND disciplina_id = 7), 30.00::numeric, 'a hockey se le carga la mitad de la comisión sobre sus cuotas');
+SELECT is(pg_temp.saldo('1.1.01.05'), 1500.00 + 2400.00, 'al banco entra el neto (2.500 − 80 − 20)');
+SELECT is((SELECT comision || ' + ' || iva FROM socios.liquidacion_visa_comisiones
+           WHERE liquidacion_visa_id = (SELECT id FROM visa) AND disciplina_id = 7), '40.00 + 10.00',
+          'a hockey se le carga la mitad de comisión e IVA sobre lo cobrado de sus socios, social incluida');
 SELECT is((SELECT sum(l.debe) FROM contabilidad.lineas l JOIN contabilidad.cuentas c ON c.id = l.cuenta_id
-           WHERE c.codigo = '5.2.08'), 100.00::numeric, 'la comisión entera es gasto');
+           WHERE c.codigo = '5.2.08'), 100.00::numeric, 'comisión e IVA son gasto');
 SELECT is((SELECT count(*) FROM socios.liquidacion_visa_rechazos WHERE liquidacion_visa_id = (SELECT id FROM visa)),
-          1::bigint, 'el rechazo queda registrado sin tocar cuotas');
+          2::bigint, 'los rechazos quedan registrados sin tocar cuotas');
 SELECT throws_like($$ SELECT socios.aplicar_liquidacion_visa('2026-03-01', '2026-04-11', 0,
   jsonb_build_array(jsonb_build_object('persona_id', pg_temp.p('11111111'), 'importe', 100))) $$,
   '%ya se les aplicó%', 'no se debita dos veces el mismo período');
 SELECT throws_like($$ SELECT socios.anular_cobro((SELECT id FROM socios.cobros WHERE medio = 'debito_visa'), 'Prueba') $$,
                    '%con su liquidación%', 'un débito se anula con su liquidación');
 
--- ---------- Liquidación a hockey (marzo y abril)
-SELECT is((SELECT importe FROM socios.previsualizar_liquidacion_disciplina(7, '2026-03-01', '2026-04-30')),
-          2970.00::numeric, 'le corresponde lo cobrado de sus cuotas menos su parte de la comisión');
-CREATE TEMP TABLE liq AS SELECT socios.liquidar_disciplina(7, '2026-03-01', '2026-04-30', '2026-05-05') AS id;
-SELECT is((SELECT club_le_debe FROM socios.saldos_disciplinas() WHERE disciplina_id = 7), 2970.00::numeric,
+-- ---------- Liquidación de marzo
+-- Hockey: débito de Ana 2.500 − social 1.000 − gastos 50 + Ceci pagó la
+-- parte de hockey (1.500) en su cuenta − social de Dani (rebotó) 1.000 = 1.950.
+SELECT is((SELECT visa_cobrado || '/' || visa_social || '/' || otros_cobrado || '/' || (gastos_comision + gastos_iva)
+                  || '/' || social_a_cargo || '/' || resultado
+           FROM socios.previsualizar_liquidacion_disciplina(7, '2026-03-01')),
+          '2500.00/1000.00/1500.00/50.00/1000.00/1950.00', 'hockey: débito, social, otros medios, gastos y social a su cargo');
+SELECT is((SELECT socios_mes FROM socios.previsualizar_liquidacion_disciplina(7, '2026-03-01')), 3,
+          'hockey tiene 3 socios en marzo');
+-- Rugby: sin débito, Eva no pagó en el sistema: la disciplina pone la social.
+SELECT is((SELECT a_pagar || '/' || a_depositar FROM socios.previsualizar_liquidacion_disciplina(13, '2026-03-01')),
+          '0/2000.00', 'rugby no cobró nada por el club: deposita la cuota social de sus dos socios');
+CREATE TEMP TABLE liqs AS SELECT unnest(socios.liquidar_disciplinas_mes('2026-03-01', '2026-04-15')) AS id;
+CREATE TEMP TABLE liq AS SELECT id FROM socios.liquidaciones_disciplina WHERE id IN (SELECT id FROM liqs) AND disciplina_id = 7;
+SELECT is((SELECT count(*) FROM liqs), 2::bigint, 'se liquidan las dos disciplinas del mes de una vez');
+SELECT is((SELECT saldo FROM socios.cuotas_saldo WHERE id = pg_temp.cuota('44444444', 'social', '2026-03-01')),
+          0.00::numeric, 'la social de Dani queda cobrada a cargo de hockey');
+SELECT is((SELECT saldo FROM socios.cuotas_saldo WHERE id = pg_temp.cuota('44444444', 'disciplina', '2026-03-01')),
+          1500.00::numeric, 'y Dani le sigue debiendo la parte de hockey');
+SELECT is((SELECT club_le_debe FROM socios.saldos_disciplinas() WHERE disciplina_id = 7), 1950.00::numeric,
           'la liquidación es deuda del club con la disciplina');
-SELECT is((SELECT saldo FROM socios.liquidaciones_disciplina_saldo WHERE id = (SELECT id FROM liq)), 2970.00::numeric,
-          'pendiente de pago');
-SELECT throws_like($$ SELECT socios.pagar_liquidacion_disciplina((SELECT id FROM liq), '2026-05-06', 0, NULL, 2600) $$,
-                   '%le debe al club%', 'no se compensa más que la deuda de la disciplina');
-DO $$ BEGIN PERFORM socios.pagar_liquidacion_disciplina((SELECT id FROM liq), '2026-05-06', 470, NULL, 2500); END $$;
+SELECT is((SELECT debe_al_club FROM socios.saldos_disciplinas() WHERE disciplina_id = 13), 2000.00::numeric,
+          'y rugby queda debiendo lo que tiene que depositar');
+SELECT is((SELECT jsonb_array_length(detalle) FROM socios.liquidaciones_disciplina WHERE id = (SELECT id FROM liq)), 3,
+          'el detalle trae a los tres socios de hockey');
+SELECT is((SELECT (e ->> 'visa_rechazado')::numeric FROM socios.liquidaciones_disciplina l, jsonb_array_elements(l.detalle) e
+           WHERE l.id = (SELECT id FROM liq) AND (e ->> 'persona_id')::integer = pg_temp.p('44444444')), 2500.00::numeric,
+          'con el rebote de Dani');
+SELECT throws_like($$ SELECT socios.anular_cobro((SELECT id FROM socios.cobros WHERE medio = 'liquidacion_disciplina' LIMIT 1), 'x') $$,
+                   '%con la liquidación de la disciplina%', 'la social a cargo de la disciplina se anula con la liquidación');
+DO $$ BEGIN PERFORM socios.pagar_liquidacion_disciplina((SELECT id FROM liq), '2026-05-06', 0, NULL, 1950); END $$;
 SELECT is((SELECT saldo FROM socios.liquidaciones_disciplina_saldo WHERE id = (SELECT id FROM liq)), 0.00::numeric,
-          'pagada: se transfiere la diferencia y se compensa la deuda');
-SELECT is((SELECT saldo FROM socios.saldos_disciplinas() WHERE disciplina_id = 7), 0.00::numeric,
-          'la cuenta corriente queda en cero');
+          'pagada compensando lo que hockey cobró de Ceci');
+SELECT is((SELECT saldo FROM socios.saldos_disciplinas() WHERE disciplina_id = 7), 550.00::numeric,
+          'hockey sigue debiendo 550 (2.500 de Ceci − 1.950)');
 SELECT throws_like($$ SELECT socios.pagar_liquidacion_disciplina((SELECT id FROM liq), '2026-05-06', 1) $$,
                    '%más que el saldo%', 'no se paga dos veces');
 SELECT throws_like($$ SELECT socios.anular_liquidacion_disciplina((SELECT id FROM liq), 'Prueba') $$,
                    '%tiene pagos%', 'una liquidación pagada no se anula sin anular el pago');
-SELECT is((SELECT sum(l.debe) FROM contabilidad.lineas l JOIN contabilidad.cuentas c ON c.id = l.cuenta_id
-           WHERE c.codigo = '5.2.09'), 2970.00::numeric, 'lo liquidado es gasto de la disciplina');
-SELECT throws_like($$ SELECT socios.liquidar_disciplina(7, '2026-04-01', '2026-05-31', '2026-06-05') $$,
-                   '%ya se liquidó%', 'no se liquida dos veces el mismo período');
-SELECT throws_like($$ SELECT socios.registrar_cobro(pg_temp.p('11111111'), '2026-04-15', 'transferencia_club', 2500) $$,
-                   '%ya se liquidó a la disciplina%', 'un cobro no cae en un período ya liquidado');
+SELECT is((SELECT sum(l.debe - l.haber) FROM contabilidad.lineas l JOIN contabilidad.cuentas c ON c.id = l.cuenta_id
+           WHERE c.codigo = '5.2.09'), 2950.00::numeric, 'gasto de hockey: cuotas cobradas menos gastos del débito');
+SELECT throws_like($$ SELECT socios.liquidar_disciplina(7, '2026-03-01', '2026-06-05') $$,
+                   '%ya se liquidó%', 'no se liquida dos veces el mismo mes');
+SELECT throws_like($$ SELECT socios.registrar_cobro(pg_temp.p('44444444'), '2026-03-30', 'transferencia_club', 1500) $$,
+                   '%ya se liquidó a la disciplina%', 'un cobro no cae en un mes ya liquidado');
 SELECT throws_like($$ SELECT socios.anular_liquidacion_visa((SELECT id FROM visa), 'Prueba') $$,
-                   '%anulá esa liquidación primero%', 'ni se anula un débito ya liquidado');
+                   '%anulá esas liquidaciones primero%', 'ni se anula un débito ya liquidado');
+DO $$ BEGIN PERFORM socios.anular_liquidacion_disciplina((SELECT id FROM liqs WHERE id NOT IN (SELECT id FROM liq)), 'Prueba'); END $$;
+SELECT is((SELECT saldo FROM socios.cuotas_saldo WHERE id = pg_temp.cuota('66666666', 'social', '2026-03-01')),
+          1000.00::numeric, 'anular la de rugby devuelve la social de Eva a su deuda');
+SELECT is((SELECT debe_al_club FROM socios.saldos_disciplinas() WHERE disciplina_id = 13), 0.00::numeric,
+          'y rugby ya no debe nada');
 
 -- ---------- Nota de crédito
 DO $$ BEGIN PERFORM socios.registrar_credito(pg_temp.p('11111111'), '2026-05-10', 'bonificacion', 'Prueba',

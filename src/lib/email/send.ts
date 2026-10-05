@@ -237,3 +237,34 @@ export async function sendNotification(to: string, data: NotificationData) {
     dedupe: null,
   });
 }
+
+/**
+ * Resumen de la liquidación mensual a un representante de la disciplina.
+ * Las variables las arma src/lib/socios/liquidacion-mail.ts.
+ */
+export async function sendLiquidacionDisciplina(
+  to: string,
+  nombre: string,
+  variables: Record<string, unknown> & { disciplina: string; periodo: string; resultado_texto: string; resultado: string },
+  opciones: { liquidacionId: number; reenvio: string | null }
+) {
+  const v = variables;
+  const mail = await armar("liquidacion_disciplina", variables, {
+    asunto: `Liquidación de ${v.disciplina} — ${v.periodo}`,
+    html: notificationHtml({
+      titulo: `Liquidación de ${v.periodo}`,
+      mensaje: `Hola ${nombre}: la liquidación de las cuotas de ${v.disciplina} de ${v.periodo} dio ${v.resultado_texto.toLowerCase()}: ${v.resultado}. El detalle está en el panel de la disciplina.`,
+      ctaText: "Ver el detalle",
+      ctaUrl: String(v.panel_url ?? "") || undefined,
+    }),
+  });
+  await encolar({
+    to,
+    nombre,
+    ...mail,
+    dedupe: `liquidacion:${opciones.liquidacionId}:${to.toLowerCase()}${opciones.reenvio ? `:${opciones.reenvio}` : ""}`,
+    refTipo: "liquidacion_disciplina",
+    refId: String(opciones.liquidacionId),
+    variables,
+  });
+}

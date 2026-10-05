@@ -654,6 +654,9 @@ export interface LiquidacionVisaLista {
   fecha: string;
   bruto: number;
   comision: number;
+  /** IVA de la comisión (se carga aparte). */
+  iva: number;
+  /** Bruto − comisión − IVA: lo que entró al banco. */
   neto: number;
   archivo: string | null;
   estado: string;
@@ -661,7 +664,8 @@ export interface LiquidacionVisaLista {
   asiento_id: string;
   cobros: number;
   rechazos: { persona: string | null; documento: string | null; importe: number; motivo: string | null }[];
-  comisiones: { disciplina: string; importe: number }[];
+  /** Gastos de cada centro: lo cobrado de sus socios y su parte de comisión e IVA (importe = comisión + IVA). */
+  comisiones: { disciplina: string; cobrado: number; comision: number; iva: number; importe: number }[];
 }
 
 export async function listarLiquidacionesVisa(db: ClienteSocios, padron: ClientePadron): Promise<LiquidacionVisaLista[]> {
@@ -698,7 +702,8 @@ export async function listarLiquidacionesVisa(db: ClienteSocios, padron: Cliente
     fecha: l.fecha,
     bruto: num(l.bruto),
     comision: num(l.comision),
-    neto: r2(num(l.bruto) - num(l.comision)),
+    iva: num(l.iva),
+    neto: r2(num(l.bruto) - num(l.comision) - num(l.iva)),
     archivo: l.archivo,
     estado: l.estado,
     motivo_anulacion: l.motivo_anulacion,
@@ -714,7 +719,13 @@ export async function listarLiquidacionesVisa(db: ClienteSocios, padron: Cliente
       })),
     comisiones: comisiones
       .filter((k) => k.liquidacion_visa_id === l.id)
-      .map((k) => ({ disciplina: k.disciplina_id ? disc.get(k.disciplina_id) ?? "Disciplina" : "Club (cuota social)", importe: num(k.importe) }))
+      .map((k) => ({
+        disciplina: k.disciplina_id ? disc.get(k.disciplina_id) ?? "Disciplina" : "Club",
+        cobrado: num(k.cobrado),
+        comision: num(k.comision),
+        iva: num(k.iva),
+        importe: num(k.importe),
+      }))
       .sort((a, b) => b.importe - a.importe),
   }));
 }
@@ -726,6 +737,7 @@ export interface AdhesionDebito {
   numero_socio: number | null;
   ultimos4: string | null;
   vencimiento: string | null;
+  emisor: string | null;
   titular_documento: string | null;
   titular_nombre: string | null;
 }
@@ -735,7 +747,7 @@ export async function adhesionesDebito(db: ClienteSocios, padron: ClientePadron,
   const medios = await leerTodo((a, b) =>
     db
       .from("medios_cobro")
-      .select("persona_id, tarjeta_ultimos4, tarjeta_vencimiento, titular_documento, titular_nombre")
+      .select("persona_id, tarjeta_ultimos4, tarjeta_vencimiento, tarjeta_emisor, titular_documento, titular_nombre")
       .eq("medio", "debito_visa")
       .lte("desde", fecha)
       .or(`hasta.is.null,hasta.gte.${fecha}`)
@@ -753,6 +765,7 @@ export async function adhesionesDebito(db: ClienteSocios, padron: ClientePadron,
         numero_socio: p?.numero_socio ?? null,
         ultimos4: m.tarjeta_ultimos4,
         vencimiento: m.tarjeta_vencimiento,
+        emisor: m.tarjeta_emisor,
         titular_documento: m.titular_documento,
         titular_nombre: m.titular_nombre,
       };
@@ -763,24 +776,80 @@ export async function adhesionesDebito(db: ClienteSocios, padron: ClientePadron,
 export interface FilaPlanilla extends AdhesionDebito {
   importe: number;
   cuotas: number;
+  /** Saldo de cuotas de meses anteriores (no entra salvo que se pida). */
+  deudaAnterior: number;
+  disciplinas: string[];
   tarjetaVencida: boolean;
 }
 
 /**
- * Planilla para cargar en el portal del débito: quienes tienen débito vigente
- * al fin del mes y el saldo de sus cuotas emitidas hasta ese mes.
+ * Disciplinas vigentes de cada persona a una fecha (por sus inscripciones a
+ * planes de disciplina).
  */
-export async function planillaDebito(db: ClienteSocios, padron: ClientePadron, periodo: string): Promise<FilaPlanilla[]> {
+async function disciplinasVigentes(
+  db: ClienteSocios,
+  padron: ClientePadron,
+  personas: number[],
+  fecha: string
+): Promise<Map<number, string[]>> {
+  const [planes, disciplinas, suscripciones] = await Promise.all([
+    leerPlanes(db),
+    leerDisciplinas(padron),
+    porIds(personas, (lote, a, b) =>
+      db
+        .from("suscripciones")
+        .select("id, persona_id, plan_id")
+        .in("persona_id", lote)
+        .lte("desde", fecha)
+        .or(`hasta.is.null,hasta.gte.${fecha}`)
+        .order("id")
+        .range(a, b)
+    ),
+  ]);
+  const discPlan = new Map(planes.filter((p) => p.disciplina_id).map((p) => [p.id, p.disciplina_id as number]));
+  const nombre = new Map(disciplinas.map((d) => [d.id, d.nombre]));
+  const out = new Map<number, string[]>();
+  for (const s of suscripciones) {
+    const d = discPlan.get(s.plan_id);
+    if (!d) continue;
+    const lista = out.get(s.persona_id) ?? [];
+    const n = nombre.get(d) ?? `Disciplina ${d}`;
+    if (!lista.includes(n)) lista.push(n);
+    out.set(s.persona_id, lista);
+  }
+  return out;
+}
+
+/**
+ * Planilla para cargar en el portal del débito: quienes tienen débito vigente
+ * al fin del mes y lo que se le carga a cada tarjeta. Como lo hace tesorería,
+ * cada mes se carga la cuota de ese mes (el saldo de las cuotas del período);
+ * con `incluirDeuda` se suma también lo que quedó de meses anteriores.
+ */
+export async function planillaDebito(
+  db: ClienteSocios,
+  padron: ClientePadron,
+  periodo: string,
+  incluirDeuda = false
+): Promise<FilaPlanilla[]> {
+  const ini = inicioMes(periodo);
   const fin = finMes(periodo);
   const adhesiones = await adhesionesDebito(db, padron, fin);
-  const cuotas = await cuotasConSaldo(db, adhesiones.map((a) => a.persona_id));
+  const ids = adhesiones.map((a) => a.persona_id);
+  const [cuotas, disciplinas] = await Promise.all([cuotasConSaldo(db, ids), disciplinasVigentes(db, padron, ids, fin)]);
   return adhesiones.map((a) => {
-    const propias = (cuotas.get(a.persona_id) ?? []).filter((c) => c.periodo_desde <= fin);
+    const hastaMes = (cuotas.get(a.persona_id) ?? []).filter((c) => c.periodo_desde <= fin);
+    const delMes = hastaMes.filter((c) => c.periodo_desde >= ini);
+    const anteriores = hastaMes.filter((c) => c.periodo_desde < ini);
+    const deudaAnterior = r2(anteriores.reduce((s, c) => s + c.saldo, 0));
+    const propias = incluirDeuda ? hastaMes : delMes;
     return {
       ...a,
       importe: r2(propias.reduce((s, c) => s + c.saldo, 0)),
       cuotas: propias.length,
-      tarjetaVencida: !!a.vencimiento && finMes(a.vencimiento) < inicioMes(periodo),
+      deudaAnterior,
+      disciplinas: disciplinas.get(a.persona_id) ?? [],
+      tarjetaVencida: !!a.vencimiento && finMes(a.vencimiento) < ini,
     };
   });
 }
@@ -842,20 +911,31 @@ export async function identificarDebitos(
 export interface SimulacionVisa {
   bruto: number;
   comision: number;
+  iva: number;
   neto: number;
   personas: { persona_id: number; importe: number; aplicado: number; aFavor: number; yaDebitado: boolean }[];
-  comisiones: { disciplina_id: number | null; nombre: string; porcentaje: number; cobrado: number; importe: number }[];
+  /** Gastos de cada centro (importe = comisión + IVA). */
+  comisiones: {
+    disciplina_id: number | null;
+    nombre: string;
+    porcentaje: number;
+    cobrado: number;
+    comision: number;
+    iva: number;
+    importe: number;
+  }[];
 }
 
 /**
  * Lo que haría `aplicar_liquidacion_visa`: el reparto de cada débito sobre las
- * cuotas de su persona y el de la comisión entre el club y las disciplinas
- * (proporcional a lo aplicado a cuotas de cada una, por su porcentaje).
+ * cuotas de su persona y el de los gastos (comisión e IVA) entre el club y las
+ * disciplinas: a cada una, en proporción a lo cobrado de sus socios (sus
+ * cuotas y las sociales a su cargo), por su porcentaje. El resto es del club.
  */
 export async function simularLiquidacionVisa(
   db: ClienteSocios,
   padron: ClientePadron,
-  args: { periodo: string; fecha: string; comision: number; cobrados: { persona_id: number; importe: number }[] }
+  args: { periodo: string; fecha: string; comision: number; iva: number; cobrados: { persona_id: number; importe: number }[] }
 ): Promise<SimulacionVisa> {
   const ids = args.cobrados.map((c) => c.persona_id);
   const [cuotas, config, disciplinas, previas] = await Promise.all([
@@ -882,33 +962,48 @@ export async function simularLiquidacionVisa(
   const disc = new Map(disciplinas.map((d) => [d.id, d.nombre]));
   const bruto = r2(args.cobrados.reduce((s, c) => s + r2(c.importe), 0));
   const comision = r2(args.comision);
+  const iva = r2(args.iva);
 
-  const porDisciplina = new Map<number, number>();
+  const aplicaciones: { cuota: CuotaPendiente; importe: number }[] = [];
   const personas = args.cobrados.map((c) => {
     const rep = repartir(cuotas.get(c.persona_id) ?? [], c.importe, args.fecha);
-    for (const a of rep.aplicaciones) {
-      if (a.cuota.tipo === "disciplina" && a.cuota.disciplina_id) {
-        porDisciplina.set(a.cuota.disciplina_id, r2((porDisciplina.get(a.cuota.disciplina_id) ?? 0) + a.importe));
-      }
-    }
+    aplicaciones.push(...rep.aplicaciones);
     return { persona_id: c.persona_id, importe: r2(c.importe), aplicado: rep.aplicado, aFavor: rep.aFavor, yaDebitado: yaDebitados.has(c.persona_id) };
   });
 
+  // La cuota social de un socio de disciplinas queda a cargo de una de ellas.
+  const sociales = aplicaciones.filter((a) => a.cuota.tipo === "social").map((a) => a.cuota.id);
+  const responsable = new Map<number, number>();
+  for (const f of await porIds(sociales, (lote, a, b) =>
+    db.from("cuotas").select("id, disciplina_responsable_id").in("id", lote).order("id").range(a, b)
+  )) {
+    if (f.disciplina_responsable_id) responsable.set(f.id, f.disciplina_responsable_id);
+  }
+  const porDisciplina = new Map<number, number>();
+  for (const a of aplicaciones) {
+    const d = a.cuota.disciplina_id ?? responsable.get(a.cuota.id) ?? null;
+    if (d) porDisciplina.set(d, r2((porDisciplina.get(d) ?? 0) + a.importe));
+  }
+
   const comisiones: SimulacionVisa["comisiones"] = [];
-  if (comision > 0 && bruto > 0) {
+  if ((comision > 0 || iva > 0) && bruto > 0) {
     for (const [id, cobrado] of porDisciplina) {
       const porcentaje = pct.get(id) ?? 100;
-      const importe = r2(((comision * cobrado) / bruto) * (porcentaje / 100));
-      if (importe > 0) comisiones.push({ disciplina_id: id, nombre: disc.get(id) ?? `Disciplina ${id}`, porcentaje, cobrado, importe });
+      const k = r2(((comision * cobrado) / bruto) * (porcentaje / 100));
+      const v = r2(((iva * cobrado) / bruto) * (porcentaje / 100));
+      if (k > 0 || v > 0) {
+        comisiones.push({ disciplina_id: id, nombre: disc.get(id) ?? `Disciplina ${id}`, porcentaje, cobrado, comision: k, iva: v, importe: r2(k + v) });
+      }
     }
-    const resto = r2(comision - comisiones.reduce((s, k) => s + k.importe, 0));
-    if (resto > 0) {
+    const restoK = r2(comision - comisiones.reduce((s, x) => s + x.comision, 0));
+    const restoV = r2(iva - comisiones.reduce((s, x) => s + x.iva, 0));
+    if (restoK > 0 || restoV > 0) {
       const cobradoClub = r2(bruto - [...porDisciplina.values()].reduce((s, v) => s + v, 0));
-      comisiones.push({ disciplina_id: null, nombre: "Club (cuota social y el resto)", porcentaje: 100, cobrado: cobradoClub, importe: resto });
+      comisiones.push({ disciplina_id: null, nombre: "Club (socios sin disciplina y el resto)", porcentaje: 100, cobrado: cobradoClub, comision: restoK, iva: restoV, importe: r2(restoK + restoV) });
     }
   }
   comisiones.sort((a, b) => b.importe - a.importe);
-  return { bruto, comision, neto: r2(bruto - comision), personas, comisiones };
+  return { bruto, comision, iva, neto: r2(bruto - comision - iva), personas, comisiones };
 }
 
 // ------------------------------------------------------------
@@ -985,7 +1080,8 @@ export interface DisciplinaCobranza {
   configurada: boolean;
   /** Deuda de la disciplina con el club (saldo de 1.1.04.03 con su auxiliar). null si no se pudo leer. */
   deuda: number | null;
-  ultimaLiquidacion: string | null;
+  /** Último mes liquidado (liquidación vigente), "YYYY-MM-01". */
+  ultimoPeriodo: string | null;
 }
 
 export async function cobranzaDisciplinas(
@@ -996,7 +1092,7 @@ export async function cobranzaDisciplinas(
   const [disciplinas, config, liqs] = await Promise.all([
     leerDisciplinas(padron),
     db.from("disciplinas_cobranza").select("*"),
-    db.from("liquidaciones_disciplina").select("disciplina_id, hasta").eq("estado", "vigente"),
+    db.from("liquidaciones_disciplina").select("disciplina_id, periodo").eq("estado", "vigente"),
   ]);
   // Lo que cada disciplina le debe al club: la misma regla que la base
   // (saldos_disciplinas, solo tesorería y Comisión Fiscal).
@@ -1010,7 +1106,7 @@ export async function cobranzaDisciplinas(
   const cfg = new Map((config.data ?? []).map((c) => [c.disciplina_id, c]));
   const ultima = new Map<number, string>();
   for (const l of liqs.data ?? []) {
-    if (!ultima.has(l.disciplina_id) || ultima.get(l.disciplina_id)! < l.hasta) ultima.set(l.disciplina_id, l.hasta);
+    if (!ultima.has(l.disciplina_id) || ultima.get(l.disciplina_id)! < l.periodo) ultima.set(l.disciplina_id, l.periodo);
   }
   return disciplinas
     .filter((d) => d.activa || cfg.has(d.id))
@@ -1023,7 +1119,7 @@ export async function cobranzaDisciplinas(
         datos_transferencia: c?.datos_transferencia ?? null,
         configurada: !!c,
         deuda: deudas ? deudas.get(d.id) ?? 0 : null,
-        ultimaLiquidacion: ultima.get(d.id) ?? null,
+        ultimoPeriodo: ultima.get(d.id) ?? null,
       };
     });
 }
@@ -1045,13 +1141,31 @@ export interface LiquidacionDisciplinaLista {
   id: number;
   disciplina_id: number;
   disciplina: string;
+  /** Mes del débito liquidado ("YYYY-MM-01"). */
+  periodo: string;
   desde: string;
   hasta: string;
   fecha: string;
+  /** Cuotas de la disciplina cobradas (débito y otros medios). */
   cobrado: number;
+  /** Gastos del débito (comisión + IVA). */
   comision: number;
-  /** Lo liquidado: deuda del club con la disciplina (2.1.07.02). */
+  /** Cobrado por débito Visa a sus socios (la cuota entera, con la social). */
+  visa_cobrado: number;
+  /** Cuota social cobrada en el débito (queda para el club). */
+  visa_social: number;
+  /** Cuota social que no se cobró y pone la disciplina. */
+  social_a_cargo: number;
+  /** Cuotas de la disciplina cobradas por otros medios. */
+  otros_cobrado: number;
+  gastos_comision: number;
+  gastos_iva: number;
+  socios: number;
+  cuota_social: number;
+  /** A pagar a la disciplina: deuda del club con ella (2.1.07.02). 0 si da a depositar. */
   importe: number;
+  /** Lo que la disciplina tiene que depositar (queda en su cuenta corriente). */
+  a_depositar: number;
   /** Pagado hasta hoy (pagos vigentes). */
   transferido: number;
   compensado: number;
@@ -1077,7 +1191,7 @@ export async function listarLiquidacionesDisciplina(
     leerTodo((a, b) => {
       let q = db.from("liquidaciones_disciplina_saldo").select("*");
       if (disciplina) q = q.eq("disciplina_id", disciplina);
-      return q.order("hasta", { ascending: false }).order("id", { ascending: false }).range(a, b);
+      return q.order("periodo", { ascending: false }).order("id", { ascending: false }).range(a, b);
     }),
     leerDisciplinas(padron),
   ]);
@@ -1107,12 +1221,22 @@ export async function listarLiquidacionesDisciplina(
     id: l.id as number,
     disciplina_id: l.disciplina_id as number,
     disciplina: disc.get(l.disciplina_id as number) ?? `Disciplina ${l.disciplina_id}`,
+    periodo: l.periodo ?? inicioMes(l.hasta ?? l.fecha ?? ""),
     desde: l.desde ?? "",
     hasta: l.hasta ?? "",
     fecha: l.fecha ?? "",
     cobrado: num(l.cobrado),
     comision: num(l.comision),
+    visa_cobrado: num(l.visa_cobrado),
+    visa_social: num(l.visa_social),
+    social_a_cargo: num(l.social_a_cargo),
+    otros_cobrado: num(l.otros_cobrado),
+    gastos_comision: num(l.gastos_comision),
+    gastos_iva: num(l.gastos_iva),
+    socios: num(l.socios),
+    cuota_social: num(l.cuota_social),
     importe: num(l.importe),
+    a_depositar: num(l.a_depositar),
     transferido: num(l.transferido),
     compensado: num(l.compensado),
     saldo: r2(num(l.saldo)),
@@ -1124,31 +1248,59 @@ export async function listarLiquidacionesDisciplina(
   }));
 }
 
-export interface PreviaLiquidacionDisciplina {
+/** Lo que daría la liquidación de un mes a una disciplina (previsualizar_liquidaciones_mes). */
+export interface FilaLiquidacionMes {
+  disciplina_id: number;
+  disciplina: string;
+  periodo: string;
+  /** Ya se cargó la liquidación del débito Visa de ese mes. */
+  visa_cargada: boolean;
+  socios: number;
+  cuota_social: number;
+  visa_cobrado: number;
+  visa_social: number;
+  otros_cobrado: number;
+  gastos_comision: number;
+  gastos_iva: number;
+  social_a_cargo: number;
   cobrado: number;
   comision: number;
-  importe: number;
+  resultado: number;
+  a_pagar: number;
+  a_depositar: number;
+  /** Lo que la disciplina le debe al club (referencia para compensar). */
   deuda: number;
   yaLiquidado: boolean;
+  liquidacion_id: number | null;
 }
 
-export async function previsualizarLiquidacionDisciplina(
-  db: ClienteSocios,
-  disciplina: number,
-  desde: string,
-  hasta: string
-): Promise<PreviaLiquidacionDisciplina> {
-  const filas = exigir(
-    await db.rpc("previsualizar_liquidacion_disciplina", { p_disciplina: disciplina, p_desde: desde, p_hasta: hasta })
-  );
-  const f = filas[0];
-  return {
-    cobrado: num(f?.cobrado),
-    comision: num(f?.comision),
-    importe: num(f?.importe),
-    deuda: num(f?.deuda_disciplina),
-    yaLiquidado: !!f?.ya_liquidado,
-  };
+/** Previsualización de la liquidación mensual de todas las disciplinas. */
+export async function previsualizarLiquidacionesMes(db: ClienteSocios, periodo: string): Promise<FilaLiquidacionMes[]> {
+  const filas = exigir(await db.rpc("previsualizar_liquidaciones_mes", { p_periodo: inicioMes(periodo) })) ?? [];
+  return filas
+    .map((f) => ({
+      disciplina_id: f.disciplina_id,
+      disciplina: f.disciplina,
+      periodo: f.periodo,
+      visa_cargada: !!f.visa_cargada,
+      socios: num(f.socios_mes),
+      cuota_social: num(f.cuota_social),
+      visa_cobrado: num(f.visa_cobrado),
+      visa_social: num(f.visa_social),
+      otros_cobrado: num(f.otros_cobrado),
+      gastos_comision: num(f.gastos_comision),
+      gastos_iva: num(f.gastos_iva),
+      social_a_cargo: num(f.social_a_cargo),
+      cobrado: num(f.cobrado),
+      comision: num(f.comision),
+      resultado: num(f.resultado),
+      a_pagar: num(f.a_pagar),
+      a_depositar: num(f.a_depositar),
+      deuda: num(f.deuda_disciplina),
+      yaLiquidado: !!f.ya_liquidado,
+      liquidacion_id: f.liquidacion_id ?? null,
+    }))
+    .sort((a, b) => a.disciplina.localeCompare(b.disciplina, "es"));
 }
 
 // ------------------------------------------------------------

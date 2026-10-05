@@ -5,6 +5,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { createContabilidadClient } from "@/lib/contabilidad/server";
 import { permisosCuotas } from "@/lib/socios/cuotas-permisos";
 import { cuentasDisponibilidad, cuentasPorDefecto, listarLiquidacionesVisa } from "@/lib/socios/cuotas";
+import { leerCambiosDebito } from "@/lib/socios/cambios-debito";
 import { hoyUruguay } from "@/lib/contabilidad/formato";
 import { VisaVista } from "@/components/socios/cuotas/visa";
 
@@ -15,10 +16,14 @@ export default async function VisaPage() {
   const permisos = await permisosCuotas();
   if (!permisos.verTesoreria) redirect("/cuotas");
   const [db, padron, conta] = await Promise.all([createSociosClient(), createServerClient(), createContabilidadClient()]);
-  const [liquidaciones, cuentas, defecto] = await Promise.all([
+  const [liquidaciones, cuentas, defecto, pendientes] = await Promise.all([
     listarLiquidacionesVisa(db, padron),
     cuentasDisponibilidad(conta),
     cuentasPorDefecto(conta),
+    leerCambiosDebito(db, { estado: "pendiente" }).then(
+      (c) => c.length,
+      () => null
+    ),
   ]);
   return (
     <VisaVista
@@ -27,6 +32,7 @@ export default async function VisaPage() {
       cuentaDefecto={defecto.banco}
       hoy={hoyUruguay()}
       puedeAplicar={permisos.puedeTesoreria}
+      cambiosPendientes={pendientes}
     />
   );
 }

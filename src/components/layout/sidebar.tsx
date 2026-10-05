@@ -54,6 +54,8 @@ import {
   MailX,
   Workflow,
   Settings,
+  ClipboardCheck,
+  Trophy,
 } from "lucide-react";
 import { useRoles } from "@/hooks/use-roles";
 import { RoleSwitcher } from "@/components/layout/role-switcher";
@@ -154,9 +156,17 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/cuotas/visa", label: "Débito Visa", icon: CreditCard, roles: ["super_admin", "tesorero", "comision_fiscal"] },
       { href: "/cuotas/notas-credito", label: "Notas de crédito", icon: FileMinus, roles: ["super_admin", "tesorero", "comision_fiscal"] },
       { href: "/cuotas/disciplinas", label: "Liquidación a disciplinas", icon: Receipt, roles: ["super_admin", "tesorero", "comision_fiscal"] },
+      { href: "/cuotas/cambios", label: "Cambios para el débito", icon: ClipboardCheck, roles: ["super_admin", "tesorero", "comision_fiscal", "secretaria"] },
       { href: "/cuotas/morosidad", label: "Morosidad", icon: AlertTriangle },
       { href: "/secretaria/planes", label: "Planes y precios", icon: Tags, roles: ["tesorero", "comision_fiscal"] },
       { href: "/secretaria/disciplinas", label: "Disciplinas", icon: Dumbbell, roles: ["tesorero", "comision_fiscal"] },
+    ],
+  },
+  {
+    title: "Mi disciplina",
+    requiredRoles: ["representante_disciplina"],
+    items: [
+      { href: "/disciplina", label: "Panel de la disciplina", icon: Trophy },
     ],
   },
   {

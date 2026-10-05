@@ -30,7 +30,7 @@ export function RoleSwitcher() {
   if (dashboardRoles.length <= 1) return null;
 
   return (
-    <div className="flex gap-1 p-1 bg-superficie rounded-xl">
+    <div className="flex flex-wrap gap-1 p-1 bg-superficie rounded-xl">
       {dashboardRoles.map((rol) => {
         const config = PANEL_CONFIG[rol];
         if (!config) return null;

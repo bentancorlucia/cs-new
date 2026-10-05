@@ -11,7 +11,6 @@ import {
   cuentaPersona,
   identificarDebitos,
   planillaDebito,
-  previsualizarLiquidacionDisciplina,
   previsualizarLote,
   simularLiquidacionVisa,
   type CuentaPersona,
@@ -19,9 +18,9 @@ import {
   type FilaPrevia,
   type Identificacion,
   type Persona,
-  type PreviaLiquidacionDisciplina,
   type SimulacionVisa,
 } from "@/lib/socios/cuotas";
+import { avisarLiquidaciones, type AvisoLiquidaciones, type ResumenLiquidacion } from "@/lib/socios/liquidacion-mail";
 import type { Json } from "@/types/socios";
 
 export type Resultado<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
@@ -211,12 +210,12 @@ export async function anularCobro(input: z.input<typeof anularSchema>): Promise<
 // Débito Visa
 // ------------------------------------------------------------
 
-export async function leerPlanillaDebito(p: string): Promise<Resultado<FilaPlanilla[]>> {
+export async function leerPlanillaDebito(p: string, incluirDeuda = false): Promise<Resultado<FilaPlanilla[]>> {
   try {
     await exigir("verTesoreria");
     const per = periodo.parse(p);
     const [db, padron] = await Promise.all([createSociosClient(), createServerClient()]);
-    return { ok: true, data: await planillaDebito(db, padron, per) };
+    return { ok: true, data: await planillaDebito(db, padron, per, z.boolean().parse(incluirDeuda)) };
   } catch (e) {
     return fallo(e);
   }
@@ -253,6 +252,7 @@ const simularSchema = z.object({
   periodo,
   fecha,
   comision: z.number().min(0),
+  iva: z.number().min(0),
   cobrados: z.array(cobradoSchema).max(5000),
 });
 
@@ -273,6 +273,7 @@ const visaSchema = z
     periodo,
     fecha,
     comision: z.number().min(0, "La comisión no puede ser negativa"),
+    iva: z.number().min(0, "El IVA no puede ser negativo"),
     cuenta_id: z.uuid().nullish(),
     archivo: z.string().trim().max(200).nullish(),
     cobrados: z.array(cobradoSchema).min(1, "La liquidación no tiene débitos cobrados").max(5000),
@@ -280,6 +281,9 @@ const visaSchema = z
   })
   .refine((d) => new Set(d.cobrados.map((c) => c.persona_id)).size === d.cobrados.length, {
     message: "Hay personas repetidas entre los cobrados",
+  })
+  .refine((d) => d.comision + d.iva < d.cobrados.reduce((s, c) => s + c.importe, 0), {
+    message: "La comisión más el IVA no pueden ser mayores que lo cobrado",
   });
 
 export async function aplicarLiquidacionVisa(input: z.input<typeof visaSchema>): Promise<Resultado<number>> {
@@ -306,6 +310,7 @@ export async function aplicarLiquidacionVisa(input: z.input<typeof visaSchema>):
       })) as Json,
       p_cuenta: nulo(d.cuenta_id),
       p_archivo: nulo(d.archivo || null),
+      p_iva: d.iva,
     });
     if (error) return { ok: false, error: mensajeError(error) };
     revalidar();
@@ -409,56 +414,73 @@ export async function guardarDisciplinaCobranza(input: z.input<typeof configDisc
   }
 }
 
-const rangoDisciplinaSchema = z
-  .object({ disciplina_id: id, desde: fecha, hasta: fecha })
-  .refine((d) => d.hasta >= d.desde, { message: "El período está al revés" });
+const liquidarMesSchema = z
+  .object({
+    periodo,
+    fecha,
+    /** null: todas las que tienen algo para liquidar. */
+    disciplinas: z.array(id).max(500).nullish(),
+  })
+  .refine((d) => d.fecha <= hoyUruguay(), { message: "La fecha no puede ser futura" })
+  .refine((d) => !d.disciplinas || d.disciplinas.length > 0, { message: "Elegí al menos una disciplina" });
 
-export async function previsualizarDisciplina(
-  input: z.input<typeof rangoDisciplinaSchema>
-): Promise<Resultado<PreviaLiquidacionDisciplina>> {
+export type ResultadoLiquidarMes = { ids: number[]; aviso: AvisoLiquidaciones | null; errorAviso: string | null };
+
+/**
+ * Liquida el mes a las disciplinas elegidas (o a todas) y les manda el
+ * resumen a sus representantes. Si el mail falla, la liquidación queda hecha
+ * igual y se avisa (se puede reenviar después).
+ */
+export async function liquidarMes(input: z.input<typeof liquidarMesSchema>): Promise<Resultado<ResultadoLiquidarMes>> {
   try {
-    await exigir("verTesoreria");
-    const p = rangoDisciplinaSchema.safeParse(input);
+    await exigir("puedeTesoreria");
+    const p = liquidarMesSchema.safeParse(input);
     if (!p.success) return invalido(p.error.issues);
+    const d = p.data;
     const db = await createSociosClient();
-    return {
-      ok: true,
-      data: await previsualizarLiquidacionDisciplina(db, p.data.disciplina_id, p.data.desde, p.data.hasta),
-    };
+    const { data, error } = await db.rpc("liquidar_disciplinas_mes", {
+      p_periodo: d.periodo,
+      p_fecha: d.fecha,
+      p_disciplinas: nulo(d.disciplinas && d.disciplinas.length > 0 ? d.disciplinas : null),
+    });
+    if (error) return { ok: false, error: mensajeError(error) };
+    const ids = (data ?? []).map(Number);
+    revalidar();
+    revalidatePath("/secretaria/disciplinas", "layout");
+    if (ids.length === 0) return { ok: true, data: { ids, aviso: null, errorAviso: null } };
+    try {
+      const aviso = await avisarLiquidaciones(db, ids);
+      return { ok: true, data: { ids, aviso, errorAviso: null } };
+    } catch (e) {
+      return { ok: true, data: { ids, aviso: null, errorAviso: e instanceof Error ? e.message : "No se pudo mandar el resumen" } };
+    }
   } catch (e) {
     return fallo(e);
   }
 }
 
-const liquidarSchema = z
-  .object({
-    disciplina_id: id,
-    desde: fecha,
-    hasta: fecha,
-    fecha,
-    notas: z.string().trim().max(500).nullish(),
-  })
-  .refine((d) => d.hasta >= d.desde, { message: "El período está al revés" });
-
-/** Liquidar genera la deuda del club con la disciplina; el pago va aparte (pagarLiquidacion). */
-export async function liquidarDisciplina(input: z.input<typeof liquidarSchema>): Promise<Resultado<number>> {
+/** Vuelve a mandar el resumen de una liquidación a los representantes de la disciplina. */
+export async function reenviarResumenLiquidacion(liquidacionId: number): Promise<Resultado<AvisoLiquidaciones>> {
   try {
     await exigir("puedeTesoreria");
-    const p = liquidarSchema.safeParse(input);
-    if (!p.success) return invalido(p.error.issues);
-    const d = p.data;
+    const lid = id.parse(liquidacionId);
     const db = await createSociosClient();
-    const { data, error } = await db.rpc("liquidar_disciplina", {
-      p_disciplina: d.disciplina_id,
-      p_desde: d.desde,
-      p_hasta: d.hasta,
-      p_fecha: d.fecha,
-      p_notas: nulo(d.notas || null),
-    });
+    return { ok: true, data: await avisarLiquidaciones(db, [lid], { reenvio: true }) };
+  } catch (e) {
+    return fallo(e);
+  }
+}
+
+/** Resumen de una liquidación con el detalle por socio (como la planilla de tesorería). */
+export async function leerResumenLiquidacion(liquidacionId: number): Promise<Resultado<ResumenLiquidacion>> {
+  try {
+    await exigir("verTesoreria");
+    const lid = id.parse(liquidacionId);
+    const db = await createSociosClient();
+    const { data, error } = await db.rpc("resumen_liquidacion", { p_liquidacion: lid });
     if (error) return { ok: false, error: mensajeError(error) };
-    revalidar();
-    revalidatePath(`/secretaria/disciplinas/${d.disciplina_id}`);
-    return { ok: true, data };
+    if (!data) return { ok: false, error: "La liquidación no existe" };
+    return { ok: true, data: data as unknown as ResumenLiquidacion };
   } catch (e) {
     return fallo(e);
   }
@@ -537,6 +559,54 @@ export async function anularLiquidacionDisciplina(input: z.input<typeof anularSc
     revalidar();
     revalidatePath("/secretaria/disciplinas", "layout");
     return { ok: true, data: undefined };
+  } catch (e) {
+    return fallo(e);
+  }
+}
+
+// ------------------------------------------------------------
+// Cambios para el débito
+// ------------------------------------------------------------
+
+const marcarSchema = z
+  .object({
+    ids: z.array(id).min(1, "Elegí al menos un cambio").max(2000),
+    estado: z.enum(["aplicado", "descartado"]),
+    notas: z.string().trim().max(500).nullish(),
+  })
+  .refine((d) => d.estado !== "descartado" || (d.notas ?? "").length >= 3, { message: "Indicá por qué se descarta" });
+
+/** Marca cambios como cargados en el portal de Visa (o descartados). El número de tarjeta se borra. */
+export async function marcarCambios(input: z.input<typeof marcarSchema>): Promise<Resultado<number>> {
+  try {
+    await exigir("puedeTesoreria");
+    const p = marcarSchema.safeParse(input);
+    if (!p.success) return invalido(p.error.issues);
+    const db = await createSociosClient();
+    const { data, error } = await db.rpc("marcar_cambios", {
+      p_cambios: p.data.ids,
+      p_estado: p.data.estado,
+      p_notas: nulo(p.data.notas || null),
+    });
+    if (error) return { ok: false, error: mensajeError(error) };
+    revalidar();
+    revalidatePath("/secretaria/disciplinas", "layout");
+    return { ok: true, data: Number(data ?? 0) };
+  } catch (e) {
+    return fallo(e);
+  }
+}
+
+/** Número completo de una tarjeta pendiente (solo tesorería; la base registra cada consulta). */
+export async function verTarjeta(cambioId: number): Promise<Resultado<string>> {
+  try {
+    await exigir("puedeTesoreria");
+    const cid = id.parse(cambioId);
+    const db = await createSociosClient();
+    const { data, error } = await db.rpc("ver_tarjeta", { p_cambio: cid });
+    if (error) return { ok: false, error: mensajeError(error) };
+    if (!data) return { ok: false, error: "No hay un número de tarjeta para ese cambio" };
+    return { ok: true, data };
   } catch (e) {
     return fallo(e);
   }

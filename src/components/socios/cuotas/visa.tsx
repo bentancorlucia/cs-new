@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { Ban, ChevronDown, CreditCard, FileSpreadsheet, History, ListChecks, Search } from "lucide-react";
+import { ArrowRight, Ban, ChevronDown, ClipboardCheck, CreditCard, FileSpreadsheet, History, ListChecks, Search } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatFecha, formatImporte } from "@/lib/contabilidad/formato";
@@ -37,12 +38,15 @@ export function VisaVista({
   cuentaDefecto,
   hoy,
   puedeAplicar,
+  cambiosPendientes = null,
 }: {
   liquidaciones: LiquidacionVisaLista[];
   cuentas: CuentaDisponible[];
   cuentaDefecto: string | null;
   hoy: string;
   puedeAplicar: boolean;
+  /** Cambios de las disciplinas pendientes de cargar en el portal (null si no se pudo leer). */
+  cambiosPendientes?: number | null;
 }) {
   const [vista, setVista] = useState<Vista>(puedeAplicar ? "cargar" : "historial");
   const opciones: { valor: Vista; etiqueta: string; cantidad?: number }[] = [
@@ -55,8 +59,9 @@ export function VisaVista({
       <EncabezadoPagina
         eyebrow="Cuotas y cobranza"
         titulo="Débito Visa"
-        descripcion="La planilla para cargar en el portal y la liquidación que devuelve Visa: cobrados, rechazos y comisión."
+        descripcion="La planilla para cargar en el portal y la liquidación que devuelve Visa: cobrados, rechazos, comisión e IVA."
       />
+      {!!cambiosPendientes && <AvisoCambios cantidad={cambiosPendientes} />}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="rounded-2xl border border-linea bg-white p-1.5">
         <Filtros<Vista> id="visa" valor={vista} onChange={setVista} opciones={opciones} />
       </motion.div>
@@ -77,23 +82,45 @@ export function VisaVista({
 // Planilla del débito
 // ------------------------------------------------------------
 
+/** Aviso con link a los cambios de las disciplinas que faltan cargar en el portal. */
+function AvisoCambios({ cantidad }: { cantidad: number }) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={easeSmooth} whileHover={{ y: -1 }}>
+      <Link
+        href="/cuotas/cambios"
+        className="group flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 transition-colors hover:bg-amber-100/70"
+      >
+        <ClipboardCheck className="size-5 shrink-0" />
+        <span className="min-w-0 flex-1">
+          <strong className="font-heading">
+            {cantidad} cambio{cantidad === 1 ? "" : "s"} pendiente{cantidad === 1 ? "" : "s"} de cargar en el portal
+          </strong>
+          <span className="block text-xs opacity-80">Altas, bajas, tarjetas nuevas y cambios de cuota que hicieron las disciplinas o el club.</span>
+        </span>
+        <ArrowRight className="size-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
+      </Link>
+    </motion.div>
+  );
+}
+
 function Planilla({ hoy }: { hoy: string }) {
   const [mes, setMes] = useState(hoy.slice(0, 7));
   const [filas, setFilas] = useState<FilaPlanilla[] | null>(null);
-  const [mostrado, setMostrado] = useState<string | null>(null);
+  const [mostrado, setMostrado] = useState<{ periodo: string; conDeuda: boolean } | null>(null);
+  const [conDeuda, setConDeuda] = useState(false);
   const [conCero, setConCero] = useState(false);
   const [texto, setTexto] = useState("");
   const [cargando, start] = useTransition();
 
-  function cargar() {
+  function cargar(deuda = conDeuda) {
     start(async () => {
-      const r = await leerPlanillaDebito(`${mes}-01`);
+      const r = await leerPlanillaDebito(`${mes}-01`, deuda);
       if (!r.ok) {
         toast.error(r.error);
         return;
       }
       setFilas(r.data);
-      setMostrado(`${mes}-01`);
+      setMostrado({ periodo: `${mes}-01`, conDeuda: deuda });
     });
   }
 
@@ -101,24 +128,29 @@ function Planilla({ hoy }: { hoy: string }) {
     const q = texto.trim().toLowerCase();
     return (filas ?? [])
       .filter((f) => conCero || f.importe > 0)
-      .filter((f) => !q || `${f.persona} ${f.cedula} ${f.titular_nombre ?? ""} ${f.ultimos4 ?? ""}`.toLowerCase().includes(q));
+      .filter((f) =>
+        !q || `${f.persona} ${f.cedula} ${f.titular_nombre ?? ""} ${f.ultimos4 ?? ""} ${f.emisor ?? ""} ${f.disciplinas.join(" ")}`.toLowerCase().includes(q)
+      );
   }, [filas, conCero, texto]);
   const total = r2(visibles.reduce((s, f) => s + f.importe, 0));
   const vencidas = visibles.filter((f) => f.tarjetaVencida).length;
+  const deudaFuera = r2((filas ?? []).reduce((s, f) => s + (mostrado?.conDeuda ? 0 : f.deudaAnterior), 0));
 
   async function excel() {
     if (!mostrado) return;
-    await exportarExcel(`debito-visa_${mostrado.slice(0, 7)}`, [
+    await exportarExcel(`debito-visa_${mostrado.periodo.slice(0, 7)}`, [
       {
         nombre: "Débito",
-        titulo: `Débito Visa — ${nombrePeriodo(mostrado)}`,
-        subtitulo: `${visibles.length} adhesiones · total ${formatImporte(total, "UYU")}`,
+        titulo: `Débito Visa — ${nombrePeriodo(mostrado.periodo)}`,
+        subtitulo: `${visibles.length} adhesiones · total ${formatImporte(total, "UYU")}${mostrado.conDeuda ? " · con deuda anterior" : " · cuotas del mes"}`,
         columnas: [
           { titulo: "Nº socio", tipo: "entero", ancho: 10 },
           { titulo: "Socio", ancho: 32 },
           { titulo: "Cédula", ancho: 14 },
+          { titulo: "Disciplina", ancho: 22 },
           { titulo: "Titular de la tarjeta", ancho: 28 },
           { titulo: "Documento del titular", ancho: 16 },
+          { titulo: "Emisor", ancho: 12 },
           { titulo: "Tarjeta (últimos 4)", ancho: 12 },
           { titulo: "Vencimiento", ancho: 12 },
           { titulo: "Cuotas", tipo: "entero", ancho: 8 },
@@ -128,8 +160,10 @@ function Planilla({ hoy }: { hoy: string }) {
           f.numero_socio,
           f.persona,
           f.cedula,
+          f.disciplinas.join(", ") || null,
           f.titular_nombre ?? f.persona,
           f.titular_documento ?? f.cedula,
+          f.emisor,
           f.ultimos4,
           f.vencimiento ? f.vencimiento.slice(0, 7) : null,
           f.cuotas,
@@ -146,7 +180,7 @@ function Planilla({ hoy }: { hoy: string }) {
           <Campo etiqueta="Mes" className="w-44">
             <input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className={claseControl} />
           </Campo>
-          <Boton onClick={cargar} pendiente={cargando}>
+          <Boton onClick={() => cargar()} pendiente={cargando}>
             Armar planilla
           </Boton>
           {filas && (
@@ -156,13 +190,29 @@ function Planilla({ hoy }: { hoy: string }) {
             </Boton>
           )}
         </div>
+        <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={conDeuda}
+            onChange={(e) => {
+              setConDeuda(e.target.checked);
+              if (filas) cargar(e.target.checked);
+            }}
+            className="size-4 accent-bordo-800"
+          />
+          Incluir deuda anterior
+        </label>
         <Explicacion>
-          Socios con débito Visa vigente a fin de mes y el saldo de sus cuotas emitidas hasta ese mes: lo que hay que cargar en el portal.
+          Socios con débito Visa vigente a fin de mes y lo que se le carga a cada tarjeta: como hace tesorería, la cuota de ese mes. Con &quot;Incluir
+          deuda anterior&quot; se suma también lo que quedó sin pagar de meses anteriores.
         </Explicacion>
         {filas && mostrado && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={easeSmooth} className="space-y-3">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-              <Kpi etiqueta={`A debitar · ${nombrePeriodo(mostrado)}`}>
+              <Kpi
+                etiqueta={`A debitar · ${nombrePeriodo(mostrado.periodo)}`}
+                detalle={mostrado.conDeuda ? "Con deuda anterior" : deudaFuera > 0 ? `Sin ${formatImporte(deudaFuera)} de deuda anterior` : "Cuotas del mes"}
+              >
                 <ImporteAnimado valor={total} moneda="UYU" />
               </Kpi>
               <Kpi etiqueta="Adhesiones">
@@ -192,7 +242,10 @@ function Planilla({ hoy }: { hoy: string }) {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: Math.min(i, 20) * 0.015 }}
-                    className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 px-3 py-2 text-sm sm:grid-cols-[minmax(0,1fr)_14rem_8rem]"
+                    className={cn(
+                      "grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 px-3 py-2 text-sm transition-colors hover:bg-superficie/50 sm:grid-cols-[minmax(0,1fr)_14rem_8rem]",
+                      f.tarjetaVencida && "bg-rose-50/40"
+                    )}
                   >
                     <div className="min-w-0">
                       <div className="truncate font-medium">{f.persona}</div>
@@ -200,18 +253,33 @@ function Planilla({ hoy }: { hoy: string }) {
                         CI {f.cedula}
                         {f.numero_socio ? ` · Nº ${f.numero_socio}` : ""} · {f.cuotas} cuota{f.cuotas === 1 ? "" : "s"}
                       </div>
+                      {f.disciplinas.length > 0 && (
+                        <div className="mt-0.5 flex flex-wrap gap-1">
+                          {f.disciplinas.map((d) => (
+                            <Pastilla key={d} tono="info">
+                              {d}
+                            </Pastilla>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="col-start-1 row-start-2 text-xs text-muted-foreground sm:col-start-auto sm:row-start-auto">
                       {f.titular_nombre && <div className="truncate">Titular: {f.titular_nombre}</div>}
                       <span className="tabular-nums">•••• {f.ultimos4 ?? "----"}</span>
+                      {f.emisor && <span className="ml-2 uppercase">{f.emisor}</span>}
                       {f.vencimiento && (
-                        <span className={cn("ml-2", f.tarjetaVencida && "text-rose-700")}>
+                        <span className={cn("ml-2", f.tarjetaVencida && "font-medium text-rose-700")}>
                           vence {f.vencimiento.slice(5, 7)}/{f.vencimiento.slice(0, 4)}
                           {f.tarjetaVencida && " (vencida)"}
                         </span>
                       )}
                     </div>
-                    <div className="row-span-2 text-right font-heading tabular-nums sm:row-span-1">{formatImporte(f.importe)}</div>
+                    <div className="row-span-2 text-right sm:row-span-1">
+                      <div className="font-heading tabular-nums">{formatImporte(f.importe)}</div>
+                      {!mostrado.conDeuda && f.deudaAnterior > 0 && (
+                        <div className="text-[11px] tabular-nums text-amber-700">+{formatImporte(f.deudaAnterior)} anterior</div>
+                      )}
+                    </div>
                   </motion.li>
                 ))}
               </ul>
@@ -257,7 +325,7 @@ function Historial({ liquidaciones, puedeAnular }: { liquidaciones: LiquidacionV
                   <div className="text-xs text-muted-foreground">Acreditado {formatFecha(l.fecha)}</div>
                 </div>
                 <div className="col-span-2 row-start-2 text-xs text-muted-foreground sm:col-span-1 sm:row-start-auto">
-                  {l.cobros} cobrados · {l.rechazos.length} rechazos · comisión {formatImporte(l.comision)}
+                  {l.cobros} cobrados · {l.rechazos.length} rechazos · comisión {formatImporte(l.comision)} · IVA {formatImporte(l.iva)}
                 </div>
                 <div className="text-right">
                   <div className="font-heading tabular-nums">{formatImporte(l.neto, "UYU")}</div>
@@ -273,14 +341,20 @@ function Historial({ liquidaciones, puedeAnular }: { liquidaciones: LiquidacionV
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                     <div className="grid gap-4 border-t border-linea px-4 py-3 md:grid-cols-2">
                       <div>
-                        <div className="mb-1 text-[10px] uppercase tracking-editorial text-muted-foreground">Comisión por centro</div>
+                        <div className="mb-1 text-[10px] uppercase tracking-editorial text-muted-foreground">Gastos por centro</div>
                         {l.comisiones.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">Sin comisión.</p>
+                          <p className="text-xs text-muted-foreground">Sin gastos.</p>
                         ) : (
-                          <ul className="space-y-1 text-sm">
+                          <ul className="space-y-1.5 text-sm">
                             {l.comisiones.map((k) => (
-                              <li key={k.disciplina} className="flex justify-between gap-3">
-                                <span className="truncate">{k.disciplina}</span>
+                              <li key={k.disciplina} className="flex items-start justify-between gap-3">
+                                <span className="min-w-0">
+                                  <span className="block truncate">{k.disciplina}</span>
+                                  <span className="block text-[11px] text-muted-foreground tabular-nums">
+                                    {k.cobrado > 0 ? `sobre ${formatImporte(k.cobrado)} · ` : ""}comisión {formatImporte(k.comision)} + IVA{" "}
+                                    {formatImporte(k.iva)}
+                                  </span>
+                                </span>
                                 <span className="tabular-nums">{formatImporte(k.importe)}</span>
                               </li>
                             ))}

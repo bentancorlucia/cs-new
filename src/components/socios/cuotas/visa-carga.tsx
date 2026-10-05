@@ -109,6 +109,7 @@ export function CargaVisa({
   const [fecha, setFecha] = useState(hoy);
   const [cuentaId, setCuentaId] = useState(cuentaDefecto ?? cuentas[0]?.id ?? "");
   const [comision, setComision] = useState("");
+  const [iva, setIva] = useState("");
   const [tabla, setTabla] = useState<Tabla | null>(null);
   const [pegado, setPegado] = useState("");
   const [encabezado, setEncabezado] = useState(true);
@@ -123,6 +124,9 @@ export function CargaVisa({
 
   const periodo = `${mes}-01`;
   const montoComision = parsearImporte(comision) ?? 0;
+  const montoIva = parsearImporte(iva) ?? 0;
+  const gastos = r2(montoComision + montoIva);
+  const ivaSugerido = r2(montoComision * 0.22);
 
   // -------- Lectura --------
   function cargarFilas(filas: string[][], nombre: string | null) {
@@ -238,7 +242,8 @@ export function CargaVisa({
       .filter((id, k, arr): id is number => id != null && arr.indexOf(id) !== k)
   );
   const bruto = r2(cobrados.reduce((s, i) => s + i.importe, 0));
-  const claveSim = JSON.stringify([periodo, fecha, montoComision, cobrados.map((c) => [c.persona?.id, c.importe])]);
+  const neto = r2(bruto - gastos);
+  const claveSim = JSON.stringify([periodo, fecha, montoComision, montoIva, cobrados.map((c) => [c.persona?.id, c.importe])]);
   const simVigente = sim && sim.clave === claveSim ? sim.datos : null;
   const yaDebitados = simVigente?.personas.filter((p) => p.yaDebitado) ?? [];
 
@@ -247,7 +252,7 @@ export function CargaVisa({
   if (cobrados.length === 0 && items) problemas.push("No hay débitos cobrados");
   if (sinPersona.length) problemas.push(`${sinPersona.length} cobro${sinPersona.length === 1 ? "" : "s"} sin identificar`);
   if (repetidos.size) problemas.push("Hay personas repetidas entre los cobrados");
-  if (montoComision >= bruto && bruto > 0) problemas.push("La comisión no puede ser mayor que lo cobrado");
+  if (gastos >= bruto && bruto > 0) problemas.push("La comisión más el IVA no pueden ser mayores que lo cobrado");
   if (!fecha || fecha > hoy) problemas.push("La fecha de acreditación no puede ser futura");
 
   function simular() {
@@ -256,6 +261,7 @@ export function CargaVisa({
         periodo,
         fecha,
         comision: montoComision,
+        iva: montoIva,
         cobrados: cobrados.map((c) => ({ persona_id: c.persona!.id, importe: c.importe })),
       });
       if (!r.ok) {
@@ -270,7 +276,7 @@ export function CargaVisa({
     <div className="space-y-4">
       {/* 1. Datos */}
       <Panel titulo="1 · Liquidación" icono={CreditCard}>
-        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <Campo etiqueta="Mes del débito">
             <input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className={claseControl} />
           </Campo>
@@ -286,8 +292,33 @@ export function CargaVisa({
               ))}
             </select>
           </Campo>
-          <Campo etiqueta="Comisión total ($)" ayuda="Lo que descontó Visa (con IVA).">
+          <Campo etiqueta="Comisión ($)" ayuda="Lo que cobró Visa, sin el IVA.">
             <input inputMode="decimal" value={comision} onChange={(e) => setComision(e.target.value)} placeholder="0,00" className={cn(claseControl, "text-right tabular-nums")} />
+          </Campo>
+          <Campo
+            etiqueta="IVA de la comisión ($)"
+            ayuda={
+              <span className="flex flex-wrap items-center gap-x-1.5">
+                Va aparte, como en el resumen de Visa.
+                {montoComision > 0 && Math.abs(montoIva - ivaSugerido) > 0.004 && (
+                  <motion.button
+                    type="button"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    whileTap={{ scale: 0.92 }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setIva(ivaSugerido.toFixed(2).replace(".", ","));
+                    }}
+                    className="rounded-full border border-bordo-100 bg-bordo-50 px-2 py-px text-[11px] font-medium text-bordo-800 transition-colors hover:bg-bordo-100"
+                  >
+                    Calcular 22 %
+                  </motion.button>
+                )}
+              </span>
+            }
+          >
+            <input inputMode="decimal" value={iva} onChange={(e) => setIva(e.target.value)} placeholder="0,00" className={cn(claseControl, "text-right tabular-nums")} />
           </Campo>
         </div>
       </Panel>
@@ -511,13 +542,14 @@ export function CargaVisa({
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ ...easeSmooth, delay: 0.05 }}>
             <Panel titulo="4 · Antes de aplicar" icono={Scale}>
               <div className="space-y-4 p-4">
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <Numero etiqueta="Bruto" valor={bruto} />
                   <Numero etiqueta="Comisión" valor={montoComision} />
-                  <Numero etiqueta="Neto al banco" valor={r2(bruto - montoComision)} fuerte />
+                  <Numero etiqueta="IVA de la comisión" valor={montoIva} />
+                  <Numero etiqueta="Neto al banco" valor={neto} fuerte />
                 </div>
                 <Explicacion>
-                  Bruto: suma de los débitos cobrados. Neto: lo que tiene que haber entrado al banco. Los rechazos ({rechazados.length},{" "}
+                  Bruto: suma de los débitos cobrados. Neto = bruto − comisión − IVA: lo que tiene que haber entrado al banco. Los rechazos ({rechazados.length},{" "}
                   {formatImporte(rechazados.reduce((s, r) => s + r.importe, 0))}) se registran pero la deuda sigue.
                 </Explicacion>
 
@@ -544,20 +576,19 @@ export function CargaVisa({
                       )}
                       <div className="grid gap-3 md:grid-cols-2">
                         <div className="rounded-2xl border border-linea p-3">
-                          <div className="mb-2 text-[10px] uppercase tracking-editorial text-muted-foreground">Reparto de la comisión</div>
+                          <div className="mb-2 text-[10px] uppercase tracking-editorial text-muted-foreground">Reparto de los gastos</div>
                           {simVigente.comisiones.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">Sin comisión.</p>
+                            <p className="text-xs text-muted-foreground">Sin gastos.</p>
                           ) : (
                             <ul className="space-y-1.5 text-sm">
                               {simVigente.comisiones.map((k) => (
                                 <li key={k.nombre} className="flex items-baseline justify-between gap-3">
                                   <span className="min-w-0 truncate">
                                     {k.nombre}
-                                    {k.disciplina_id && (
-                                      <span className="ml-1 text-[11px] text-muted-foreground">
-                                        {k.porcentaje}% sobre {formatImporte(k.cobrado)}
-                                      </span>
-                                    )}
+                                    <span className="ml-1 text-[11px] text-muted-foreground">
+                                      {k.disciplina_id ? `${k.porcentaje}% sobre ${formatImporte(k.cobrado)} · ` : ""}
+                                      comisión {formatImporte(k.comision)} + IVA {formatImporte(k.iva)}
+                                    </span>
                                   </span>
                                   <span className="tabular-nums">{formatImporte(k.importe)}</span>
                                 </li>
@@ -565,7 +596,8 @@ export function CargaVisa({
                             </ul>
                           )}
                           <Explicacion className="mt-2">
-                            A cada disciplina, la parte de la comisión proporcional a lo cobrado de sus cuotas por su porcentaje; el resto es del club.
+                            A cada disciplina, la parte de la comisión y del IVA proporcional a lo cobrado a sus socios (sus cuotas y la social a su
+                            cargo) por su porcentaje; el resto es del club. Se le descuenta en la liquidación del mes.
                           </Explicacion>
                         </div>
                         <div className="rounded-2xl border border-linea p-3">
@@ -610,8 +642,8 @@ export function CargaVisa({
         titulo={`Aplicar el débito de ${nombrePeriodo(periodo)}`}
         descripcion={
           <span>
-            {cobrados.length} cobros por {formatImporte(bruto, "UYU")}, comisión {formatImporte(montoComision, "UYU")}, neto{" "}
-            {formatImporte(r2(bruto - montoComision), "UYU")} al banco el {fecha.split("-").reverse().join("/")}. {rechazados.length} rechazos
+            {cobrados.length} cobros por {formatImporte(bruto, "UYU")}, comisión {formatImporte(montoComision, "UYU")} más IVA{" "}
+            {formatImporte(montoIva, "UYU")}, neto {formatImporte(neto, "UYU")} al banco el {fecha.split("-").reverse().join("/")}. {rechazados.length} rechazos
             quedan registrados. Todo se aplica junto, con un asiento.
           </span>
         }
@@ -623,6 +655,7 @@ export function CargaVisa({
           setSim(null);
           setPegado("");
           setComision("");
+          setIva("");
           router.refresh();
           alAplicar();
         }}
@@ -631,6 +664,7 @@ export function CargaVisa({
             periodo,
             fecha,
             comision: montoComision,
+            iva: montoIva,
             cuenta_id: cuentaId || null,
             archivo: tabla?.nombre ?? null,
             cobrados: cobrados.map((c) => ({ persona_id: c.persona!.id, importe: c.importe })),

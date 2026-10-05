@@ -7,6 +7,7 @@ import { AnimatePresence, motion, useReducedMotion, useSpring } from "framer-mot
 import {
   AlertTriangle,
   Ban,
+  ClipboardCheck,
   CreditCard,
   FileMinus,
   HandCoins,
@@ -65,6 +66,7 @@ const TABS: { href: string; etiqueta: string; icono: LucideIcon; tesoreria?: boo
   { href: "/cuotas/visa", etiqueta: "Débito Visa", icono: CreditCard, tesoreria: true },
   { href: "/cuotas/notas-credito", etiqueta: "Notas de crédito", icono: FileMinus, tesoreria: true },
   { href: "/cuotas/disciplinas", etiqueta: "Disciplinas", icono: Receipt, tesoreria: true },
+  { href: "/cuotas/cambios", etiqueta: "Cambios", icono: ClipboardCheck },
   { href: "/cuotas/morosidad", etiqueta: "Morosidad", icono: AlertTriangle },
 ];
 

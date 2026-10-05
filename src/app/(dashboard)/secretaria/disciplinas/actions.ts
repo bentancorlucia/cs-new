@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createServerClient } from "@/lib/supabase/server";
-import { createSociosClient, exigirPermisoSocios } from "@/lib/socios/server";
+import { createSociosClient, exigirPermisoSocios, permisosSocios } from "@/lib/socios/server";
 import { mensajeError } from "@/lib/contabilidad/formato";
 
 /**
@@ -282,6 +282,79 @@ export async function cancelarPlanPago(input: z.input<typeof cancelarPlanSchema>
     if (error) return { ok: false, error: mensajeError(error) };
     revalidar(p.data.disciplina_id);
     revalidatePath("/pedidos-disciplinas");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return fallo(e);
+  }
+}
+
+// ------------------------------------------------------------
+// Representantes (secretaría, tesorería y super_admin)
+// ------------------------------------------------------------
+
+/** Secretaría o tesorería (super_admin entra en las dos). La base vuelve a validar. */
+async function exigirRepresentantes() {
+  const p = await permisosSocios();
+  if (!p.puedeGestionar && !p.puedeTesoreria) throw new Error("No tenés permiso para cambiar los representantes");
+}
+
+const representanteSchema = z.object({
+  id: id.nullish(),
+  disciplina_id: id,
+  nombre: z.string().trim().min(2, "Indicá el nombre").max(120, "Como máximo 120 caracteres"),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(200)
+    .refine((v) => z.email().safeParse(v).success, "Correo inválido"),
+  telefono: textoOpcional(30),
+  cargo: textoOpcional(80),
+  recibe_liquidacion: z.boolean(),
+  acceso_panel: z.boolean(),
+});
+
+export async function guardarRepresentante(input: z.input<typeof representanteSchema>): Promise<Resultado<number>> {
+  try {
+    await exigirRepresentantes();
+    const p = representanteSchema.safeParse(input);
+    if (!p.success) return invalido(p.error.issues);
+    const d = p.data;
+    const db = await createSociosClient();
+    const { data, error } = await db.rpc("guardar_representante", {
+      p_id: nulo(d.id ?? null),
+      p_disciplina: d.disciplina_id,
+      p_datos: {
+        nombre: d.nombre,
+        email: d.email,
+        telefono: d.telefono,
+        cargo: d.cargo,
+        recibe_liquidacion: d.recibe_liquidacion,
+        acceso_panel: d.acceso_panel,
+      },
+    });
+    if (error) {
+      if (error.code === "23505") return { ok: false, error: "Ya hay un representante de la disciplina con ese correo" };
+      return { ok: false, error: mensajeError(error) };
+    }
+    revalidar(d.disciplina_id);
+    return { ok: true, data: Number(data) };
+  } catch (e) {
+    return fallo(e);
+  }
+}
+
+const quitarRepresentanteSchema = z.object({ id, disciplina_id: id });
+
+export async function quitarRepresentante(input: z.input<typeof quitarRepresentanteSchema>): Promise<Resultado> {
+  try {
+    await exigirRepresentantes();
+    const p = quitarRepresentanteSchema.safeParse(input);
+    if (!p.success) return invalido(p.error.issues);
+    const db = await createSociosClient();
+    const { error } = await db.rpc("quitar_representante", { p_id: p.data.id });
+    if (error) return { ok: false, error: mensajeError(error) };
+    revalidar(p.data.disciplina_id);
     return { ok: true, data: undefined };
   } catch (e) {
     return fallo(e);

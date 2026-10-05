@@ -15,6 +15,7 @@ import {
   planesPagoDisciplina,
   sociosDeDisciplina,
 } from "@/lib/socios/disciplinas";
+import { leerCambiosDebito, leerRepresentantes, type CambioDebito, type Representante } from "@/lib/socios/cambios-debito";
 import { hoyUruguay } from "@/lib/contabilidad/formato";
 import { DetalleDisciplina, type DatosTesoreria, type Pestana } from "@/components/socios/disciplinas/detalle";
 
@@ -23,7 +24,7 @@ export const dynamic = "force-dynamic";
 type Params = Promise<{ id: string }>;
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-const PESTANAS: Pestana[] = ["resumen", "cuenta", "planes", "socios"];
+const PESTANAS: Pestana[] = ["resumen", "cuenta", "planes", "socios", "representantes", "cambios"];
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { id } = await params;
@@ -54,6 +55,18 @@ export default async function DisciplinaPage({ params, searchParams }: { params:
   } catch (e) {
     errorSocios = e instanceof Error ? e.message : "error inesperado";
   }
+
+  // Representantes y registro de cambios: los leen secretaría, tesorería y Comisión Fiscal.
+  const [representantes, cambios] = await Promise.all([
+    leerRepresentantes(so, disciplinaId).then(
+      (datos): { datos: Representante[]; error: string | null } => ({ datos, error: null }),
+      (e: unknown) => ({ datos: [], error: e instanceof Error ? e.message : "error inesperado" })
+    ),
+    leerCambiosDebito(so, { disciplina: disciplinaId }).then(
+      (datos): { datos: CambioDebito[]; error: string | null } => ({ datos, error: null }),
+      (e: unknown) => ({ datos: [], error: e instanceof Error ? e.message : "error inesperado" })
+    ),
+  ]);
 
   let tesoreria: DatosTesoreria | null = null;
   let errorTesoreria: string | null = null;
@@ -104,6 +117,11 @@ export default async function DisciplinaPage({ params, searchParams }: { params:
       puedeGestionar={permisos.puedeGestionar}
       verTesoreria={permisos.verTesoreria}
       puedeTesoreria={permisos.puedeTesoreria}
+      representantes={representantes.datos}
+      errorRepresentantes={representantes.error}
+      cambios={cambios.datos}
+      errorCambios={cambios.error}
+      puedeEditarRepresentantes={permisos.puedeGestionar || permisos.puedeTesoreria}
     />
   );
 }

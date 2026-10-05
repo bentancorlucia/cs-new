@@ -92,7 +92,7 @@ SELECT is(comunicaciones.correr_automatizacion('cumpleanos', '2026-01-01', '{"cu
 SELECT is((SELECT count(*) FROM comunicaciones.corridas WHERE clave = 'cumpleanos'), 0::bigint, 'y no queda registrada');
 
 -- Plantillas en HTML y mails automáticos
-SELECT is((SELECT count(*) FROM comunicaciones.plantillas WHERE transaccional), 6::bigint, 'seis mails automáticos editables');
+SELECT is((SELECT count(*) FROM comunicaciones.plantillas WHERE transaccional), 7::bigint, 'siete mails automáticos editables (con el resumen de liquidación a las disciplinas)');
 SELECT throws_like($$ UPDATE comunicaciones.plantillas SET activa = false WHERE clave = 'pedido_listo' $$,
                    '%solo cambian de asunto%', 'un mail automático no se desactiva');
 SELECT throws_like($$ UPDATE comunicaciones.plantillas SET cuerpo_original = 'x' WHERE clave = 'pedido_listo' $$,
