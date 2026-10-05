@@ -87,7 +87,7 @@ function AvisoCambios({ cantidad }: { cantidad: number }) {
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={easeSmooth} whileHover={{ y: -1 }}>
       <Link
-        href="/cuotas/cambios"
+        href="/cuotas/cambios?estado=pendiente"
         className="group flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 transition-colors hover:bg-amber-100/70"
       >
         <ClipboardCheck className="size-5 shrink-0" />

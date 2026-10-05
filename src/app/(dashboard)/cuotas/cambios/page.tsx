@@ -9,18 +9,18 @@ import { hoyUruguay } from "@/lib/contabilidad/formato";
 import { CambiosVista } from "@/components/socios/cuotas/cambios";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Cambios para el débito" };
+export const metadata: Metadata = { title: "Cambios de socios" };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-const ESTADOS: FiltroEstadoCambios[] = ["pendiente", "aplicado", "descartado", "debito", "todos"];
+const ESTADOS: FiltroEstadoCambios[] = ["todos", "pendiente", "aplicado", "descartado", "debito"];
 const esFecha = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
 export default async function CambiosPage({ searchParams }: { searchParams: SearchParams }) {
   const permisos = await permisosCuotas();
   if (!permisos.puedeVer) redirect("/mi-cuenta");
   const sp = await searchParams;
-  const estado = ESTADOS.includes(sp.estado as FiltroEstadoCambios) ? (sp.estado as FiltroEstadoCambios) : "pendiente";
+  const estado = ESTADOS.includes(sp.estado as FiltroEstadoCambios) ? (sp.estado as FiltroEstadoCambios) : "todos";
   const desde = esFecha(sp.desde) ? sp.desde : null;
   const hasta = esFecha(sp.hasta) ? sp.hasta : null;
   const hoy = hoyUruguay();

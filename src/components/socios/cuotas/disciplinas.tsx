@@ -642,7 +642,7 @@ function Formula() {
         Se cobra la cuota entera por el débito (social + disciplina); la social es del club. La de los socios que no pagaron (tarjeta rechazada u otro
         medio) la pone la disciplina, que se la cobra al socio. Los gastos se reparten en proporción a lo cobrado. Si da negativo, la disciplina
         deposita la diferencia.{" "}
-        <Link href="/cuotas/cambios" className="inline-flex items-center gap-0.5 font-medium text-bordo-800 hover:underline">
+        <Link href="/cuotas/cambios?estado=debito" className="inline-flex items-center gap-0.5 font-medium text-bordo-800 hover:underline">
           Cambios para el débito
           <ArrowUpRight className="size-3" />
         </Link>

@@ -34,7 +34,7 @@ export function CambiosDisciplinaVista({ cambios, error }: { cambios: CambioDebi
       icono={History}
       accion={
         pendientes > 0 ? (
-          <BotonLink href="/cuotas/cambios" variante="secundario" className="h-8 px-3 text-xs">
+          <BotonLink href="/cuotas/cambios?estado=pendiente" variante="secundario" className="h-8 px-3 text-xs">
             {pendientes} pendiente{pendientes === 1 ? "" : "s"} de cargar en Visa
           </BotonLink>
         ) : undefined

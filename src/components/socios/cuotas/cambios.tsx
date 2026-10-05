@@ -303,11 +303,11 @@ export function ListaCambios({
 type Origen = "todos" | "representante" | "club";
 
 const ESTADOS: { valor: FiltroEstadoCambios; etiqueta: string }[] = [
-  { valor: "pendiente", etiqueta: "Pendientes" },
+  { valor: "todos", etiqueta: "Todo el registro" },
+  { valor: "pendiente", etiqueta: "Pendientes en Visa" },
   { valor: "aplicado", etiqueta: "Cargados" },
   { valor: "descartado", etiqueta: "Descartados" },
   { valor: "debito", etiqueta: "Todos los del débito" },
-  { valor: "todos", etiqueta: "Todo el registro" },
 ];
 
 export function CambiosVista({
@@ -345,7 +345,7 @@ export function CambiosVista({
   function navegar(cambio: Partial<typeof filtros>) {
     const f = { ...filtros, ...cambio };
     const q = new URLSearchParams();
-    if (f.estado !== "pendiente") q.set("estado", f.estado);
+    if (f.estado !== "todos") q.set("estado", f.estado);
     if (f.desde) q.set("desde", f.desde);
     if (f.hasta) q.set("hasta", f.hasta);
     setSeleccion(new Set());
@@ -426,8 +426,8 @@ export function CambiosVista({
     <div className="space-y-5">
       <EncabezadoPagina
         eyebrow="Cuotas y cobranza"
-        titulo="Cambios para el débito"
-        descripcion="Todo lo que cambian las disciplinas y el club que hay que cargar en el portal de Visa: altas, bajas, tarjetas nuevas y cambios de cuota. Cuando lo cargás, marcalo: el número de tarjeta se borra."
+        titulo="Cambios de socios"
+        descripcion="Todo lo que cambian las disciplinas y el club: altas, bajas, planes, medios de cobro, tarjetas y precios. Lo que afecta al débito Visa queda pendiente hasta que lo cargás en el portal y lo marcás: el número de tarjeta se borra."
       >
         <Boton variante="secundario" onClick={excel} disabled={visiblesPendientes.length === 0}>
           <FileSpreadsheet className="size-4" />
