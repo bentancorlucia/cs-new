@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["tesseract.js", "pdf-parse"],
+  // El escudo va en el PDF de las órdenes de compra (descarga y adjunto del
+  // mail, que también sale desde la cola de Comunicaciones).
+  outputFileTracingIncludes: { "/**": ["./public/images/escudo/logo-cs.png"] },
   experimental: {
     optimizePackageImports: ["lucide-react", "framer-motion", "date-fns"],
   },

@@ -11,6 +11,8 @@ import { getUserRoles } from "@/lib/supabase/roles";
 import { hoyUruguay } from "@/lib/contabilidad/formato";
 import { diasEntre, lunesDe, r2 } from "@/lib/comercial/compras-esquemas";
 import type { CentroOpcion, CuentaOpcion } from "@/lib/contabilidad/asientos";
+import { createComunicacionesAdminClient } from "@/lib/comunicaciones/server";
+import type { OrdenCompraPdfDatos } from "@/lib/pdf/orden-compra-pdf";
 
 /*
  * Consultas de proveedores y compras (cuenta corriente de todo el club).
@@ -873,6 +875,70 @@ export async function obtenerOrdenCompra(id: number): Promise<OrdenCompraDetalle
     })),
     recepciones,
   };
+}
+
+/** Lo que va en el PDF de la orden: la orden, la ficha del proveedor y el código de cada producto. */
+export async function datosPdfOrdenCompra(id: number): Promise<OrdenCompraPdfDatos | null> {
+  const o = await obtenerOrdenCompra(id);
+  if (!o) return null;
+  const pub = await createServerClient();
+  const prodIds = [...new Set(o.items.map((i) => i.producto_id))];
+  const varIds = [...new Set(o.items.map((i) => i.variante_id).filter((v): v is number => v !== null))];
+  const [prov, { data: ps }, { data: vs }] = await Promise.all([
+    obtenerProveedor(o.proveedor_id),
+    prodIds.length ? pub.from("productos").select("id, sku").in("id", prodIds) : Promise.resolve({ data: [] }),
+    varIds.length ? pub.from("producto_variantes").select("id, sku").in("id", varIds) : Promise.resolve({ data: [] }),
+  ]);
+  const skuProducto = new Map((ps ?? []).map((p) => [p.id, p.sku]));
+  const skuVariante = new Map((vs ?? []).map((v) => [v.id, v.sku]));
+  return {
+    numero: o.numero,
+    fecha: o.fecha,
+    estado: o.estado,
+    moneda: o.moneda,
+    notas: o.notas,
+    aprobada_at: o.aprobada_at,
+    plazo_dias: prov?.condiciones?.plazo_dias ?? null,
+    proveedor: {
+      nombre: o.proveedor,
+      razon_social: prov?.razon_social ?? null,
+      rut: prov?.rut ?? null,
+      direccion: prov?.direccion ?? null,
+      contacto_nombre: prov?.contacto_nombre ?? null,
+      contacto_email: prov?.contacto_email ?? null,
+      contacto_telefono: prov?.contacto_telefono ?? null,
+    },
+    items: o.items.map((i) => ({
+      codigo: (i.variante_id !== null ? skuVariante.get(i.variante_id) : null) || skuProducto.get(i.producto_id) || null,
+      descripcion: i.nombre,
+      cantidad: i.cantidad,
+      precio: i.costo_unitario,
+    })),
+  };
+}
+
+export type EnvioOrdenCompra = {
+  id: string;
+  email: string;
+  estado: string;
+  error: string | null;
+  enviado_at: string | null;
+  created_at: string;
+};
+
+/** Mails de la orden al proveedor (comunicaciones.mensajes con ref orden_compra). */
+export async function enviosOrdenCompra(id: number): Promise<EnvioOrdenCompra[]> {
+  const { puedeVer } = await permisosCompras();
+  if (!puedeVer) return [];
+  const db = createComunicacionesAdminClient();
+  const { data } = await db
+    .from("mensajes")
+    .select("id, email, estado, error, enviado_at, created_at")
+    .eq("ref_tipo", "orden_compra")
+    .eq("ref_id", String(id))
+    .order("created_at", { ascending: false })
+    .limit(20);
+  return data ?? [];
 }
 
 // ------------------------------------------------------------

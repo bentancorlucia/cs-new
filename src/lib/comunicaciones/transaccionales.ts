@@ -140,6 +140,19 @@ export const TRANSACCIONALES: Transaccional[] = [
     },
   },
   {
+    clave: "orden_compra",
+    cuando: "Cuando se le manda una orden de compra al proveedor desde Compras (va con el PDF de la orden adjunto).",
+    variables: [
+      { clave: "nombre", etiqueta: "Contacto del proveedor (o el proveedor si no hay contacto)" },
+      { clave: "proveedor", etiqueta: "Proveedor" },
+      { clave: "numero_orden", etiqueta: "Número de orden" },
+      { clave: "fecha", etiqueta: "Fecha de la orden" },
+      { clave: "total", etiqueta: "Total con moneda" },
+      { clave: "mensaje", etiqueta: "Mensaje escrito al enviar (vacío si no hay)" },
+    ],
+    ejemplo: { nombre: "Laura", proveedor: "Distribuidora Sur", numero_orden: "OC-00012", fecha: "05/10/2026", total: "$ 18.450,00", mensaje: "Necesitamos la entrega antes del viernes." },
+  },
+  {
     clave: "notificacion",
     cuando: "Avisos generales del sistema.",
     variables: [

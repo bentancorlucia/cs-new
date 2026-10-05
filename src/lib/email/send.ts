@@ -4,6 +4,8 @@ import { procesarCola } from "../comunicaciones/worker";
 import { renderPlantilla } from "../comunicaciones/render";
 import { pesos } from "../comunicaciones/transaccionales";
 import type { Encabezado } from "../comunicaciones/molde";
+import { formatFecha, formatImporte } from "../contabilidad/formato";
+import type { OrdenCompraPdfDatos } from "../pdf/orden-compra-pdf";
 import {
   orderConfirmationHtml,
   orderReadyHtml,
@@ -77,7 +79,7 @@ async function armar(
 const itemsVars = (items: { nombre: string; cantidad: number; precioUnitario: number }[]) =>
   items.map((i) => ({ producto: i.nombre, cantidad: i.cantidad, importe: pesos(i.precioUnitario * i.cantidad) }));
 
-async function encolar(m: Encolado) {
+async function encolar(m: Encolado): Promise<boolean> {
   try {
     const db = createComunicacionesAdminClient();
     const { error } = await db.rpc("encolar_transaccional", {
@@ -96,8 +98,10 @@ async function encolar(m: Encolado) {
     } catch {
       // Fuera de un request (scripts): lo manda el cron.
     }
+    return true;
   } catch (error) {
     console.error(`[Email] No se pudo encolar "${m.asunto}":`, error);
+    return false;
   }
 }
 
@@ -266,5 +270,55 @@ export async function sendLiquidacionDisciplina(
     refTipo: "liquidacion_disciplina",
     refId: String(opciones.liquidacionId),
     variables,
+  });
+}
+
+const escaparHtml = (t: string) =>
+  t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/**
+ * Orden de compra al proveedor, con el PDF adjunto. El PDF se arma al
+ * enviar con los datos que se guardan acá (la foto de la orden al
+ * momento de mandarla). Devuelve false si no se pudo encolar.
+ */
+export async function sendOrdenCompraProveedor(
+  to: string,
+  data: { ordenId: number; mensaje: string; pdf: OrdenCompraPdfDatos }
+): Promise<boolean> {
+  const { pdf } = data;
+  const nombre = pdf.proveedor.contacto_nombre || pdf.proveedor.nombre;
+  const total = formatImporte(
+    pdf.items.reduce((s, i) => s + Math.round(i.cantidad * i.precio * 100) / 100, 0),
+    pdf.moneda
+  );
+  const mail = await armar(
+    "orden_compra",
+    {
+      nombre,
+      proveedor: pdf.proveedor.nombre,
+      numero_orden: pdf.numero,
+      fecha: formatFecha(pdf.fecha),
+      total,
+      mensaje: data.mensaje,
+    },
+    {
+      asunto: `Orden de compra ${pdf.numero} — Club Seminario`,
+      html: notificationHtml({
+        titulo: `Orden de compra ${pdf.numero}`,
+        mensaje:
+          `Hola ${escaparHtml(nombre)}: te enviamos adjunta la orden de compra ${pdf.numero} del ${formatFecha(pdf.fecha)} por ${total}. ` +
+          `Por favor, indicá el número de orden en el remito y en la factura.` +
+          (data.mensaje ? `<br><br>${escaparHtml(data.mensaje).replace(/\n/g, "<br>")}` : ""),
+      }),
+    }
+  );
+  return encolar({
+    to,
+    nombre,
+    ...mail,
+    dedupe: null,
+    refTipo: "orden_compra",
+    refId: String(data.ordenId),
+    variables: { adjunto: { tipo: "orden_compra_pdf", datos: pdf } },
   });
 }

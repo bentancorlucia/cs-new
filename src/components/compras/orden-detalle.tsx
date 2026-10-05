@@ -4,18 +4,84 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Ban, CheckCircle2, PackageCheck, PackagePlus, Pencil, ShoppingCart, Truck } from "lucide-react";
+import {
+  Ban,
+  CheckCircle2,
+  Download,
+  FileText,
+  Mail,
+  PackageCheck,
+  PackagePlus,
+  Pencil,
+  Send,
+  ShoppingCart,
+  Truck,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatFecha, formatImporte } from "@/lib/contabilidad/formato";
 import { fadeInUp, staggerContainerFast } from "@/lib/motion";
-import type { OrdenCompraDetalle } from "@/lib/comercial/compras";
+import { formatFechaHora } from "@/lib/comunicaciones/esquemas";
+import type { EnvioOrdenCompra, OrdenCompraDetalle } from "@/lib/comercial/compras";
 import { ConfirmarDialog } from "@/components/contabilidad/ejercicios/confirmar-dialog";
-import { aprobarOrdenCompra, cancelarOrdenCompra } from "@/app/(dashboard)/admin/compras/actions";
-import { BadgeEstadoOrden, BadgeMoneda, Boton, BotonLink, EncabezadoPagina, Kpi, LinkAsiento, Panel } from "./ui";
+import { aprobarOrdenCompra, cancelarOrdenCompra, enviarOrdenCompra } from "@/app/(dashboard)/admin/compras/actions";
+import { DialogoAccion } from "./dialogos";
+import {
+  BadgeEstadoOrden,
+  BadgeMoneda,
+  Boton,
+  BotonLink,
+  Campo,
+  claseBoton,
+  claseControl,
+  EncabezadoPagina,
+  Kpi,
+  LinkAsiento,
+  Panel,
+} from "./ui";
 
-export function OrdenDetalle({ orden: o, puedeOperar }: { orden: OrdenCompraDetalle; puedeOperar: boolean }) {
+const ESTADO_ENVIO: Record<string, { texto: string; clase: string }> = {
+  pendiente: { texto: "En cola", clase: "border-dorado-300 bg-dorado-100 text-dorado-800" },
+  enviando: { texto: "Enviando", clase: "border-sky-200 bg-sky-50 text-sky-800" },
+  enviado: { texto: "Enviado", clase: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  fallido: { texto: "Falló", clase: "border-rose-200 bg-rose-50 text-rose-700" },
+  omitido: { texto: "Omitido", clase: "border-slate-200 bg-slate-100 text-slate-600" },
+  cancelado: { texto: "Cancelado", clase: "border-slate-200 bg-slate-100 text-slate-600" },
+};
+
+/** Link a un archivo (no a una página): <a> común, con la misma pinta que BotonLink. */
+function BotonArchivo({ href, children, nuevaPestana }: { href: string; children: React.ReactNode; nuevaPestana?: boolean }) {
+  return (
+    <motion.a
+      href={href}
+      target={nuevaPestana ? "_blank" : undefined}
+      rel={nuevaPestana ? "noopener" : undefined}
+      whileHover={{ y: -1 }}
+      whileTap={{ scale: 0.97 }}
+      className={cn("inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-medium transition-colors", claseBoton.secundario)}
+    >
+      {children}
+    </motion.a>
+  );
+}
+
+export function OrdenDetalle({
+  orden: o,
+  puedeOperar,
+  emailProveedor,
+  envios,
+}: {
+  orden: OrdenCompraDetalle;
+  puedeOperar: boolean;
+  emailProveedor: string | null;
+  envios: EnvioOrdenCompra[];
+}) {
   const router = useRouter();
   const [confirmar, setConfirmar] = useState<"aprobar" | "cancelar" | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const [email, setEmail] = useState("");
+  const [mensaje, setMensaje] = useState("");
+  const pdf = `/api/admin/compras/ordenes/${o.id}/pdf`;
+  const enviable = o.estado !== "borrador" && o.estado !== "cancelada";
   const pendientes = o.unidades - o.recibidas;
   const recibible = o.estado === "aprobada" || o.estado === "recibida_parcial";
   const cancelable = (o.estado === "borrador" || o.estado === "aprobada") && o.recepciones.every((r) => r.estado === "anulada");
@@ -41,6 +107,27 @@ export function OrdenDetalle({ orden: o, puedeOperar }: { orden: OrdenCompraDeta
           </span>
         }
       >
+        <BotonArchivo href={pdf} nuevaPestana>
+          <FileText className="size-4" />
+          Ver PDF
+        </BotonArchivo>
+        <BotonArchivo href={`${pdf}?descargar=1`}>
+          <Download className="size-4" />
+          Descargar
+        </BotonArchivo>
+        {puedeOperar && enviable && (
+          <Boton
+            variante="dorado"
+            onClick={() => {
+              setEmail(emailProveedor ?? "");
+              setMensaje("");
+              setEnviando(true);
+            }}
+          >
+            <Send className="size-4" />
+            Enviar al proveedor
+          </Boton>
+        )}
         {puedeOperar && o.estado === "borrador" && (
           <>
             <BotonLink href={`/admin/compras/ordenes/${o.id}/editar`} variante="secundario">
@@ -146,6 +233,76 @@ export function OrdenDetalle({ orden: o, puedeOperar }: { orden: OrdenCompraDeta
           </ul>
         )}
       </Panel>
+
+      {envios.length > 0 && (
+        <Panel titulo={`Envíos al proveedor (${envios.length})`} icono={Mail} delay={0.2}>
+          <motion.ul
+            variants={staggerContainerFast}
+            initial="hidden"
+            animate="visible"
+            className="divide-y divide-linea/70"
+          >
+            {envios.map((e) => {
+              const est = ESTADO_ENVIO[e.estado] ?? ESTADO_ENVIO.omitido;
+              return (
+                <motion.li key={e.id} variants={fadeInUp} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
+                  <span className="font-medium break-all">{e.email}</span>
+                  <span
+                    className={cn(
+                      "inline-flex h-5 items-center rounded-full border px-2 text-[11px] font-medium whitespace-nowrap",
+                      est.clase
+                    )}
+                  >
+                    {est.texto}
+                  </span>
+                  {e.error && e.estado !== "enviado" && <span className="text-xs text-rose-700">{e.error}</span>}
+                  <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+                    {formatFechaHora(e.enviado_at ?? e.created_at)}
+                  </span>
+                </motion.li>
+              );
+            })}
+          </motion.ul>
+        </Panel>
+      )}
+
+      <DialogoAccion
+        open={enviando}
+        onOpenChange={setEnviando}
+        icono={Send}
+        titulo={`Enviar ${o.numero} a ${o.proveedor}`}
+        descripcion="Sale desde el correo del club con el PDF de la orden adjunto. El mail se puede editar en Comunicaciones → Plantillas."
+        textoAccion="Enviar"
+        deshabilitado={!email.trim()}
+        ejecutar={async () => {
+          const r = await enviarOrdenCompra(o.id, { email, mensaje });
+          return r.ok ? { ok: true, mensaje: `Orden enviada a ${email.trim()}` } : r;
+        }}
+      >
+        <Campo
+          etiqueta="Email del proveedor"
+          ayuda={emailProveedor ? undefined : "El proveedor no tiene email cargado: escribilo acá o cargalo en su ficha."}
+        >
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoFocus={!emailProveedor}
+            placeholder="ventas@proveedor.com.uy"
+            className={claseControl}
+          />
+        </Campo>
+        <Campo etiqueta="Mensaje (opcional)">
+          <textarea
+            value={mensaje}
+            onChange={(e) => setMensaje(e.target.value)}
+            rows={3}
+            maxLength={2000}
+            placeholder="Ej.: necesitamos la entrega antes del viernes."
+            className={cn(claseControl, "h-auto py-2")}
+          />
+        </Campo>
+      </DialogoAccion>
 
       <ConfirmarDialog
         open={confirmar === "aprobar"}

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createComercialClient, exigirOperador } from "@/lib/comercial/server";
 import { mensajeError } from "@/lib/contabilidad/formato";
 import {
@@ -17,7 +18,9 @@ import {
   type OrdenPagoInput,
   type RecepcionInput,
 } from "@/lib/comercial/compras-esquemas";
+import { sendOrdenCompraProveedor } from "@/lib/email/send";
 import {
+  datosPdfOrdenCompra,
   documentosPendientes,
   pendientesDeFacturar,
   permisosCompras,
@@ -140,6 +143,31 @@ export async function cancelarOrdenCompra(id: number): Promise<Resultado> {
     const { error } = await com.rpc("cancelar_orden_compra", { p_id: id });
     if (error) return { ok: false, error: mensajeError(error) };
     revalidar(`/admin/compras/ordenes/${id}`);
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return fallo(e);
+  }
+}
+
+const envioOrdenSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Email inválido").max(200),
+  mensaje: z.string().trim().max(2000, "El mensaje es muy largo").default(""),
+});
+
+/** Manda la orden al proveedor por mail con el PDF adjunto (sale por la cola de Comunicaciones). */
+export async function enviarOrdenCompra(id: number, input: { email: string; mensaje?: string }): Promise<Resultado> {
+  try {
+    await exigirOperador();
+    if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "Orden inválida" };
+    const p = envioOrdenSchema.safeParse(input);
+    if (!p.success) return invalido(p.error.issues);
+    const pdf = await datosPdfOrdenCompra(id);
+    if (!pdf) return { ok: false, error: "Orden inexistente" };
+    if (pdf.estado === "borrador") return { ok: false, error: "Aprobá la orden antes de mandarla al proveedor" };
+    if (pdf.estado === "cancelada") return { ok: false, error: "La orden está cancelada" };
+    const ok = await sendOrdenCompraProveedor(p.data.email, { ordenId: id, mensaje: p.data.mensaje, pdf });
+    if (!ok) return { ok: false, error: "No se pudo encolar el mail. Probá de nuevo." };
+    revalidatePath(`/admin/compras/ordenes/${id}`);
     return { ok: true, data: undefined };
   } catch (e) {
     return fallo(e);

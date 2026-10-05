@@ -5,6 +5,7 @@ import { enviarCorreo, smtpConfigurado } from "./smtp";
 import { urlBajaUnClic, urlPaginaBaja } from "./baja";
 import { generarQREntrada } from "@/lib/qr/generate";
 import { generarTicketPDF } from "@/lib/pdf/ticket-pdf";
+import { nombreArchivoOrdenCompra, renderOrdenCompraPdf, type OrdenCompraPdfDatos } from "@/lib/pdf/orden-compra-pdf";
 
 type Envio = {
   id: string;
@@ -136,7 +137,17 @@ async function adjuntos(adjunto: unknown) {
           eventoLugar?: string;
         };
       }
+    | { tipo: "orden_compra_pdf"; datos: OrdenCompraPdfDatos }
     | undefined;
+  if (a?.tipo === "orden_compra_pdf") {
+    return [
+      {
+        nombre: nombreArchivoOrdenCompra(a.datos),
+        contenido: await renderOrdenCompraPdf(a.datos),
+        tipo: "application/pdf",
+      },
+    ];
+  }
   if (!a || a.tipo !== "entradas_pdf") return undefined;
   const qrDataUrls = await Promise.all(a.datos.codigos.map((c) => generarQREntrada(c)));
   const pdf = await generarTicketPDF({ ...a.datos, qrDataUrls });

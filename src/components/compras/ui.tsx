@@ -271,7 +271,7 @@ export function Campo({
 // Botones y links
 // ------------------------------------------------------------
 
-const claseBoton = {
+export const claseBoton = {
   primario: "bg-bordo-800 text-white shadow-sm hover:bg-bordo-900",
   secundario: "border border-linea bg-white text-foreground hover:border-bordo-200 hover:bg-superficie",
   peligro: "border border-rose-200 bg-white text-rose-700 hover:bg-rose-50",
