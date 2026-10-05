@@ -26,7 +26,7 @@ Tipos: `src/types/socios.ts` (`supabase gen types typescript --local --schema so
 
 | Rol | Puede |
 |---|---|
-| secretaria | altas, bajas, inscripciones, medio de cobro, planes; registrar cobros |
+| secretaria | altas, bajas, inscripciones, medio de cobro, planes (padrón). No entra a Cuotas de socios ni registra cobros |
 | tesorero | emitir cuotas, cargos, notas de crédito, anular, débito Visa, liquidar disciplinas, precios, configuración; registrar cobros |
 | comision_fiscal | ver todo |
 | socio | ver sus cuotas, cobros y estado de cuenta (`estado_cuenta` de su propia persona) |
@@ -37,7 +37,7 @@ Padrón (secretaría): `alta_socio(p_persona jsonb, p_desde, p_planes jsonb, p_m
 
 Cuotas (tesorería): `previsualizar_lote(p_periodo)` (con `excluida` = motivo), `emitir_lote(p_periodo, p_fecha_emision?, p_fecha_vencimiento?, p_omitir bigint[])`, `emitir_cuota(p_suscripcion, p_periodo, p_importe?, p_motivo?)`, `emitir_cargo`, `anular_lote`, `anular_cuota`.
 
-Cobranza: `registrar_cobro(p_persona, p_fecha, p_medio, p_importe, p_cuenta?, p_disciplina?, p_referencia?, p_cuotas?)` (también secretaría), `anular_cobro`, `registrar_credito(p_persona, p_fecha, p_tipo, p_motivo, p_cuotas jsonb [{cuota_id, importe?}])`, `anular_credito`, `aplicar_liquidacion_visa(p_periodo, p_fecha, p_comision, p_cobrados [{persona_id, importe, referencia?}], p_rechazados [{persona_id?, documento?, importe, motivo?}], p_cuenta?, p_archivo?)`, `anular_liquidacion_visa`, `previsualizar_liquidacion_disciplina(p_disciplina, p_desde, p_hasta)`, `liquidar_disciplina(p_disciplina, p_desde, p_hasta, p_fecha, p_compensar, p_cuenta?, p_notas?)`, `anular_liquidacion_disciplina`.
+Cobranza: `registrar_cobro(p_persona, p_fecha, p_medio, p_importe, p_cuenta?, p_disciplina?, p_referencia?, p_cuotas?)` (solo tesorería; el panel de la disciplina lo usa delegado), `anular_cobro`, `registrar_credito(p_persona, p_fecha, p_tipo, p_motivo, p_cuotas jsonb [{cuota_id, importe?}])`, `anular_credito`, `aplicar_liquidacion_visa(p_periodo, p_fecha, p_comision, p_cobrados [{persona_id, importe, referencia?}], p_rechazados [{persona_id?, documento?, importe, motivo?}], p_cuenta?, p_archivo?)`, `anular_liquidacion_visa`, `previsualizar_liquidacion_disciplina(p_disciplina, p_desde, p_hasta)`, `liquidar_disciplina(p_disciplina, p_desde, p_hasta, p_fecha, p_compensar, p_cuenta?, p_notas?)`, `anular_liquidacion_disciplina`.
 
 Consultas: vistas `cuotas_saldo` (pagado, acreditado, saldo) y `cobros_saldo` (saldo a favor); `situacion(p_fecha)` (cuotas vencidas, deuda, saldo a favor, al día), `estado_cuenta(p_persona)`, `control_contable()` (cuotas y saldo a favor contra la contabilidad: la diferencia tiene que ser 0).
 
