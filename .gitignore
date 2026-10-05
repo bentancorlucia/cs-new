@@ -45,3 +45,6 @@ yarn-error.log*
 next-env.d.ts
 .aidesigner/*
 !.aidesigner/.gitkeep
+
+# credenciales de los usuarios de prueba (scripts/usuarios-prueba.mjs)
+.usuarios-prueba*.local

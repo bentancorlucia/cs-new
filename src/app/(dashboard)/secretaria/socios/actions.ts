@@ -3,13 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { createServerClient } from "@/lib/supabase/server";
 import { createSociosClient, exigirPermisoSocios, permisosSocios } from "@/lib/socios/server";
-import { mensajeError } from "@/lib/contabilidad/formato";
+import { hoyUruguay, mensajeError } from "@/lib/contabilidad/formato";
 import {
   altaSchema,
   bajaSchema,
   cambiarMedioSchema,
   cambiarPlanSchema,
   cedulaSchema,
+  crearPlanDisciplinaSchema,
   finalizarSchema,
   inscribirSchema,
   personaSchema,
@@ -269,6 +270,38 @@ export async function finalizarInscripcion(personaId: number, input: unknown): P
     }
     revalidar(personaId);
     return { ok: true, data: undefined };
+  } catch (e) {
+    return fallo(e);
+  }
+}
+
+// ------------------------------------------------------------
+// Primer plan de una disciplina (desde el alta o al inscribir)
+// ------------------------------------------------------------
+
+/**
+ * Crea un plan para una disciplina que no tiene (rige desde el mes en
+ * curso, hora de Uruguay) y devuelve su id. La base controla el permiso:
+ * secretaría, tesorería, super_admin y los representantes de la disciplina.
+ */
+export async function crearPlanDisciplina(input: unknown): Promise<Resultado<number>> {
+  try {
+    const { puedeGestionar, puedeTesoreria } = await permisosSocios();
+    if (!puedeGestionar && !puedeTesoreria) return { ok: false, error: "No autorizado" };
+    const p = crearPlanDisciplinaSchema.safeParse(input);
+    if (!p.success) return invalido(p.error.issues);
+    const so = await createSociosClient();
+    const { data, error } = await so.rpc("disc_crear_plan", {
+      p_disciplina: p.data.disciplina_id,
+      p_nombre: p.data.nombre,
+      p_importe: p.data.importe,
+      p_desde: `${hoyUruguay().slice(0, 7)}-01`,
+    });
+    if (error) return { ok: false, error: mensajeError(error) };
+    if (!data) return { ok: false, error: "No se pudo crear el plan" };
+    revalidatePath("/secretaria", "layout");
+    revalidatePath("/disciplina", "layout");
+    return { ok: true, data };
   } catch (e) {
     return fallo(e);
   }

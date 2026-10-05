@@ -24,16 +24,20 @@ import { altaSchema, formatCedula, soloDigitos } from "@/lib/socios/esquemas";
 import type { Disciplina, PersonaPadron, PlanConPrecio } from "@/lib/socios/padron";
 import { buscarPorCedula, darDeAlta } from "@/app/(dashboard)/secretaria/socios/actions";
 import {
-  AvisoCedula,
-  MEDIO_VACIO,
   MedioCobroCampos,
+  erroresMedio,
+  medioCobroAInput,
+  medioCobroInicial,
+  type DisciplinaSocio,
+  type MedioCobroForm,
+} from "@/components/socios/medio-cobro";
+import {
+  AvisoCedula,
   PERSONA_VACIA,
   PersonaCampos,
   PlanesCampos,
   erroresPorCampo,
-  medioAInput,
   personaAInput,
-  type MedioForm,
   type PersonaForm,
   type PlanElegido,
 } from "./campos";
@@ -62,12 +66,14 @@ export function AltaSocio({
   const [guardando, startGuardar] = useTransition();
   const [persona, setPersona] = useState<PersonaForm>(PERSONA_VACIA);
   const [desde, setDesde] = useState(hoy);
+  // Los planes creados acá mismo (disciplinas que no tenían) se suman sin recargar.
+  const [planesLista, setPlanesLista] = useState<PlanConPrecio[]>(planes);
   const primerSocial = planes.find((p) => p.tipo === "social" && p.activo);
   const [social, setSocial] = useState<PlanElegido | null>(
     primerSocial ? { plan_id: primerSocial.id, periodicidad: "mensual" } : null
   );
   const [elegidos, setElegidos] = useState<PlanElegido[]>([]);
-  const [medio, setMedio] = useState<MedioForm>(MEDIO_VACIO);
+  const [medio, setMedio] = useState<MedioCobroForm>(() => medioCobroInicial(null, true));
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -115,7 +121,18 @@ export function AltaSocio({
   }
 
   const planesElegidos = useMemo(() => [...(social ? [social] : []), ...elegidos], [social, elegidos]);
-  const porId = useMemo(() => new Map(planes.map((p) => [p.id, p])), [planes]);
+  const porId = useMemo(() => new Map(planesLista.map((p) => [p.id, p])), [planesLista]);
+  /** Las disciplinas de los planes elegidos: la transferencia va a la cuenta de una de ellas. */
+  const disciplinasSocio = useMemo(() => {
+    const out: DisciplinaSocio[] = [];
+    for (const e of elegidos) {
+      const p = porId.get(e.plan_id);
+      if (p?.disciplina_id && !out.some((d) => d.id === p.disciplina_id)) {
+        out.push({ id: p.disciplina_id, nombre: p.disciplina ?? "la disciplina" });
+      }
+    }
+    return out;
+  }, [elegidos, porId]);
   const totalMensual = planesElegidos.reduce((s, e) => {
     const p = porId.get(e.plan_id);
     if (!p?.precio) return s;
@@ -130,13 +147,13 @@ export function AltaSocio({
       persona: personaAInput(persona),
       desde,
       planes: planesElegidos,
-      medio: medio.medio ? medioAInput(medio) : null,
+      medio: medioCobroAInput(medio, disciplinasSocio, null),
     };
     const p = altaSchema.safeParse(input);
     if (!p.success) {
       const errs = {
         ...erroresPorCampo(p.error.issues, "persona"),
-        ...Object.fromEntries(Object.entries(erroresPorCampo(p.error.issues, "medio")).map(([k, v]) => [k || "medio", v])),
+        ...erroresMedio(p.error.issues),
         ...(erroresPorCampo(p.error.issues).desde ? { desde: erroresPorCampo(p.error.issues).desde } : {}),
       };
       setErrores(errs);
@@ -146,6 +163,8 @@ export function AltaSocio({
     setErrores({});
     startGuardar(async () => {
       const r = await darDeAlta(input);
+      // El número completo de la tarjeta no queda en el navegador.
+      setMedio((m) => ({ ...m, tarjeta_numero: "" }));
       if (!r.ok) {
         setError(r.error);
         toast.error(r.error);
@@ -306,8 +325,10 @@ export function AltaSocio({
               <Panel titulo="Cuota social y disciplinas" icono={Layers} delay={0.15}>
                 <div className="p-4">
                   <PlanesCampos
-                    planes={planes}
+                    planes={planesLista}
                     disciplinas={disciplinas}
+                    hoy={hoy}
+                    onPlanCreado={(p) => setPlanesLista((l) => [...l, p])}
                     social={social}
                     onSocial={setSocial}
                     elegidos={elegidos}
@@ -322,8 +343,10 @@ export function AltaSocio({
                     valor={medio}
                     onChange={setMedio}
                     errores={errores}
-                    disciplinas={disciplinas}
+                    disciplinas={disciplinasSocio}
                     permitirNinguno
+                    textoNinguno="Sin elegir: el medio de cobro se puede cargar después desde la ficha."
+                    ayudaSinDisciplina="Si lo inscribís en una disciplina, la transferencia va a la cuenta de esa disciplina."
                   />
                 </div>
               </Panel>

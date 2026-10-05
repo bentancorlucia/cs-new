@@ -3,6 +3,16 @@ import type { SociosClient } from "./server";
 import type { ResumenLiquidacion } from "./liquidacion-mail";
 import type { TipoMovimiento } from "./disciplinas";
 import { NOMBRE_TIPO_MOVIMIENTO } from "./disciplinas";
+import { medioSchema, vencimientoCorto, type MedioInput } from "./esquemas";
+
+export {
+  EMISORES_TARJETA,
+  luhnValido,
+  mascaraTarjeta,
+  mascaraVencimientoCorto,
+  vencimientoAIso,
+  vencimientoCorto,
+} from "./esquemas";
 
 /**
  * Panel de la disciplina (representantes/delegados): tipos de lo que
@@ -279,19 +289,11 @@ export const NOMBRE_MEDIO_DISC: Record<MedioCobroDisc, string> = {
   efectivo: "Efectivo",
 };
 
-export const EMISORES_TARJETA = ["ITAU", "BROU", "SCOTIA", "SANTANDER", "BBVA", "HSBC", "OCA", "HERITAGE", "BANDES", "OTRO"] as const;
-
 const n = (v: unknown) => Number(v ?? 0);
 
 /** "Pérez, Juan" */
 export const nombreSocio = (s: Pick<SocioDisciplina, "nombre" | "apellido">) =>
   [s.apellido, s.nombre].filter(Boolean).join(", ");
-
-/** "AAAA-MM-01" → "02/29". */
-export function vencimientoCorto(iso: string | null | undefined): string {
-  if (!iso) return "";
-  return `${iso.slice(5, 7)}/${iso.slice(2, 4)}`;
-}
 
 /** "Visa ****1234 · ITAU · vence 02/29" o el nombre del medio. */
 export function textoMedio(m: MedioSocio | null | undefined): string {
@@ -309,46 +311,6 @@ export function textoMedio(m: MedioSocio | null | undefined): string {
 /** Los planes vigentes del socio en la disciplina. */
 export const planesVigentes = (s: SocioDisciplina) => s.inscripciones.filter((i) => i.vigente);
 
-/** Número de tarjeta: dígito verificador (Luhn), 13 a 19 dígitos. */
-export function luhnValido(numero: string): boolean {
-  const v = numero.replace(/\D/g, "");
-  if (v.length < 13 || v.length > 19) return false;
-  let suma = 0;
-  for (let i = 0; i < v.length; i++) {
-    let d = Number(v[v.length - 1 - i]);
-    if (i % 2 === 1) {
-      d *= 2;
-      if (d > 9) d -= 9;
-    }
-    suma += d;
-  }
-  return suma % 10 === 0;
-}
-
-/** "4111111111111111" → "4111 1111 1111 1111" (hasta 19 dígitos). */
-export function mascaraTarjeta(v: string): string {
-  return v
-    .replace(/\D/g, "")
-    .slice(0, 19)
-    .replace(/(\d{4})(?=\d)/g, "$1 ");
-}
-
-/** "0229" → "02/29" mientras se escribe. */
-export function mascaraVencimientoCorto(v: string): string {
-  const d = v.replace(/\D/g, "").slice(0, 4);
-  return d.length <= 2 ? d : `${d.slice(0, 2)}/${d.slice(2)}`;
-}
-
-/** "MM/AA" o "MM/AAAA" → "AAAA-MM-01". */
-export function vencimientoAIso(v: string): string | null {
-  const m = v.trim().match(/^(\d{1,2})\s*\/\s*(\d{2}|\d{4})$/);
-  if (!m) return null;
-  const mes = Number(m[1]);
-  const anio = m[2].length === 2 ? 2000 + Number(m[2]) : Number(m[2]);
-  if (mes < 1 || mes > 12 || anio < 2000 || anio > 2100) return null;
-  return `${anio}-${String(mes).padStart(2, "0")}-01`;
-}
-
 // ------------------------------------------------------------
 // Esquemas (formularios y Server Actions)
 // ------------------------------------------------------------
@@ -363,49 +325,9 @@ const textoOpc = (max: number) =>
     .nullish()
     .transform((v) => (v && v.trim() ? v.trim() : null));
 
-export const medioDiscSchema = z
-  .object({
-    medio: z.enum(["debito_visa", "transferencia_club", "transferencia_disciplina", "efectivo"], { message: "Elegí el medio de cobro" }),
-    disciplina_id: id.nullish(),
-    /** Número completo (tarjeta nueva). Vacío: se mantiene la tarjeta actual (tarjeta_ultimos4). */
-    tarjeta_numero: z.string().nullish(),
-    tarjeta_ultimos4: z.string().nullish(),
-    /** "MM/AA" */
-    tarjeta_vencimiento: z.string().nullish(),
-    tarjeta_emisor: textoOpc(20),
-    titular_nombre: textoOpc(120),
-    titular_documento: textoOpc(20),
-  })
-  .superRefine((m, ctx) => {
-    if (m.medio !== "debito_visa") return;
-    const numero = (m.tarjeta_numero ?? "").replace(/\D/g, "");
-    if (numero) {
-      if (!luhnValido(numero)) ctx.addIssue({ code: "custom", path: ["tarjeta_numero"], message: "El número de tarjeta no es válido: revisalo" });
-    } else if (!/^\d{4}$/.test(m.tarjeta_ultimos4 ?? "")) {
-      ctx.addIssue({ code: "custom", path: ["tarjeta_numero"], message: "Ingresá el número de la tarjeta" });
-    }
-    const venc = vencimientoAIso(m.tarjeta_vencimiento ?? "");
-    if (!venc) ctx.addIssue({ code: "custom", path: ["tarjeta_vencimiento"], message: "Vencimiento como MM/AA" });
-    if (!m.tarjeta_emisor) ctx.addIssue({ code: "custom", path: ["tarjeta_emisor"], message: "Elegí el emisor" });
-  })
-  .transform((m) => {
-    const visa = m.medio === "debito_visa";
-    const numero = (m.tarjeta_numero ?? "").replace(/\D/g, "");
-    return {
-      medio: m.medio,
-      disciplina_id: m.medio === "transferencia_disciplina" ? (m.disciplina_id ?? null) : null,
-      ...(visa
-        ? {
-            ...(numero ? { tarjeta_numero: numero } : { tarjeta_ultimos4: m.tarjeta_ultimos4 }),
-            tarjeta_vencimiento: vencimientoAIso(m.tarjeta_vencimiento ?? ""),
-            tarjeta_emisor: m.tarjeta_emisor?.toUpperCase() ?? null,
-            titular_nombre: m.titular_nombre,
-            titular_documento: m.titular_documento ? m.titular_documento.replace(/\D/g, "") || m.titular_documento : null,
-          }
-        : {}),
-    };
-  });
-export type MedioDiscInput = z.input<typeof medioDiscSchema>;
+/** El mismo esquema del medio de cobro que usa secretaría. */
+export const medioDiscSchema = medioSchema;
+export type MedioDiscInput = MedioInput;
 
 export const personaDiscSchema = z.object({
   cedula: z

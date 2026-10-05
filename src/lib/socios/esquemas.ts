@@ -99,8 +99,44 @@ export const personaSchema = z.object({
 export type PersonaInput = z.input<typeof personaSchema>;
 export type Persona = z.output<typeof personaSchema>;
 
-/** "MM/AAAA" → "AAAA-MM-01" (o null si no es válido). */
-export function vencimientoTarjeta(v: string | null | undefined): string | null {
+// ------------------------------------------------------------
+// Tarjeta (débito automático Visa)
+// ------------------------------------------------------------
+
+export const EMISORES_TARJETA = ["ITAU", "BROU", "SCOTIA", "SANTANDER", "BBVA", "HSBC", "OCA", "HERITAGE", "BANDES", "OTRO"] as const;
+
+/** Número de tarjeta: dígito verificador (Luhn), 13 a 19 dígitos. */
+export function luhnValido(numero: string): boolean {
+  const v = numero.replace(/\D/g, "");
+  if (v.length < 13 || v.length > 19) return false;
+  let suma = 0;
+  for (let i = 0; i < v.length; i++) {
+    let d = Number(v[v.length - 1 - i]);
+    if (i % 2 === 1) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    suma += d;
+  }
+  return suma % 10 === 0;
+}
+
+/** "4111111111111111" → "4111 1111 1111 1111" (hasta 19 dígitos). */
+export function mascaraTarjeta(v: string): string {
+  return v
+    .replace(/\D/g, "")
+    .slice(0, 19)
+    .replace(/(\d{4})(?=\d)/g, "$1 ");
+}
+
+/** "0229" → "02/29" mientras se escribe. */
+export function mascaraVencimientoCorto(v: string): string {
+  const d = v.replace(/\D/g, "").slice(0, 4);
+  return d.length <= 2 ? d : `${d.slice(0, 2)}/${d.slice(2)}`;
+}
+
+/** "MM/AA" o "MM/AAAA" → "AAAA-MM-01" (o null si no es válido). */
+export function vencimientoAIso(v: string | null | undefined): string | null {
   const m = (v ?? "").trim().match(/^(\d{1,2})\s*\/\s*(\d{2}|\d{4})$/);
   if (!m) return null;
   const mes = Number(m[1]);
@@ -109,47 +145,72 @@ export function vencimientoTarjeta(v: string | null | undefined): string | null 
   return `${anio}-${String(mes).padStart(2, "0")}-01`;
 }
 
+/** "AAAA-MM-01" → "02/29". */
+export function vencimientoCorto(iso: string | null | undefined): string {
+  if (!iso) return "";
+  return `${iso.slice(5, 7)}/${iso.slice(2, 4)}`;
+}
+
 /** "AAAA-MM-01" → "MM/AAAA" */
 export function formatVencimiento(iso: string | null | undefined): string {
   if (!iso) return "";
   return `${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 }
 
+/**
+ * Medio de cobro (secretaría y panel de la disciplina). Débito: número
+ * completo de la tarjeta nueva (la base lo guarda cifrado hasta que
+ * tesorería lo carga en Visa; queda solo el final) o, si se mantiene la
+ * tarjeta, sus últimos 4. Transferencia a la disciplina: siempre una
+ * disciplina del socio (la base lo vuelve a controlar).
+ */
 export const medioSchema = z
   .object({
     medio: z.enum(MEDIOS_COBRO, { message: "Elegí el medio de cobro" }),
     disciplina_id: z.number().int().positive().nullish(),
+    /** Número completo (tarjeta nueva). Vacío: se mantiene la tarjeta actual (tarjeta_ultimos4). */
+    tarjeta_numero: z.string().nullish(),
     tarjeta_ultimos4: z.string().nullish(),
+    /** "MM/AA" */
     tarjeta_vencimiento: z.string().nullish(),
-    titular_otro: z.boolean().optional(),
-    titular_documento: textoOpcional(20),
+    tarjeta_emisor: textoOpcional(20),
     titular_nombre: textoOpcional(120),
+    titular_documento: textoOpcional(20),
   })
   .superRefine((m, ctx) => {
     if (m.medio === "transferencia_disciplina" && !m.disciplina_id) {
       ctx.addIssue({ code: "custom", path: ["disciplina_id"], message: "Elegí la disciplina" });
     }
-    if (m.medio === "debito_visa") {
-      if (!/^\d{4}$/.test(m.tarjeta_ultimos4 ?? "")) {
-        ctx.addIssue({ code: "custom", path: ["tarjeta_ultimos4"], message: "Los últimos 4 dígitos de la tarjeta" });
-      }
-      if (!vencimientoTarjeta(m.tarjeta_vencimiento)) {
-        ctx.addIssue({ code: "custom", path: ["tarjeta_vencimiento"], message: "Vencimiento como MM/AAAA" });
-      }
-      if (m.titular_otro && (!m.titular_documento || !m.titular_nombre)) {
-        ctx.addIssue({ code: "custom", path: ["titular_nombre"], message: "Nombre y documento del titular" });
-      }
+    if (m.medio !== "debito_visa") return;
+    const numero = soloDigitos(m.tarjeta_numero);
+    if (numero) {
+      if (!luhnValido(numero)) ctx.addIssue({ code: "custom", path: ["tarjeta_numero"], message: "El número de tarjeta no es válido: revisalo" });
+    } else if (!/^\d{4}$/.test(m.tarjeta_ultimos4 ?? "")) {
+      ctx.addIssue({ code: "custom", path: ["tarjeta_numero"], message: "Ingresá el número de la tarjeta" });
+    }
+    if (!vencimientoAIso(m.tarjeta_vencimiento)) {
+      ctx.addIssue({ code: "custom", path: ["tarjeta_vencimiento"], message: "Vencimiento como MM/AA" });
+    }
+    if (!m.tarjeta_emisor) ctx.addIssue({ code: "custom", path: ["tarjeta_emisor"], message: "Elegí el emisor" });
+    if (m.titular_documento && !m.titular_nombre) {
+      ctx.addIssue({ code: "custom", path: ["titular_nombre"], message: "Falta el nombre del titular" });
     }
   })
   .transform((m) => {
     const visa = m.medio === "debito_visa";
+    const numero = soloDigitos(m.tarjeta_numero);
     return {
       medio: m.medio,
       disciplina_id: m.medio === "transferencia_disciplina" ? (m.disciplina_id ?? null) : null,
-      tarjeta_ultimos4: visa ? (m.tarjeta_ultimos4 ?? null) : null,
-      tarjeta_vencimiento: visa ? vencimientoTarjeta(m.tarjeta_vencimiento) : null,
-      titular_documento: visa && m.titular_otro ? soloDigitos(m.titular_documento) || m.titular_documento : null,
-      titular_nombre: visa && m.titular_otro ? m.titular_nombre : null,
+      ...(visa
+        ? {
+            ...(numero ? { tarjeta_numero: numero } : { tarjeta_ultimos4: m.tarjeta_ultimos4 ?? null }),
+            tarjeta_vencimiento: vencimientoAIso(m.tarjeta_vencimiento),
+            tarjeta_emisor: m.tarjeta_emisor?.toUpperCase() ?? null,
+            titular_nombre: m.titular_nombre,
+            titular_documento: m.titular_documento ? soloDigitos(m.titular_documento) || m.titular_documento : null,
+          }
+        : {}),
     };
   });
 export type MedioInput = z.input<typeof medioSchema>;
@@ -181,6 +242,13 @@ export const cambiarPlanSchema = z.object({
   plan_id: z.number().int().positive({ message: "Elegí la nueva categoría" }),
   desde: fecha,
   periodicidad,
+});
+
+/** Primer plan de una disciplina que todavía no tiene (desde secretaría, en el alta o al inscribir). */
+export const crearPlanDisciplinaSchema = z.object({
+  disciplina_id: z.number().int().positive({ message: "Elegí la disciplina" }),
+  nombre: z.string().trim().min(2, "Poné un nombre al plan").max(120),
+  importe: z.number({ message: "Importe inválido" }).positive("La cuota tiene que ser mayor que cero"),
 });
 
 export const finalizarSchema = z.object({

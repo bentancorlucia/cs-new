@@ -111,6 +111,13 @@ export function FichaSocio({
   // El vigente hoy (con una baja de hoy se cerró con hasta = hoy, pero rige todavía).
   const medioActual = medios.find((m) => m.desde <= hoy && (m.hasta === null || m.hasta >= hoy)) ?? medios.find((m) => m.hasta === null) ?? null;
   const esSocio = estado === "vigente" || estado === "programado";
+  /** Sus disciplinas (inscripciones abiertas): la transferencia va a la cuenta de una de ellas. */
+  const disciplinasSocio = abiertas.reduce<{ id: number; nombre: string }[]>((l, i) => {
+    if (i.tipo === "disciplina" && i.disciplina_id && !l.some((d) => d.id === i.disciplina_id)) {
+      l.push({ id: i.disciplina_id, nombre: i.disciplina ?? "la disciplina" });
+    }
+    return l;
+  }, []);
   /** Ya tiene la baja cargada (último día hoy o más adelante): sigue figurando como socio hasta esa fecha. */
   const bajaProgramada = esSocio && !!membresiaActual?.hasta;
   const nombre = `${persona.nombre} ${persona.apellido}`;
@@ -269,6 +276,7 @@ export function FichaSocio({
           onOpenChange={cerrar}
           personaId={persona.id}
           planes={planes}
+          disciplinas={disciplinas}
           vigentes={abiertas}
           hoy={hoy}
           alta={membresiaActual?.desde ?? null}
@@ -301,9 +309,9 @@ export function FichaSocio({
           open
           onOpenChange={cerrar}
           personaId={persona.id}
-          disciplinas={disciplinas}
+          disciplinas={disciplinasSocio}
+          actual={medioActual}
           hoy={hoy}
-          actualDesde={medioActual?.desde ?? null}
         />
       )}
       {dialogo?.tipo === "baja" && (
@@ -590,7 +598,8 @@ function DetalleMedio({ m }: { m: MedioRegistrado }) {
       <EtiquetaMedio medio={m.medio} disciplina={m.disciplina} className="text-sm" />
       {m.medio === "debito_visa" && (
         <div className="pl-5 text-xs text-muted-foreground tabular-nums">
-          •••• {m.tarjeta_ultimos4} · vence {formatVencimiento(m.tarjeta_vencimiento)}
+          •••• {m.tarjeta_ultimos4}
+          {m.tarjeta_emisor ? ` · ${m.tarjeta_emisor}` : ""} · vence {formatVencimiento(m.tarjeta_vencimiento)}
           {m.titular_nombre ? ` · titular ${m.titular_nombre}${m.titular_documento ? ` (${m.titular_documento})` : ""}` : ""}
         </div>
       )}

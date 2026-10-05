@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRightLeft, CircleStop, CreditCard, Plus, RotateCcw, UserMinus } from "lucide-react";
 import { formatFecha, formatImporte } from "@/lib/contabilidad/formato";
 import {
@@ -10,7 +11,7 @@ import {
   finalizarSchema,
   inscribirSchema,
 } from "@/lib/socios/esquemas";
-import type { Disciplina, Inscripcion, PlanConPrecio } from "@/lib/socios/padron";
+import type { Disciplina, Inscripcion, MedioRegistrado, PlanConPrecio } from "@/lib/socios/padron";
 import {
   anularBaja,
   cambiarMedio,
@@ -21,8 +22,18 @@ import {
 } from "@/app/(dashboard)/secretaria/socios/actions";
 import { cn } from "@/lib/utils";
 import { DialogoAccion } from "./dialogo";
-import { MEDIO_VACIO, MedioCobroCampos, PrecioPlan, erroresPorCampo, medioAInput, type MedioForm } from "./campos";
-import { Aviso, Campo, claseControl } from "./ui";
+import {
+  MedioCobroCampos,
+  erroresMedio,
+  medioCobroAInput,
+  medioCobroInicial,
+  medioEfectivo,
+  type DisciplinaSocio,
+  type MedioActual,
+  type MedioCobroForm,
+} from "@/components/socios/medio-cobro";
+import { CrearPrimerPlan, PrecioPlan, erroresPorCampo } from "./campos";
+import { Aviso, Campo, EtiquetaMedio, claseControl } from "./ui";
 
 type Abierto = { open: boolean; onOpenChange: (o: boolean) => void };
 
@@ -108,28 +119,45 @@ export function DialogoInscribir({
   onOpenChange,
   personaId,
   planes,
+  disciplinas,
   vigentes,
   hoy,
   alta,
 }: Abierto & {
   personaId: number;
   planes: PlanConPrecio[];
+  /** Todas las disciplinas activas (tengan o no planes). */
+  disciplinas: Disciplina[];
   vigentes: Inscripcion[];
   hoy: string;
   alta: string | null;
 }) {
-  const disponibles = planes.filter((p) => p.activo && !vigentes.some((v) => v.plan_id === p.id && !v.hasta));
+  // Planes creados acá mismo (primer plan de una disciplina).
+  const [creados, setCreados] = useState<PlanConPrecio[]>([]);
+  const todos = useMemo(() => [...planes, ...creados], [planes, creados]);
+  const disponibles = todos.filter((p) => p.activo && !vigentes.some((v) => v.plan_id === p.id && !v.hasta));
+  const [que, setQue] = useState("");
   const [plan, setPlan] = useState("");
   const [desde, setDesde] = useState(mayor(hoy, alta ?? hoy));
   const [periodicidad, setPeriodicidad] = useState<"mensual" | "anual">("mensual");
   const [errores, setErrores] = useState<Record<string, string>>({});
   const elegido = disponibles.find((p) => String(p.id) === plan);
+  const sociales = disponibles.filter((p) => p.tipo === "social");
+  const discElegida = que && que !== "social" ? (disciplinas.find((d) => String(d.id) === que) ?? null) : null;
+  const opciones =
+    que === "social" ? sociales : discElegida ? disponibles.filter((p) => p.tipo === "disciplina" && p.disciplina_id === discElegida.id) : [];
+  const sinPlanes = !!discElegida && !todos.some((p) => p.activo && p.tipo === "disciplina" && p.disciplina_id === discElegida.id);
+  // La cuota social que ya paga (o la del plan social activo), para el total.
+  const social = vigentes.find((v) => v.tipo === "social");
+  const planSocial = todos.find((p) => p.id === social?.plan_id) ?? todos.find((p) => p.tipo === "social" && p.activo);
+  const cuotaSocial = planSocial?.precio?.importe_mensual ?? null;
 
   return (
     <DialogoAccion
       open={open}
       onOpenChange={(o) => {
         if (o) {
+          setQue("");
           setPlan("");
           setDesde(mayor(hoy, alta ?? hoy));
           setPeriodicidad("mensual");
@@ -142,6 +170,7 @@ export function DialogoInscribir({
       descripcion="Una disciplina (o categoría) o la cuota social. Tiene que quedar dentro del período como socio."
       textoAccion="Inscribir"
       mensajeOk="Inscripción registrada"
+      deshabilitado={sinPlanes}
       ejecutar={() => {
         const input = {
           persona_id: personaId,
@@ -157,12 +186,60 @@ export function DialogoInscribir({
         return inscribir(input);
       }}
     >
-      <SelectPlan planes={disponibles} valor={plan} onChange={setPlan} error={errores.plan_id} />
-      {elegido && (
-        <div className="-mt-1 px-0.5">
-          <PrecioPlan plan={elegido} periodicidad={elegido.permite_anual ? periodicidad : "mensual"} />
-        </div>
-      )}
+      <Campo etiqueta="Disciplina">
+        <select
+          value={que}
+          onChange={(e) => {
+            setQue(e.target.value);
+            setPlan("");
+          }}
+          className={claseControl}
+        >
+          <option value="">Elegí…</option>
+          {sociales.length > 0 && <option value="social">Cuota social</option>}
+          {disciplinas.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.nombre}
+            </option>
+          ))}
+        </select>
+      </Campo>
+      <AnimatePresence initial={false} mode="wait">
+        {sinPlanes && discElegida ? (
+          <CrearPrimerPlan
+            key={`crear-${discElegida.id}`}
+            disciplina={discElegida}
+            cuotaSocial={cuotaSocial}
+            hoy={hoy}
+            onCreado={(p) => {
+              setCreados((l) => [...l, p]);
+              setPlan(String(p.id));
+            }}
+          />
+        ) : que ? (
+          <motion.div
+            key={`plan-${que}`}
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            className="space-y-1"
+          >
+            {opciones.length === 0 ? (
+              <Aviso visible tono="info">
+                Ya está inscripta/o en todas las categorías activas de {discElegida?.nombre ?? "la cuota social"}.
+              </Aviso>
+            ) : (
+              <SelectPlan planes={opciones} valor={plan} onChange={setPlan} error={errores.plan_id} etiqueta="Categoría" />
+            )}
+            {elegido && (
+              <div className="px-0.5">
+                <PrecioPlan plan={elegido} periodicidad={elegido.permite_anual ? periodicidad : "mensual"} />
+              </div>
+            )}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+      {!plan && errores.plan_id && !que && <p className="px-0.5 text-xs text-rose-700">{errores.plan_id}</p>}
       <div className="grid grid-cols-2 gap-3">
         <Campo etiqueta="Desde" error={errores.desde}>
           <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className={claseControl} />
@@ -357,41 +434,69 @@ export function DialogoMedio({
   onOpenChange,
   personaId,
   disciplinas,
+  actual,
   hoy,
-  actualDesde,
-}: Abierto & { personaId: number; disciplinas: Disciplina[]; hoy: string; actualDesde: string | null }) {
-  const [medio, setMedio] = useState<MedioForm>(MEDIO_VACIO);
+}: Abierto & {
+  personaId: number;
+  /** Las disciplinas en las que está inscripto (la transferencia va a una de ellas). */
+  disciplinas: DisciplinaSocio[];
+  actual: MedioRegistrado | null;
+  hoy: string;
+}) {
+  const medioActual = useMemo(() => medioActualDeRegistro(actual), [actual]);
+  const [medio, setMedio] = useState<MedioCobroForm>(() => medioCobroInicial(medioActual));
   const [desde, setDesde] = useState(hoy);
   const [errores, setErrores] = useState<Record<string, string>>({});
+  const actualDesde = actual?.desde ?? null;
+  const efectivo = medioEfectivo(medio, disciplinas);
   return (
     <DialogoAccion
       open={open}
       onOpenChange={(o) => {
         if (o) {
-          setMedio(MEDIO_VACIO);
+          setMedio(medioCobroInicial(medioActual));
           setDesde(hoy);
           setErrores({});
+        } else {
+          // Al cerrar no queda el número de la tarjeta en memoria.
+          setMedio((m) => ({ ...m, tarjeta_numero: "" }));
         }
         onOpenChange(o);
       }}
       icono={CreditCard}
       titulo="Cambiar medio de cobro"
-      descripcion="El medio anterior queda en el historial hasta el día antes del cambio."
+      descripcion={
+        <span className="flex flex-wrap items-center gap-1">
+          Hoy: <EtiquetaMedio medio={actual?.medio ?? null} disciplina={actual?.disciplina} className="font-medium" />
+          <span>· El medio anterior queda en el historial hasta el día antes del cambio.</span>
+        </span>
+      }
       textoAccion="Guardar medio"
       mensajeOk="Medio de cobro actualizado"
       ancho="sm:max-w-lg"
+      deshabilitado={!efectivo.medio}
       ejecutar={() => {
-        const input = { persona_id: personaId, desde, medio: medioAInput(medio) };
+        const input = { persona_id: personaId, desde, medio: medioCobroAInput(medio, disciplinas, medioActual?.tarjeta) };
         const p = cambiarMedioSchema.safeParse(input);
         if (!p.success) {
-          const e = erroresPorCampo(p.error.issues, "medio");
-          setErrores({ ...e, ...(e[""] ? { medio: e[""] } : {}), ...erroresPorCampo(p.error.issues) });
+          setErrores({ ...erroresPorCampo(p.error.issues), ...erroresMedio(p.error.issues) });
           return null;
         }
-        return cambiarMedio(input);
+        setErrores({});
+        return cambiarMedio(input).then((r) => {
+          // El número completo no queda en el navegador.
+          setMedio((m) => ({ ...m, tarjeta_numero: "" }));
+          return r;
+        });
       }}
     >
-      <MedioCobroCampos valor={medio} onChange={setMedio} errores={errores} disciplinas={disciplinas} />
+      <MedioCobroCampos
+        valor={medio}
+        onChange={setMedio}
+        errores={errores}
+        disciplinas={disciplinas}
+        tarjetaActual={medioActual?.tarjeta}
+      />
       <Campo etiqueta="Desde" error={errores.desde} className="sm:max-w-[12rem]">
         <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className={claseControl} />
       </Campo>
@@ -401,6 +506,25 @@ export function DialogoMedio({
       </Aviso>
     </DialogoAccion>
   );
+}
+
+/** El medio vigente de la ficha, con su tarjeta (para "misma tarjeta"). */
+function medioActualDeRegistro(m: MedioRegistrado | null): MedioActual | null {
+  if (!m) return null;
+  return {
+    medio: m.medio,
+    disciplina_id: m.disciplina_id,
+    tarjeta:
+      m.medio === "debito_visa" && m.tarjeta_ultimos4
+        ? {
+            ultimos4: m.tarjeta_ultimos4,
+            vencimiento: m.tarjeta_vencimiento,
+            emisor: m.tarjeta_emisor,
+            titular: m.titular_nombre,
+            titular_documento: m.titular_documento,
+          }
+        : null,
+  };
 }
 
 // ------------------------------------------------------------

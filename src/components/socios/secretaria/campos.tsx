@@ -2,11 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Banknote, Building2, CreditCard, Landmark, Plus, Trash2, type LucideIcon } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatFecha, formatImporte } from "@/lib/contabilidad/formato";
-import { cedulaValida, type MedioCobro, type MedioInput, type PersonaInput } from "@/lib/socios/esquemas";
+import { cedulaValida, type PersonaInput } from "@/lib/socios/esquemas";
 import type { Disciplina, PlanConPrecio } from "@/lib/socios/padron";
+import { crearPlanDisciplina } from "@/app/(dashboard)/secretaria/socios/actions";
+import { CrearPlanInline } from "@/components/socios/crear-plan-inline";
 import { Aviso, Boton, Campo, claseControl } from "./ui";
 
 /** Issues de Zod → { campo: mensaje } (el primero de cada campo). */
@@ -135,205 +137,6 @@ export function AvisoCedula({ cedula }: { cedula: string }) {
 }
 
 // ------------------------------------------------------------
-// Medio de cobro
-// ------------------------------------------------------------
-
-export interface MedioForm {
-  medio: MedioCobro | "";
-  disciplina_id: number | null;
-  tarjeta_ultimos4: string;
-  tarjeta_vencimiento: string;
-  titular_otro: boolean;
-  titular_documento: string;
-  titular_nombre: string;
-}
-
-export const MEDIO_VACIO: MedioForm = {
-  medio: "",
-  disciplina_id: null,
-  tarjeta_ultimos4: "",
-  tarjeta_vencimiento: "",
-  titular_otro: false,
-  titular_documento: "",
-  titular_nombre: "",
-};
-
-export function medioAInput(m: MedioForm): MedioInput {
-  return {
-    medio: m.medio as MedioCobro,
-    disciplina_id: m.disciplina_id,
-    tarjeta_ultimos4: m.tarjeta_ultimos4,
-    tarjeta_vencimiento: m.tarjeta_vencimiento,
-    titular_otro: m.titular_otro,
-    titular_documento: m.titular_documento,
-    titular_nombre: m.titular_nombre,
-  };
-}
-
-const OPCIONES_MEDIO: { valor: MedioCobro; titulo: string; texto: string; icono: LucideIcon }[] = [
-  { valor: "debito_visa", titulo: "Débito Visa", texto: "Débito automático de la tarjeta", icono: CreditCard },
-  { valor: "transferencia_club", titulo: "Transferencia al club", texto: "Depósito o transferencia a la cuenta del club", icono: Landmark },
-  { valor: "transferencia_disciplina", titulo: "Cuenta de una disciplina", texto: "Paga en la cuenta de su disciplina", icono: Building2 },
-  { valor: "efectivo", titulo: "Efectivo", texto: "Paga en secretaría", icono: Banknote },
-];
-
-/** "0326" → "03/2026"; deja escribir libremente y agrega la barra. */
-function mascaraVencimiento(v: string): string {
-  const d = v.replace(/\D/g, "").slice(0, 6);
-  if (d.length <= 2) return d;
-  return `${d.slice(0, 2)}/${d.slice(2)}`;
-}
-
-export function MedioCobroCampos({
-  valor,
-  onChange,
-  errores,
-  disciplinas,
-  permitirNinguno,
-}: {
-  valor: MedioForm;
-  onChange: (m: MedioForm) => void;
-  errores: Record<string, string>;
-  disciplinas: Disciplina[];
-  permitirNinguno?: boolean;
-}) {
-  return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {OPCIONES_MEDIO.map((o) => {
-          const activo = valor.medio === o.valor;
-          const Icono = o.icono;
-          return (
-            <motion.button
-              key={o.valor}
-              type="button"
-              whileHover={{ y: -1 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => onChange({ ...valor, medio: activo && permitirNinguno ? "" : o.valor })}
-              aria-pressed={activo}
-              className={cn(
-                "relative flex items-start gap-3 rounded-xl border p-3 text-left transition-colors",
-                activo ? "border-bordo-700 bg-bordo-50/60" : "border-linea bg-white hover:border-bordo-200"
-              )}
-            >
-              <span
-                className={cn(
-                  "flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors",
-                  activo ? "bg-bordo-800 text-white" : "bg-superficie text-bordo-700"
-                )}
-              >
-                <Icono className="size-4" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-medium text-foreground">{o.titulo}</span>
-                <span className="block text-xs text-muted-foreground">{o.texto}</span>
-              </span>
-            </motion.button>
-          );
-        })}
-      </div>
-      {errores.medio && <p className="px-0.5 text-xs text-rose-700">{errores.medio}</p>}
-      {permitirNinguno && !valor.medio && (
-        <p className="px-0.5 text-xs text-muted-foreground">Sin elegir: el medio de cobro se puede cargar después desde la ficha.</p>
-      )}
-
-      <AnimatePresence initial={false} mode="popLayout">
-        {valor.medio === "transferencia_disciplina" && (
-          <motion.div key="disc" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
-            <Campo etiqueta="Disciplina" error={errores.disciplina_id}>
-              <select
-                value={valor.disciplina_id ?? ""}
-                onChange={(e) => onChange({ ...valor, disciplina_id: e.target.value ? Number(e.target.value) : null })}
-                aria-invalid={!!errores.disciplina_id || undefined}
-                className={claseControl}
-              >
-                <option value="">Elegí la disciplina…</option>
-                {disciplinas.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.nombre}
-                  </option>
-                ))}
-              </select>
-            </Campo>
-          </motion.div>
-        )}
-        {valor.medio === "debito_visa" && (
-          <motion.div
-            key="visa"
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            className="space-y-3 rounded-xl border border-linea bg-superficie/40 p-3"
-          >
-            <div className="grid grid-cols-2 gap-3">
-              <Campo etiqueta="Últimos 4 dígitos" error={errores.tarjeta_ultimos4}>
-                <input
-                  value={valor.tarjeta_ultimos4}
-                  onChange={(e) => onChange({ ...valor, tarjeta_ultimos4: e.target.value.replace(/\D/g, "").slice(0, 4) })}
-                  inputMode="numeric"
-                  placeholder="1234"
-                  aria-invalid={!!errores.tarjeta_ultimos4 || undefined}
-                  className={cn(claseControl, "tracking-[0.3em]")}
-                />
-              </Campo>
-              <Campo etiqueta="Vencimiento" error={errores.tarjeta_vencimiento}>
-                <input
-                  value={valor.tarjeta_vencimiento}
-                  onChange={(e) => onChange({ ...valor, tarjeta_vencimiento: mascaraVencimiento(e.target.value) })}
-                  inputMode="numeric"
-                  placeholder="MM/AAAA"
-                  aria-invalid={!!errores.tarjeta_vencimiento || undefined}
-                  className={claseControl}
-                />
-              </Campo>
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              Nunca se guarda el número completo de la tarjeta: solo los últimos 4 dígitos y el vencimiento.
-            </p>
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={valor.titular_otro}
-                onChange={(e) => onChange({ ...valor, titular_otro: e.target.checked })}
-                className="size-4 accent-bordo-800"
-              />
-              La tarjeta es de otra persona
-            </label>
-            <AnimatePresence initial={false}>
-              {valor.titular_otro && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="grid grid-cols-1 gap-3 overflow-hidden sm:grid-cols-2"
-                >
-                  <Campo etiqueta="Titular" error={errores.titular_nombre}>
-                    <input
-                      value={valor.titular_nombre}
-                      onChange={(e) => onChange({ ...valor, titular_nombre: e.target.value })}
-                      placeholder="Nombre y apellido"
-                      className={claseControl}
-                    />
-                  </Campo>
-                  <Campo etiqueta="Documento del titular" error={errores.titular_documento}>
-                    <input
-                      value={valor.titular_documento}
-                      onChange={(e) => onChange({ ...valor, titular_documento: e.target.value })}
-                      inputMode="numeric"
-                      className={claseControl}
-                    />
-                  </Campo>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-// ------------------------------------------------------------
 // Planes (cuota social + disciplinas)
 // ------------------------------------------------------------
 
@@ -391,6 +194,47 @@ function Periodicidad({
   );
 }
 
+/** El plan recién creado con `crearPlanDisciplina`, para sumarlo a la lista local sin recargar. */
+export function planCreado(
+  plan: { id: number; nombre: string; importe: number },
+  disciplina: Disciplina,
+  hoy: string
+): PlanConPrecio {
+  return {
+    id: plan.id,
+    nombre: plan.nombre,
+    tipo: "disciplina",
+    disciplina_id: disciplina.id,
+    disciplina: disciplina.nombre,
+    permite_anual: false,
+    activo: true,
+    precio: { id: 0, plan_id: plan.id, vigente_desde: `${hoy.slice(0, 7)}-01`, importe_mensual: plan.importe, importe_anual: null },
+    proximo: null,
+  };
+}
+
+/** Crea el primer plan de una disciplina desde secretaría. */
+export function CrearPrimerPlan({
+  disciplina,
+  cuotaSocial,
+  hoy,
+  onCreado,
+}: {
+  disciplina: Disciplina;
+  cuotaSocial: number | null;
+  hoy: string;
+  onCreado: (plan: PlanConPrecio) => void;
+}) {
+  return (
+    <CrearPlanInline
+      disciplina={disciplina.nombre}
+      cuotaSocial={cuotaSocial}
+      crear={(nombre, importe) => crearPlanDisciplina({ disciplina_id: disciplina.id, nombre, importe })}
+      onCreado={(p) => onCreado(planCreado(p, disciplina, hoy))}
+    />
+  );
+}
+
 export function PlanesCampos({
   planes,
   disciplinas,
@@ -398,21 +242,30 @@ export function PlanesCampos({
   onSocial,
   elegidos,
   onElegidos,
+  onPlanCreado,
+  hoy,
 }: {
   planes: PlanConPrecio[];
+  /** Todas las disciplinas activas (tengan o no planes). */
   disciplinas: Disciplina[];
   social: PlanElegido | null;
   onSocial: (p: PlanElegido | null) => void;
   elegidos: PlanElegido[];
   onElegidos: (l: PlanElegido[]) => void;
+  onPlanCreado: (p: PlanConPrecio) => void;
+  hoy: string;
 }) {
   const sociales = planes.filter((p) => p.tipo === "social" && p.activo);
   const deDisciplina = planes.filter((p) => p.tipo === "disciplina" && p.activo);
   const [disc, setDisc] = useState("");
   const [planNuevo, setPlanNuevo] = useState("");
   const porId = useMemo(() => new Map(planes.map((p) => [p.id, p])), [planes]);
-  const conPlanes = disciplinas.filter((d) => deDisciplina.some((p) => p.disciplina_id === d.id));
-  const categorias = deDisciplina.filter((p) => String(p.disciplina_id) === disc && !elegidos.some((e) => e.plan_id === p.id));
+  const discElegida = disciplinas.find((d) => String(d.id) === disc) ?? null;
+  const planesDisc = deDisciplina.filter((p) => String(p.disciplina_id) === disc);
+  const categorias = planesDisc.filter((p) => !elegidos.some((e) => e.plan_id === p.id));
+  const sinPlanes = !!discElegida && planesDisc.length === 0;
+  const planSocial = social ? porId.get(social.plan_id) : sociales[0];
+  const cuotaSocial = planSocial?.precio?.importe_mensual ?? null;
 
   function agregar(id: number) {
     const p = porId.get(id);
@@ -523,48 +376,68 @@ export function PlanesCampos({
             );
           })}
         </AnimatePresence>
-        {conPlanes.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-linea p-3 text-xs text-muted-foreground">
-            No hay planes de disciplina activos.
-          </p>
+        {disciplinas.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-linea p-3 text-xs text-muted-foreground">No hay disciplinas activas.</p>
         ) : (
-          <div className="grid grid-cols-1 gap-2 rounded-xl border border-dashed border-linea p-3 sm:grid-cols-[1fr_1fr_auto]">
-            <select
-              value={disc}
-              onChange={(e) => {
-                setDisc(e.target.value);
-                setPlanNuevo("");
-              }}
-              aria-label="Disciplina"
-              className={claseControl}
-            >
-              <option value="">Disciplina…</option>
-              {conPlanes.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.nombre}
-                </option>
-              ))}
-            </select>
-            <select
-              value={planNuevo}
-              onChange={(e) => setPlanNuevo(e.target.value)}
-              disabled={!disc}
-              aria-label="Categoría"
-              className={claseControl}
-            >
-              <option value="">Categoría…</option>
-              {categorias.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nombre}
-                  {p.precio ? ` — ${formatImporte(p.precio.importe_mensual, "UYU")}` : " — sin precio"}
-                </option>
-              ))}
-            </select>
-            <Boton variante="secundario" disabled={!planNuevo} onClick={() => agregar(Number(planNuevo))}>
-              <Plus className="size-4" />
-              Agregar
-            </Boton>
-          </div>
+          <motion.div layout className="space-y-3 rounded-xl border border-dashed border-linea p-3">
+            <div className={cn("grid grid-cols-1 gap-2", !sinPlanes && "sm:grid-cols-[1fr_1fr_auto]")}>
+              <select
+                value={disc}
+                onChange={(e) => {
+                  setDisc(e.target.value);
+                  setPlanNuevo("");
+                }}
+                aria-label="Disciplina"
+                className={claseControl}
+              >
+                <option value="">Disciplina…</option>
+                {disciplinas.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.nombre}
+                  </option>
+                ))}
+              </select>
+              {!sinPlanes && (
+                <>
+                  <select
+                    value={planNuevo}
+                    onChange={(e) => setPlanNuevo(e.target.value)}
+                    disabled={!disc || categorias.length === 0}
+                    aria-label="Categoría"
+                    className={claseControl}
+                  >
+                    <option value="">{disc && categorias.length === 0 ? "Ya elegiste todas" : "Categoría…"}</option>
+                    {categorias.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nombre}
+                        {p.precio ? ` — ${formatImporte(p.precio.importe_mensual, "UYU")}` : " — sin precio"}
+                      </option>
+                    ))}
+                  </select>
+                  <Boton variante="secundario" disabled={!planNuevo} onClick={() => agregar(Number(planNuevo))}>
+                    <Plus className="size-4" />
+                    Agregar
+                  </Boton>
+                </>
+              )}
+            </div>
+            <AnimatePresence initial={false}>
+              {sinPlanes && discElegida && (
+                <CrearPrimerPlan
+                  key={discElegida.id}
+                  disciplina={discElegida}
+                  cuotaSocial={cuotaSocial}
+                  hoy={hoy}
+                  onCreado={(plan) => {
+                    onPlanCreado(plan);
+                    onElegidos([...elegidos, { plan_id: plan.id, periodicidad: "mensual" }]);
+                    setDisc("");
+                    setPlanNuevo("");
+                  }}
+                />
+              )}
+            </AnimatePresence>
+          </motion.div>
         )}
       </div>
     </div>

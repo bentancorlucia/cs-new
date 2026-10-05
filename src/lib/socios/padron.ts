@@ -339,6 +339,7 @@ export interface Inscripcion {
   plan_id: number;
   plan: string;
   tipo: "social" | "disciplina";
+  disciplina_id: number | null;
   disciplina: string | null;
   periodicidad: string;
   desde: string;
@@ -356,6 +357,7 @@ export interface MedioRegistrado {
   disciplina_id: number | null;
   tarjeta_ultimos4: string | null;
   tarjeta_vencimiento: string | null;
+  tarjeta_emisor: string | null;
   titular_documento: string | null;
   titular_nombre: string | null;
   desde: string;
@@ -432,7 +434,7 @@ export async function cargarFicha(id: number): Promise<Ficha | null> {
         .order("id", { ascending: false }),
       so
         .from("medios_cobro")
-        .select("id, medio, disciplina_id, tarjeta_ultimos4, tarjeta_vencimiento, titular_documento, titular_nombre, desde, hasta")
+        .select("id, medio, disciplina_id, tarjeta_ultimos4, tarjeta_vencimiento, tarjeta_emisor, titular_documento, titular_nombre, desde, hasta")
         .eq("persona_id", id)
         .order("desde", { ascending: false }),
       so.from("planes").select("id, nombre, tipo, disciplina_id"),
@@ -489,6 +491,7 @@ export async function cargarFicha(id: number): Promise<Ficha | null> {
         plan_id: s.plan_id,
         plan: p?.nombre ?? `Plan ${s.plan_id}`,
         tipo: (p?.tipo ?? "social") as "social" | "disciplina",
+        disciplina_id: p?.disciplina_id ?? null,
         disciplina: p?.disciplina_id ? (discPorId.get(p.disciplina_id) ?? null) : null,
         periodicidad: s.periodicidad,
         desde: s.desde,

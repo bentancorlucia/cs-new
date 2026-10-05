@@ -1,6 +1,6 @@
 -- Representantes, panel de la disciplina, registro de cambios y tarjetas.
 BEGIN;
-SELECT plan(30);
+SELECT plan(32);
 
 DO $$ BEGIN PERFORM contabilidad.crear_ejercicio(extract(year FROM contabilidad._hoy())::int); END $$;
 CREATE FUNCTION pg_temp.p(p_cedula text) RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT id FROM public.padron_socios WHERE cedula = p_cedula $$;
@@ -36,6 +36,13 @@ DO $$ BEGIN PERFORM socios.alta_socio('{"cedula": "70000001", "nombre": "Raúl",
   '{"medio": "efectivo"}'); END $$;
 SELECT is((SELECT origen || '/' || count(*) FROM socios.cambios_disciplina WHERE persona_id = pg_temp.p('70000001')
            GROUP BY origen), 'club/4', 'un alta de secretaría queda en el registro como cambio del club');
+
+SELECT throws_like($$ SELECT socios.cambiar_medio_cobro(pg_temp.p('70000001'),
+  '{"medio": "transferencia_disciplina", "disciplina_id": 7}', contabilidad._hoy()) $$,
+  '%disciplina del socio%', 'la transferencia va a la cuenta de su disciplina, no de otra');
+SELECT lives_ok($$ SELECT socios.cambiar_medio_cobro(pg_temp.p('70000001'),
+  '{"medio": "transferencia_disciplina", "disciplina_id": 13}', contabilidad._hoy()) $$,
+  'a la cuenta de rugby, que es la suya, sí');
 
 -- ---------- Representantes
 CREATE TEMP TABLE rep AS SELECT socios.guardar_representante(NULL, 7,

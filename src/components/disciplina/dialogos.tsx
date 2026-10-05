@@ -23,6 +23,7 @@ import {
   cambiarMedioDiscSchema,
   nombreSocio,
   planesVigentes,
+  type MedioSocio,
   type PlanDisciplina,
   type PlanesDisciplina,
   type SocioDisciplina,
@@ -40,7 +41,17 @@ import {
 import { Campo, DialogoAccion, Explicacion, claseControl } from "@/components/socios/cuotas/ui";
 import { erroresPorCampo } from "@/components/socios/secretaria/campos";
 import { aNumero } from "@/components/socios/disciplinas/ui";
-import { MedioCampos, medioFormAInput, medioInicial, type MedioFormDisc } from "./campos-medio";
+import {
+  MedioCobroCampos,
+  erroresMedio,
+  medioCobroAInput,
+  medioCobroInicial,
+  medioEfectivo,
+  type DisciplinaSocio,
+  type MedioActual,
+  type MedioCobroForm,
+} from "@/components/socios/medio-cobro";
+import { CrearPlanInline } from "@/components/socios/crear-plan-inline";
 import { MedioSocioTexto } from "./ui";
 
 export type AccionPanel =
@@ -140,12 +151,31 @@ interface PersonaFormDisc {
 
 const PERSONA_VACIA: PersonaFormDisc = { cedula: "", nombre: "", apellido: "", email: "", telefono: "", fecha_nacimiento: "", direccion: "" };
 
+/** En el panel, la transferencia siempre va a la cuenta de esta disciplina. */
+const disciplinaPanel = (id: number, nombre: string): DisciplinaSocio[] => [{ id, nombre }];
+
+/** El medio actual del socio, con su tarjeta (para "misma tarjeta"). */
+function medioActualDeSocio(m: MedioSocio | null): MedioActual | null {
+  if (!m) return null;
+  return {
+    medio: m.medio,
+    disciplina_id: m.disciplina_id,
+    tarjeta:
+      m.medio === "debito_visa" && m.tarjeta
+        ? { ultimos4: m.tarjeta, vencimiento: m.vencimiento, emisor: m.emisor, titular: m.titular, titular_documento: m.titular_documento }
+        : null,
+  };
+}
+
 function DialogoAlta({ disciplinaId, disciplinaNombre, hoy, onClose, socios, planes }: Comun & { socios: SocioDisciplina[]; planes: PlanesDisciplina }) {
-  const activos = planes.planes.filter((p) => p.activo);
+  // Si la disciplina no tiene planes, el primero se crea acá mismo y se suma a la lista.
+  const [creados, setCreados] = useState<PlanDisciplina[]>([]);
+  const activos = [...planes.planes, ...creados].filter((p) => p.activo);
   const [persona, setPersona] = useState<PersonaFormDisc>(PERSONA_VACIA);
   const [plan, setPlan] = useState<number>(activos.length === 1 ? activos[0].plan_id : 0);
   const [desde, setDesde] = useState(hoy);
-  const [medio, setMedio] = useState<MedioFormDisc>(medioInicial(null, true));
+  const [medio, setMedio] = useState<MedioCobroForm>(() => medioCobroInicial(null, true));
+  const discs = disciplinaPanel(disciplinaId, disciplinaNombre);
   const [errores, setErrores] = useState<Record<string, string>>({});
   const minimo = sumarDias(inicioMes(hoy), -31);
 
@@ -168,7 +198,7 @@ function DialogoAlta({ disciplinaId, disciplinaNombre, hoy, onClose, socios, pla
         fecha_nacimiento: previo.fecha_nacimiento ?? "",
         direccion: previo.direccion ?? "",
       });
-      setMedio(medioInicial(null, true));
+      setMedio(medioCobroInicial(null, true));
     } else {
       setPersona((p) => ({ ...p, cedula: d }));
     }
@@ -182,13 +212,13 @@ function DialogoAlta({ disciplinaId, disciplinaNombre, hoy, onClose, socios, pla
       persona,
       desde,
       plan,
-      medio: medio.medio ? medioFormAInput(medio, disciplinaId, null) : null,
+      medio: medioCobroAInput(medio, discs, null),
     };
     const p = altaDiscSchema.safeParse(input);
     if (!p.success) {
       const e = {
         ...erroresPorCampo(p.error.issues, "persona"),
-        ...erroresPorCampo(p.error.issues, "medio"),
+        ...erroresMedio(p.error.issues),
         ...(erroresPorCampo(p.error.issues).plan ? { plan: erroresPorCampo(p.error.issues).plan } : {}),
         ...(erroresPorCampo(p.error.issues).desde ? { desde: erroresPorCampo(p.error.issues).desde } : {}),
       };
@@ -196,7 +226,10 @@ function DialogoAlta({ disciplinaId, disciplinaNombre, hoy, onClose, socios, pla
       return { ok: false, error: p.error.issues[0]?.message ?? "Revisá los datos" };
     }
     setErrores({});
-    return res(await altaSocioDisc(input));
+    const r = await altaSocioDisc(input);
+    // El número completo de la tarjeta no queda en el navegador.
+    setMedio((m) => ({ ...m, tarjeta_numero: "" }));
+    return res(r);
   }
 
   return (
@@ -264,15 +297,38 @@ function DialogoAlta({ disciplinaId, disciplinaNombre, hoy, onClose, socios, pla
 
             <div className="space-y-2">
               <div className="px-0.5 text-[10px] uppercase tracking-editorial text-muted-foreground">Plan</div>
-              {activos.length === 0 ? (
-                <p className="text-xs text-rose-700">La disciplina no tiene planes activos: creá uno en la pestaña Planes.</p>
-              ) : (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {activos.map((p) => (
-                    <BotonPlan key={p.plan_id} plan={p} activo={plan === p.plan_id} social={planes.cuota_social} onClick={() => setPlan(p.plan_id)} />
-                  ))}
-                </div>
-              )}
+              <AnimatePresence initial={false} mode="wait">
+                {activos.length === 0 ? (
+                  <CrearPlanInline
+                    key="crear"
+                    disciplina={disciplinaNombre}
+                    cuotaSocial={planes.cuota_social || null}
+                    crear={(nombre, importe) => crearPlanDisc({ disciplina: disciplinaId, nombre, importe, desde: inicioMes(hoy) })}
+                    onCreado={(p) => {
+                      setCreados((l) => [
+                        ...l,
+                        {
+                          plan_id: p.id,
+                          nombre: p.nombre,
+                          activo: true,
+                          permite_anual: false,
+                          precio_vigente: p.importe,
+                          precios: [{ vigente_desde: inicioMes(hoy), importe_mensual: p.importe, importe_anual: null }],
+                          inscriptos: 0,
+                          con_debito: 0,
+                        },
+                      ]);
+                      setPlan(p.id);
+                    }}
+                  />
+                ) : (
+                  <motion.div key="lista" layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {activos.map((p) => (
+                      <BotonPlan key={p.plan_id} plan={p} activo={plan === p.plan_id} social={planes.cuota_social} onClick={() => setPlan(p.plan_id)} />
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
               {errores.plan && <p className="px-0.5 text-xs text-rose-700">{errores.plan}</p>}
             </div>
 
@@ -284,7 +340,14 @@ function DialogoAlta({ disciplinaId, disciplinaNombre, hoy, onClose, socios, pla
 
             <div className="space-y-2">
               <div className="px-0.5 text-[10px] uppercase tracking-editorial text-muted-foreground">Medio de cobro</div>
-              <MedioCampos valor={medio} onChange={setMedio} errores={errores} permitirNinguno />
+              <MedioCobroCampos
+                valor={medio}
+                onChange={setMedio}
+                errores={errores}
+                disciplinas={discs}
+                permitirNinguno
+                textoNinguno="Sin elegir: lo podés cargar después desde la lista de socios."
+              />
             </div>
           </motion.div>
         )}
@@ -308,12 +371,18 @@ function BotonPlan({ plan, activo, social, onClick }: { plan: PlanDisciplina; ac
     >
       <span className="min-w-0">
         <span className="block truncate text-sm font-medium">{plan.nombre}</span>
-        <span className="block text-[11px] text-muted-foreground tabular-nums">
-          Disciplina {plan.precio_vigente === null ? "sin precio" : formatImporte(plan.precio_vigente)}
-        </span>
-      </span>
-      <span className="shrink-0 text-sm font-medium tabular-nums text-bordo-800">
-        {plan.precio_vigente === null ? "—" : formatImporte(r2(social + plan.precio_vigente))}
+        {plan.precio_vigente === null ? (
+          <span className="block text-[11px] text-rose-700">Sin precio cargado</span>
+        ) : (
+          <>
+            <span className="block text-[11px] text-foreground tabular-nums">
+              Paga el socio: <span className="font-medium text-bordo-800">{formatImporte(r2(social + plan.precio_vigente), "UYU")}</span>
+            </span>
+            <span className="block text-[11px] text-muted-foreground tabular-nums">
+              Social {formatImporte(social)} + plan {formatImporte(plan.precio_vigente)}
+            </span>
+          </>
+        )}
       </span>
     </motion.button>
   );
@@ -441,16 +510,18 @@ function DialogoCambiarPlan({ disciplinaId, hoy, onClose, socio, planes }: Comun
 // Medio de cobro / tarjeta
 // ------------------------------------------------------------
 
-function DialogoMedio({ disciplinaId, hoy, onClose, socio }: Comun & { socio: SocioDisciplina }) {
-  const [medio, setMedio] = useState<MedioFormDisc>(medioInicial(socio.medio));
+function DialogoMedio({ disciplinaId, disciplinaNombre, hoy, onClose, socio }: Comun & { socio: SocioDisciplina }) {
+  const actual = useMemo(() => medioActualDeSocio(socio.medio), [socio.medio]);
+  const discs = disciplinaPanel(disciplinaId, disciplinaNombre);
+  const [medio, setMedio] = useState<MedioCobroForm>(() => medioCobroInicial(actual));
   const [desde, setDesde] = useState(socio.medio && socio.medio.desde > hoy ? socio.medio.desde : hoy);
   const [errores, setErrores] = useState<Record<string, string>>({});
 
   async function ejecutar(): Promise<Res> {
-    const input = { disciplina: disciplinaId, persona: socio.persona_id, desde, medio: medioFormAInput(medio, disciplinaId, socio.medio) };
+    const input = { disciplina: disciplinaId, persona: socio.persona_id, desde, medio: medioCobroAInput(medio, discs, actual?.tarjeta) };
     const p = cambiarMedioDiscSchema.safeParse(input);
     if (!p.success) {
-      setErrores(erroresPorCampo(p.error.issues, "medio"));
+      setErrores(erroresMedio(p.error.issues));
       return { ok: false, error: p.error.issues[0]?.message ?? "Revisá los datos" };
     }
     setErrores({});
@@ -468,7 +539,7 @@ function DialogoMedio({ disciplinaId, hoy, onClose, socio }: Comun & { socio: So
       titulo="Tarjeta y medio de cobro"
       textoAccion="Guardar"
       mensaje="Medio de cobro actualizado: tesorería lo va a cargar"
-      deshabilitado={!medio.medio}
+      deshabilitado={!medioEfectivo(medio, discs).medio}
       ancho="sm:max-w-lg"
       descripcion={
         <span className="flex flex-wrap items-center gap-1">
@@ -478,7 +549,7 @@ function DialogoMedio({ disciplinaId, hoy, onClose, socio }: Comun & { socio: So
       ejecutar={ejecutar}
     >
       <CabeceraSocio socio={socio} />
-      <MedioCampos valor={medio} onChange={setMedio} errores={errores} actual={socio.medio} />
+      <MedioCobroCampos valor={medio} onChange={setMedio} errores={errores} disciplinas={discs} tarjetaActual={actual?.tarjeta} />
       <Campo etiqueta="Desde" ayuda={socio.medio ? `El medio actual rige desde el ${formatFecha(socio.medio.desde)}.` : undefined}>
         <input type="date" value={desde} min={socio.medio?.desde} onChange={(e) => setDesde(e.target.value)} className={claseControl} />
       </Campo>
@@ -531,113 +602,221 @@ function DialogoDatos({ disciplinaId, onClose, socio }: Comun & { socio: SocioDi
 // Cobro recibido por la disciplina
 // ------------------------------------------------------------
 
+const importeTexto = (v: number) => (v > 0 ? String(r2(v)).replace(".", ",") : "");
+/** Lo que se le sugiere cobrar: si está en otra disciplina, solo lo de esta (lo otro lo cobra la otra). */
+const sugerido = (s: SocioDisciplina) => (s.otras_disciplinas.length > 0 ? s.deuda_disciplina : s.deuda_total);
+
 function DialogoCobro({ disciplinaId, disciplinaNombre, hoy, onClose, socio: inicial, socios }: Comun & { socio: SocioDisciplina | null; socios: SocioDisciplina[] }) {
   const [socio, setSocio] = useState<SocioDisciplina | null>(inicial);
   const [buscar, setBuscar] = useState("");
   const [fecha, setFecha] = useState(hoy);
-  const sugerido = inicial ? inicial.deuda_vencida || inicial.deuda_total : 0;
-  const [importe, setImporte] = useState(sugerido > 0 ? String(sugerido).replace(".", ",") : "");
+  const [importe, setImporte] = useState(importeTexto(inicial ? sugerido(inicial) : 0));
   const [referencia, setReferencia] = useState("");
   const monto = aNumero(importe);
 
+  // Solo socios de esta disciplina: los que están hoy y los que se fueron debiendo.
+  const candidatos = useMemo(() => socios.filter((s) => s.vigente || s.deuda_total > 0), [socios]);
   const q = buscar.trim().toLowerCase();
-  const encontrados = q.length < 2 ? [] : socios.filter((s) => `${s.nombre} ${s.apellido} ${s.cedula} ${s.numero_socio ?? ""}`.toLowerCase().includes(q)).slice(0, 8);
+  const conDeuda = useMemo(
+    () => candidatos.filter((s) => s.deuda_total > 0).sort((x, y) => y.deuda_total - x.deuda_total).slice(0, 6),
+    [candidatos]
+  );
+  const encontrados =
+    q.length < 2
+      ? conDeuda
+      : candidatos.filter((s) => `${s.nombre} ${s.apellido} ${s.cedula} ${s.numero_socio ?? ""}`.toLowerCase().includes(q)).slice(0, 8);
+
+  const nombre = socio ? `${socio.nombre} ${socio.apellido}`.trim() : "";
+  const resto = socio ? r2(socio.deuda_total - monto) : 0;
+  const mensaje = !socio
+    ? "Pago registrado"
+    : resto <= 0
+      ? `Listo: ${nombre} quedó al día`
+      : monto >= socio.deuda_vencida
+        ? `Listo: ${nombre} quedó al día. Le quedan ${formatImporte(resto, "UYU")} de cuotas por vencer`
+        : `Pago registrado. ${nombre} todavía debe ${formatImporte(resto, "UYU")}`;
+
+  function elegir(s: SocioDisciplina) {
+    setSocio(s);
+    setImporte(importeTexto(sugerido(s)));
+  }
 
   return (
     <DialogoAccion
       open
       onOpenChange={(o) => !o && onClose()}
       icono={HandCoins}
-      titulo="Registrar cobro"
-      textoAccion="Registrar cobro"
-      mensaje="Cobro registrado"
+      titulo="Registrar un pago que recibió la disciplina"
+      textoAccion="Registrar pago"
+      mensaje={mensaje}
       deshabilitado={!socio || !(monto > 0)}
-      descripcion={`Un pago que recibió ${disciplinaNombre} directamente (transferencia a su cuenta o efectivo). Se aplica a las cuotas del socio y queda como deuda de la disciplina con el club, que se descuenta en la próxima liquidación.`}
+      descripcion={
+        <span className="block space-y-1.5">
+          <span className="block">
+            Usalo cuando un socio te pagó a vos: por transferencia a la cuenta de {disciplinaNombre} o en mano. Así queda al día
+            en el sistema.
+          </span>
+          <span className="block text-xs">
+            La plata es de la disciplina: el club solo se queda con la cuota social, que se descuenta en la liquidación del mes.
+          </span>
+        </span>
+      }
       ejecutar={async () =>
         socio
           ? res(await registrarCobroDisc({ disciplina: disciplinaId, persona: socio.persona_id, fecha, importe: monto, referencia }))
           : { ok: false, error: "Elegí el socio" }
       }
     >
-      {socio ? (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <div className="min-w-0 flex-1">
-              <CabeceraSocio socio={socio} />
+      <AnimatePresence initial={false} mode="wait">
+        {socio ? (
+          <motion.div key={`socio-${socio.persona_id}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="space-y-2.5">
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <CabeceraSocio socio={socio} />
+              </div>
+              {!inicial && (
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    setSocio(null);
+                    setImporte("");
+                  }}
+                  className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-bordo-800 transition-colors hover:bg-bordo-50"
+                >
+                  Cambiar
+                </motion.button>
+              )}
             </div>
-            {!inicial && (
-              <button type="button" onClick={() => setSocio(null)} className="shrink-0 text-xs font-medium text-bordo-800 hover:underline">
-                Cambiar
-              </button>
+            {socio.deuda_total > 0 ? (
+              <>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { t: "Cuotas vencidas", v: String(socio.cuotas_vencidas), alerta: socio.cuotas_vencidas > 0 },
+                    { t: "Debe en total", v: formatImporte(socio.deuda_total), alerta: socio.deuda_vencida > 0 },
+                    { t: `De ${disciplinaNombre}`, v: formatImporte(socio.deuda_disciplina), alerta: false },
+                  ].map((x, i) => (
+                    <motion.div
+                      key={x.t}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.04 * i }}
+                      className={cn("rounded-xl border px-2.5 py-2", x.alerta ? "border-rose-200 bg-rose-50/60" : "border-linea bg-white")}
+                    >
+                      <div className="truncate text-[10px] uppercase tracking-editorial text-muted-foreground">{x.t}</div>
+                      <div className={cn("truncate text-sm font-medium tabular-nums", x.alerta ? "text-rose-800" : "text-foreground")}>{x.v}</div>
+                    </motion.div>
+                  ))}
+                </div>
+                {socio.otras_disciplinas.length > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    También está en {socio.otras_disciplinas.join(", ")}: te sugerimos cobrar solo lo de {disciplinaNombre}; lo demás lo
+                    cobra esa disciplina.
+                  </p>
+                )}
+                {socio.deuda_vencida > 0 && socio.deuda_vencida < socio.deuda_total && (
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {[
+                      ...(socio.otras_disciplinas.length > 0 ? [{ t: `Solo lo de ${disciplinaNombre}`, v: socio.deuda_disciplina }] : []),
+                      { t: "Todo lo que debe", v: socio.deuda_total },
+                      { t: "Solo lo vencido", v: socio.deuda_vencida },
+                    ].map((x) => (
+                      <motion.button
+                        key={x.t}
+                        type="button"
+                        whileHover={{ y: -1 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => setImporte(importeTexto(x.v))}
+                        className={cn(
+                          "rounded-full border px-2.5 py-1 tabular-nums transition-colors",
+                          r2(monto) === r2(x.v) ? "border-bordo-700 bg-bordo-50 text-bordo-900" : "border-linea bg-white hover:border-bordo-200"
+                        )}
+                      >
+                        {x.t}: {formatImporte(x.v)}
+                      </motion.button>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <motion.p
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900"
+              >
+                No debe nada: lo que registres queda a favor para las próximas cuotas.
+              </motion.p>
             )}
-          </div>
-          {(socio.deuda_total > 0 || socio.deuda_vencida > 0) && (
-            <div className="flex flex-wrap gap-2 text-xs">
-              {[
-                { t: "Vencido", v: socio.deuda_vencida },
-                { t: "Total adeudado", v: socio.deuda_total },
-              ]
-                .filter((x) => x.v > 0)
-                .map((x) => (
-                  <motion.button
-                    key={x.t}
-                    type="button"
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setImporte(String(x.v).replace(".", ","))}
-                    className="rounded-full border border-linea bg-white px-2.5 py-1 tabular-nums transition-colors hover:border-bordo-200"
-                  >
-                    {x.t}: {formatImporte(x.v)}
-                  </motion.button>
-                ))}
+          </motion.div>
+        ) : (
+          <motion.div key="buscar" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="space-y-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={buscar}
+                onChange={(e) => setBuscar(e.target.value)}
+                autoFocus
+                placeholder={`¿Quién pagó? Buscá entre los socios de ${disciplinaNombre}…`}
+                className={cn(claseControl, "pl-9")}
+              />
             </div>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <div className="relative">
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={buscar}
-              onChange={(e) => setBuscar(e.target.value)}
-              autoFocus
-              placeholder="Buscá el socio por nombre o cédula…"
-              className={cn(claseControl, "pl-9")}
-            />
-          </div>
-          <ul className="space-y-1">
-            <AnimatePresence initial={false}>
-              {encontrados.map((s) => (
-                <motion.li key={s.persona_id} layout initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSocio(s);
-                      const v = s.deuda_vencida || s.deuda_total;
-                      if (v > 0) setImporte(String(v).replace(".", ","));
-                    }}
-                    className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-bordo-50"
+            {q.length < 2 && conDeuda.length > 0 && (
+              <div className="px-1 text-[10px] uppercase tracking-editorial text-muted-foreground">Los que más deben</div>
+            )}
+            <ul className="space-y-1">
+              <AnimatePresence initial={false}>
+                {encontrados.map((s, i) => (
+                  <motion.li
+                    key={s.persona_id}
+                    layout
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0, transition: { delay: 0.02 * i } }}
+                    exit={{ opacity: 0 }}
                   >
-                    <span className="min-w-0 truncate">{nombreSocio(s)}</span>
-                    <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
-                      {formatCedula(s.cedula)}
-                      {s.deuda_total > 0 ? ` · debe ${formatImporte(s.deuda_total)}` : ""}
-                    </span>
-                  </button>
-                </motion.li>
-              ))}
-            </AnimatePresence>
-          </ul>
-          {q.length >= 2 && encontrados.length === 0 && <p className="px-1 text-xs text-muted-foreground">Nadie de la disciplina con ese nombre.</p>}
-        </div>
-      )}
+                    <motion.button
+                      type="button"
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => elegir(s)}
+                      className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-bordo-50"
+                    >
+                      <span className="min-w-0 truncate">{nombreSocio(s)}</span>
+                      <span className={cn("shrink-0 text-[11px] tabular-nums", s.deuda_total > 0 ? "text-rose-700" : "text-muted-foreground")}>
+                        {s.deuda_total > 0 ? `debe ${formatImporte(s.deuda_total)}` : formatCedula(s.cedula)}
+                      </span>
+                    </motion.button>
+                  </motion.li>
+                ))}
+              </AnimatePresence>
+            </ul>
+            {q.length >= 2 && encontrados.length === 0 && <p className="px-1 text-xs text-muted-foreground">Nadie de {disciplinaNombre} con ese nombre o cédula.</p>}
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="grid grid-cols-2 gap-3">
-        <Campo etiqueta="Fecha">
+        <Campo etiqueta="¿Cuándo te pagó?">
           <input type="date" value={fecha} max={hoy} onChange={(e) => setFecha(e.target.value)} className={claseControl} />
         </Campo>
-        <Campo etiqueta="Importe">
+        <Campo etiqueta="¿Cuánto?">
           <input value={importe} onChange={(e) => setImporte(e.target.value)} inputMode="decimal" placeholder="0,00" className={cn(claseControl, "tabular-nums")} />
         </Campo>
       </div>
+      <AnimatePresence initial={false}>
+        {socio && monto > 0 && (
+          <motion.p
+            key="despues"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className={cn("overflow-hidden px-0.5 text-xs", resto <= 0 ? "text-emerald-700" : "text-muted-foreground")}
+          >
+            {resto < 0
+              ? `Queda al día y con ${formatImporte(-resto, "UYU")} a favor.`
+              : resto === 0
+                ? "Con este pago queda al día."
+                : `Después de este pago todavía debe ${formatImporte(resto, "UYU")}.`}
+          </motion.p>
+        )}
+      </AnimatePresence>
       <Campo etiqueta="Referencia (opcional)">
         <input value={referencia} onChange={(e) => setReferencia(e.target.value)} placeholder="Nº de transferencia, recibo…" className={claseControl} />
       </Campo>
