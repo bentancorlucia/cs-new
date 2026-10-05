@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { FileText, History, LayoutDashboard, MailX, Send, Settings, Workflow } from "lucide-react";
+import { FileText, History, LayoutDashboard, MailX, Megaphone, Send, Settings, Workflow } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -13,6 +13,7 @@ const TABS = [
   { href: "/comunicaciones/plantillas", etiqueta: "Plantillas", icono: FileText, gestion: true },
   { href: "/comunicaciones/bajas", etiqueta: "Bajas", icono: MailX, gestion: true },
   { href: "/comunicaciones/automatizaciones", etiqueta: "Automatizaciones", icono: Workflow, gestion: true },
+  { href: "/comunicaciones/popups", etiqueta: "Popups", icono: Megaphone, gestion: true },
   { href: "/comunicaciones/configuracion", etiqueta: "Configuración", icono: Settings, config: true },
 ];
 

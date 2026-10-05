@@ -1,15 +1,15 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { requireRole } from "@/lib/supabase/roles";
-import { PopupForm } from "@/components/secretaria/popups/popup-form";
+import { PopupForm } from "@/components/comunicaciones/popups/popup-form";
 
 export default async function NuevoPopupPage() {
   await requireRole(["super_admin", "secretaria"]);
 
   return (
-    <div className="px-4 py-8 md:px-8">
+    <div>
       <Link
-        href="/secretaria/popups"
+        href="/comunicaciones/popups"
         className="mb-4 inline-flex items-center gap-1 text-sm text-bordo-800 hover:underline"
       >
         <ChevronLeft className="h-4 w-4" /> Volver

@@ -184,7 +184,7 @@ export function PopupForm({ mode, initial }: Props) {
       if (!res.ok) throw new Error(j.error || "Error al guardar");
 
       toast.success(mode === "create" ? "Popup creado" : "Popup actualizado");
-      router.push("/secretaria/popups");
+      router.push("/comunicaciones/popups");
       router.refresh();
     } catch (e: any) {
       toast.error(e.message || "Error al guardar");
@@ -461,7 +461,7 @@ export function PopupForm({ mode, initial }: Props) {
           <Button
             type="button"
             variant="outline"
-            onClick={() => router.push("/secretaria/popups")}
+            onClick={() => router.push("/comunicaciones/popups")}
             disabled={submitting}
           >
             Cancelar

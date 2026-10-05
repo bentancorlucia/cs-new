@@ -227,7 +227,7 @@ export function PopupsTable({ popups }: { popups: PopupRow[] }) {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
-                            <Link href={`/secretaria/popups/${p.id}/edit`}>
+                            <Link href={`/comunicaciones/popups/${p.id}/edit`}>
                               <Button
                                 variant="ghost"
                                 size="sm"

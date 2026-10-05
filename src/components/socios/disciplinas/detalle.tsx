@@ -217,7 +217,7 @@ export function DetalleDisciplina({
               puedeEditar={puedeEditarRepresentantes}
             />
           )}
-          {pestana === "cambios" && <CambiosDisciplinaVista cambios={cambios} error={errorCambios} />}
+          {pestana === "cambios" && <CambiosDisciplinaVista cambios={cambios} error={errorCambios} verTesoreria={verTesoreria} />}
         </motion.div>
       </AnimatePresence>
 

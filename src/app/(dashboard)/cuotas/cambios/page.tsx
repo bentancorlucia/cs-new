@@ -18,7 +18,7 @@ const esFecha = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d
 
 export default async function CambiosPage({ searchParams }: { searchParams: SearchParams }) {
   const permisos = await permisosCuotas();
-  if (!permisos.puedeVer) redirect("/mi-cuenta");
+  if (!permisos.verTesoreria) redirect("/mi-cuenta");
   const sp = await searchParams;
   const estado = ESTADOS.includes(sp.estado as FiltroEstadoCambios) ? (sp.estado as FiltroEstadoCambios) : "todos";
   const desde = esFecha(sp.desde) ? sp.desde : null;

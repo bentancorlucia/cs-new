@@ -64,7 +64,7 @@ const nulo = <T,>(v: T | null | undefined) => (v ?? null) as T;
 
 export async function buscarPersonasAction(texto: string): Promise<Resultado<Persona[]>> {
   try {
-    await exigir("puedeVer");
+    await exigir("verTesoreria");
     const t = z.string().max(80).parse(texto);
     return { ok: true, data: await buscarPersonas(await createServerClient(), t) };
   } catch (e) {
@@ -74,7 +74,7 @@ export async function buscarPersonasAction(texto: string): Promise<Resultado<Per
 
 export async function leerCuentaPersona(personaId: number, al?: string): Promise<Resultado<CuentaPersona | null>> {
   try {
-    await exigir("puedeVer");
+    await exigir("verTesoreria");
     const pid = id.parse(personaId);
     const f = al ? fecha.parse(al) : hoyUruguay();
     const [db, padron] = await Promise.all([createSociosClient(), createServerClient()]);

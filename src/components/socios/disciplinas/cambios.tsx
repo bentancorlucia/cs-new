@@ -10,7 +10,16 @@ import { BotonLink, Explicacion, Filtros, Panel, Vacio, claseControl } from "@/c
 type Filtro = "todos" | "debito" | "pendiente" | "representante";
 
 /** Registro de cambios de una disciplina (solo lectura). */
-export function CambiosDisciplinaVista({ cambios, error }: { cambios: CambioDebito[]; error: string | null }) {
+export function CambiosDisciplinaVista({
+  cambios,
+  error,
+  verTesoreria,
+}: {
+  cambios: CambioDebito[];
+  error: string | null;
+  /** El link a Cambios de socios (Cuotas de socios es de tesorería). */
+  verTesoreria: boolean;
+}) {
   const [filtro, setFiltro] = useState<Filtro>("todos");
   const [texto, setTexto] = useState("");
 
@@ -33,7 +42,7 @@ export function CambiosDisciplinaVista({ cambios, error }: { cambios: CambioDebi
       titulo="Cambios"
       icono={History}
       accion={
-        pendientes > 0 ? (
+        pendientes > 0 && verTesoreria ? (
           <BotonLink href="/cuotas/cambios?estado=pendiente" variante="secundario" className="h-8 px-3 text-xs">
             {pendientes} pendiente{pendientes === 1 ? "" : "s"} de cargar en Visa
           </BotonLink>

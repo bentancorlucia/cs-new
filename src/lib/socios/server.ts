@@ -40,9 +40,10 @@ export type SociosClient = Awaited<ReturnType<typeof createSociosClient>>;
 export const ROLES_SECRETARIA = ["super_admin", "secretaria"];
 /** Emisión de cuotas, notas de crédito, débito, liquidaciones, precios. */
 export const ROLES_TESORERIA = ["super_admin", "tesorero"];
-/** Registrar cobros. */
-export const ROLES_COBRANZA = ["super_admin", "secretaria", "tesorero"];
-export const ROLES_LECTURA = [...ROLES_COBRANZA, "comision_fiscal"];
+/** Registrar cobros (Cuotas de socios es de tesorería). */
+export const ROLES_COBRANZA = ["super_admin", "tesorero"];
+/** Ver el padrón y sus cuotas. */
+export const ROLES_LECTURA = ["super_admin", "secretaria", "tesorero", "comision_fiscal"];
 
 export async function permisosSocios() {
   const roles = await getUserRoles();

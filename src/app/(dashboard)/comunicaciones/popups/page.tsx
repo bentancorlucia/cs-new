@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/roles";
 import { Button } from "@/components/ui/button";
-import { PopupsTable } from "@/components/secretaria/popups/popups-table";
+import { PopupsTable } from "@/components/comunicaciones/popups/popups-table";
 import type { PopupRow } from "@/lib/popups/types";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ export default async function PopupsPage() {
   const popups = (data ?? []) as unknown as PopupRow[];
 
   return (
-    <div className="px-4 py-8 md:px-8">
+    <div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl font-bold text-bordo-800">
@@ -33,7 +33,7 @@ export default async function PopupsPage() {
             enlaces internos o externos.
           </p>
         </div>
-        <Link href="/secretaria/popups/nuevo">
+        <Link href="/comunicaciones/popups/nuevo">
           <Button className="bg-bordo-800 text-white hover:bg-bordo-700">
             <Plus className="mr-1 h-4 w-4" /> Nuevo popup
           </Button>
