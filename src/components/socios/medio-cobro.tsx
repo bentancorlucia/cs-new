@@ -18,9 +18,10 @@ import {
  * Medio de cobro del socio, igual en secretaría (alta y ficha) y en el
  * panel de la disciplina. Solo dos opciones:
  *  - Débito automático (Visa), con el número completo de la tarjeta.
- *  - Transferencia a la cuenta de SU disciplina (si está en varias, elige
- *    entre las suyas). Si no está en ninguna disciplina (solo socio
- *    social): transferencia al club.
+ *  - Transferencia: la cuota de cada disciplina, en la cuenta de esa
+ *    disciplina. La disciplina elegida (`disciplina_id`) es la cuenta donde
+ *    paga la cuota social (si está en varias, elige entre las suyas). Si no
+ *    está en ninguna disciplina (solo socio social): transferencia al club.
  * Los medios que ya estaban cargados (efectivo, etc.) se siguen mostrando
  * en fichas y listas, pero no se ofrecen para elegir.
  */
@@ -162,10 +163,13 @@ export function MedioCobroCampos({
 
   const textos: Record<string, { titulo: string; texto: string }> = {
     debito_visa: { titulo: "Débito automático (Visa)", texto: "Se debita de la tarjeta todos los meses" },
-    transferencia_disciplina: {
-      titulo: `Transferencia a la cuenta de ${discElegida?.nombre ?? "la disciplina"}`,
-      texto: disciplinas.length > 1 ? "Paga en la cuenta de una de sus disciplinas" : "Paga en la cuenta de su disciplina",
-    },
+    transferencia_disciplina:
+      disciplinas.length > 1
+        ? {
+            titulo: "Transferencia a la cuenta de cada disciplina",
+            texto: `Cada cuota en la cuenta de su disciplina; la social, en la de ${discElegida?.nombre ?? "una de ellas"}`,
+          }
+        : { titulo: `Transferencia a la cuenta de ${discElegida?.nombre ?? "la disciplina"}`, texto: "Paga en la cuenta de su disciplina" },
     transferencia_club: { titulo: "Transferencia al club", texto: "No está en ninguna disciplina: paga en la cuenta del club" },
   };
 
@@ -261,7 +265,9 @@ export function MedioCobroCampos({
             className="overflow-hidden"
           >
             <div className="space-y-1.5">
-              <div className="px-0.5 text-[11px] text-muted-foreground">¿A la cuenta de cuál de sus disciplinas?</div>
+              <div className="px-0.5 text-[11px] text-muted-foreground">
+                ¿En qué cuenta paga la cuota social? La cuota de cada disciplina va a la cuenta de esa disciplina.
+              </div>
               <div className="flex flex-wrap gap-1.5">
                 {disciplinas.map((d) => {
                   const activa = d.id === disciplina_id;

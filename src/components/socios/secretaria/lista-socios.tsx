@@ -425,7 +425,7 @@ export function ListaSocios({
                           <Disciplinas lista={f.disciplinas} />
                         </td>
                         <td className="max-w-[12rem] px-3 py-2.5">
-                          {f.estado === "vigente" ? <EtiquetaMedio medio={f.medio} disciplina={f.medioDisciplina} /> : <span className="text-xs text-muted-foreground">—</span>}
+                          {f.estado === "vigente" ? <EtiquetaMedio medio={f.medio} disciplina={f.medioDisciplina} varias={f.disciplinas.length > 1} /> : <span className="text-xs text-muted-foreground">—</span>}
                         </td>
                         <td className="px-3 py-2.5">
                           <BadgeSituacion cuotasVencidas={f.cuotasVencidas} alDia={f.alDia} />
@@ -492,7 +492,7 @@ export function ListaSocios({
                     {(f.disciplinas.length > 0 || f.estado === "vigente") && (
                       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
                         <Disciplinas lista={f.disciplinas} />
-                        {f.estado === "vigente" && <EtiquetaMedio medio={f.medio} disciplina={f.medioDisciplina} />}
+                        {f.estado === "vigente" && <EtiquetaMedio medio={f.medio} disciplina={f.medioDisciplina} varias={f.disciplinas.length > 1} />}
                       </div>
                     )}
                   </Link>

@@ -261,6 +261,7 @@ export function FichaSocio({
           <MedioCobro
             actual={medioActual}
             historial={medios.filter((m) => m !== medioActual)}
+            varias={disciplinasSocio.length > 1}
             puedeGestionar={puedeGestionar && esSocio && !bajaProgramada}
             onCambiar={() => abrir({ tipo: "medio" })}
           />
@@ -592,10 +593,10 @@ function DatosPersonales({ ficha, puedeGestionar }: { ficha: Ficha; puedeGestion
   );
 }
 
-function DetalleMedio({ m }: { m: MedioRegistrado }) {
+function DetalleMedio({ m, varias }: { m: MedioRegistrado; varias?: boolean }) {
   return (
     <div className="space-y-0.5">
-      <EtiquetaMedio medio={m.medio} disciplina={m.disciplina} className="text-sm" />
+      <EtiquetaMedio medio={m.medio} disciplina={m.disciplina} varias={varias} className="text-sm" />
       {m.medio === "debito_visa" && (
         <div className="pl-5 text-xs text-muted-foreground tabular-nums">
           •••• {m.tarjeta_ultimos4}
@@ -610,10 +611,13 @@ function DetalleMedio({ m }: { m: MedioRegistrado }) {
 function MedioCobro({
   actual,
   historial,
+  varias,
   puedeGestionar,
   onCambiar,
 }: {
   actual: MedioRegistrado | null;
+  /** Está en varias disciplinas (con transferencia, cada cuota va a la cuenta de la suya). */
+  varias: boolean;
   historial: MedioRegistrado[];
   puedeGestionar: boolean;
   onCambiar: () => void;
@@ -634,7 +638,7 @@ function MedioCobro({
       <div className="space-y-3 p-4">
         {actual ? (
           <div>
-            <DetalleMedio m={actual} />
+            <DetalleMedio m={actual} varias={varias} />
             <div className="mt-1 pl-5 text-[11px] text-muted-foreground">Desde {formatFecha(actual.desde)}</div>
           </div>
         ) : (

@@ -92,9 +92,19 @@ export function CobroForm({
     cuentaElegida?.medio === medio ? cuentaElegida.id : ((medio === "efectivo" ? defecto.caja : defecto.banco) ?? "");
 
   const monto = Number(importe.replace(",", ".")) || 0;
+  // En la cuenta de una disciplina se pagan sus cuotas y la social que tiene a cargo.
+  const cuotas = useMemo(
+    () =>
+      !cuenta
+        ? []
+        : medio === "transferencia_disciplina" && disciplina
+          ? cuenta.cuotas.filter((c) => c.cuenta_disciplina === disciplina)
+          : cuenta.cuotas,
+    [cuenta, medio, disciplina]
+  );
   const reparto = useMemo(
-    () => (cuenta ? repartir(cuenta.cuotas, monto, fecha, elegir ? [...elegidas] : null) : null),
-    [cuenta, monto, fecha, elegir, elegidas]
+    () => (cuenta ? repartir(cuotas, monto, fecha, elegir ? [...elegidas].filter((id) => cuotas.some((c) => c.id === id)) : null) : null),
+    [cuenta, cuotas, monto, fecha, elegir, elegidas]
   );
   const deuda = cuenta ? saldoTotal(cuenta) : 0;
 
@@ -235,7 +245,7 @@ export function CobroForm({
             titulo="Cuotas con saldo"
             delay={0.09}
             accion={
-              cuenta && cuenta.cuotas.length > 0 ? (
+              cuenta && cuotas.length > 0 ? (
                 <label className="flex items-center gap-2 text-xs">
                   <input type="checkbox" checked={elegir} onChange={(e) => setElegir(e.target.checked)} className="size-4 accent-bordo-800" />
                   Elegir a qué cuotas aplicar
@@ -245,11 +255,15 @@ export function CobroForm({
           >
             {!cuenta ? (
               <p className="p-4 text-sm text-muted-foreground">Elegí una persona para ver sus cuotas.</p>
-            ) : cuenta.cuotas.length === 0 ? (
-              <p className="p-4 text-sm text-muted-foreground">No tiene cuotas con saldo: todo el cobro quedaría como saldo a favor.</p>
+            ) : cuotas.length === 0 ? (
+              <p className="p-4 text-sm text-muted-foreground">
+                {cuenta.cuotas.length > 0 && medio === "transferencia_disciplina"
+                  ? `No tiene cuotas que se paguen en la cuenta de ${nombreDisc ?? "esa disciplina"}: todo el cobro quedaría como saldo a favor, para sus próximas cuotas de esa cuenta.`
+                  : "No tiene cuotas con saldo: todo el cobro quedaría como saldo a favor."}
+              </p>
             ) : (
               <ul className="divide-y divide-linea">
-                {cuenta.cuotas.map((c, i) => {
+                {cuotas.map((c, i) => {
                   const aplica = reparto?.aplicaciones.find((a) => a.cuota.id === c.id)?.importe ?? 0;
                   const posterior = c.fecha_emision > fecha;
                   const vencida = c.fecha_vencimiento < hoy;
@@ -375,7 +389,7 @@ export function CobroForm({
               cuenta_id: eligeCuenta && medio !== "transferencia_disciplina" ? cuentaId || null : null,
               disciplina_id: medio === "transferencia_disciplina" ? Number(disciplina) : null,
               referencia: referencia.trim() || null,
-              cuotas: elegir ? [...elegidas] : null,
+              cuotas: elegir ? [...elegidas].filter((id) => cuotas.some((c) => c.id === id)) : null,
             });
             return r.ok ? { ok: true } : r;
           }}

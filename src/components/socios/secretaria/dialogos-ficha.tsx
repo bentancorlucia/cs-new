@@ -467,7 +467,7 @@ export function DialogoMedio({
       titulo="Cambiar medio de cobro"
       descripcion={
         <span className="flex flex-wrap items-center gap-1">
-          Hoy: <EtiquetaMedio medio={actual?.medio ?? null} disciplina={actual?.disciplina} className="font-medium" />
+          Hoy: <EtiquetaMedio medio={actual?.medio ?? null} disciplina={actual?.disciplina} varias={disciplinas.length > 1} className="font-medium" />
           <span>· El medio anterior queda en el historial hasta el día antes del cambio.</span>
         </span>
       }

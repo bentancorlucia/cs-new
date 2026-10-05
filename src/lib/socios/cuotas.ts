@@ -544,6 +544,11 @@ export interface CuotaPendiente {
   pagado: number;
   acreditado: number;
   saldo: number;
+  /**
+   * En la cuenta de qué disciplina se puede pagar: la cuota de una disciplina,
+   * en la suya; la social, en la que la tiene a cargo. Solo lo llena `cuentaPersona`.
+   */
+  cuenta_disciplina?: number | null;
 }
 
 /** Cuotas emitidas con saldo, en el orden en que las cancela un cobro (las más viejas primero). */
@@ -637,9 +642,23 @@ export async function cuentaPersona(db: ClienteSocios, padron: ClientePadron, pe
   ]);
   const persona = personas.get(personaId);
   if (!persona) return null;
+  const lista = cuotas.get(personaId) ?? [];
+  // La social se paga en la cuenta de la disciplina que la tiene a cargo (la anual, en la que la cubre hoy).
+  const sociales = lista.filter((c) => c.tipo === "social").map((c) => c.id);
+  const [resp, social] = sociales.length
+    ? await Promise.all([
+        db.from("cuotas").select("id, disciplina_responsable_id").in("id", sociales),
+        db.rpc("cuota_social_de", { p_persona: personaId, p_fecha: fecha }),
+      ])
+    : [null, null];
+  const responsable = new Map((resp?.data ?? []).map((c) => [c.id, c.disciplina_responsable_id]));
+  const socialHoy = (social?.data as { disciplina_id?: number | null } | null)?.disciplina_id ?? null;
+  for (const c of lista) {
+    c.cuenta_disciplina = c.tipo === "disciplina" ? c.disciplina_id : c.tipo === "social" ? (responsable.get(c.id) ?? socialHoy) : null;
+  }
   return {
     persona,
-    cuotas: cuotas.get(personaId) ?? [],
+    cuotas: lista,
     saldoAFavor: r2((aFavor.data ?? []).reduce((s, c) => s + num(c.saldo_a_favor), 0)),
     medio: medio.data ?? null,
   };

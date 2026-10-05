@@ -151,7 +151,7 @@ interface PersonaFormDisc {
 
 const PERSONA_VACIA: PersonaFormDisc = { cedula: "", nombre: "", apellido: "", email: "", telefono: "", fecha_nacimiento: "", direccion: "" };
 
-/** En el panel, la transferencia siempre va a la cuenta de esta disciplina. */
+/** En el panel, la transferencia va a la cuenta de esta disciplina (la social, también, salvo que ya la pague en otra). */
 const disciplinaPanel = (id: number, nombre: string): DisciplinaSocio[] => [{ id, nombre }];
 
 /** El medio actual del socio, con su tarjeta (para "misma tarjeta"). */
@@ -512,7 +512,15 @@ function DialogoCambiarPlan({ disciplinaId, hoy, onClose, socio, planes }: Comun
 
 function DialogoMedio({ disciplinaId, disciplinaNombre, hoy, onClose, socio }: Comun & { socio: SocioDisciplina }) {
   const actual = useMemo(() => medioActualDeSocio(socio.medio), [socio.medio]);
-  const discs = disciplinaPanel(disciplinaId, disciplinaNombre);
+  // Si ya paga la social en la cuenta de otra de sus disciplinas, puede seguir ahí.
+  const discs = useMemo(() => {
+    const base = disciplinaPanel(disciplinaId, disciplinaNombre);
+    const m = socio.medio;
+    const otra = m?.medio === "transferencia_disciplina" && m.disciplina_id !== disciplinaId ? m.disciplina_id : null;
+    return otra && socio.social_cubre && socio.otras_disciplinas.includes(socio.social_cubre)
+      ? [...base, { id: otra, nombre: socio.social_cubre }]
+      : base;
+  }, [disciplinaId, disciplinaNombre, socio.medio, socio.social_cubre, socio.otras_disciplinas]);
   const [medio, setMedio] = useState<MedioCobroForm>(() => medioCobroInicial(actual));
   const [desde, setDesde] = useState(socio.medio && socio.medio.desde > hoy ? socio.medio.desde : hoy);
   const [errores, setErrores] = useState<Record<string, string>>({});

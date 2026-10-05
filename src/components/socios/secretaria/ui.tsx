@@ -89,10 +89,13 @@ const ICONO_MEDIO = {
 export function EtiquetaMedio({
   medio,
   disciplina,
+  varias,
   className,
 }: {
   medio: string | null;
   disciplina?: string | null;
+  /** Está en varias disciplinas: cada cuota va a la cuenta de la suya y `disciplina` es donde paga la social. */
+  varias?: boolean;
   className?: string;
 }) {
   if (!medio) return <span className={cn("text-xs text-muted-foreground", className)}>Sin medio</span>;
@@ -101,7 +104,11 @@ export function EtiquetaMedio({
     <span className={cn("inline-flex items-center gap-1.5 text-xs text-foreground", className)}>
       <Icono className="size-3.5 shrink-0 text-bordo-700" />
       <span className="truncate">
-        {medio === "transferencia_disciplina" && disciplina ? `Cuenta de ${disciplina}` : (NOMBRE_MEDIO[medio] ?? medio)}
+        {medio === "transferencia_disciplina" && disciplina
+          ? varias
+            ? `Cuenta de cada disciplina · social en ${disciplina}`
+            : `Cuenta de ${disciplina}`
+          : (NOMBRE_MEDIO[medio] ?? medio)}
       </span>
     </span>
   );
