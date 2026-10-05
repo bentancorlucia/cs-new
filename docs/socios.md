@@ -94,6 +94,18 @@ Migraciones `20261008110000` a `20261008150000`; pantallas en `/disciplina/[id]`
 - **Registro de cambios** (`socios.cambios_disciplina`): lo escriben triggers de membresías, inscripciones y medios de cobro, y las funciones del panel, haga el cambio quien lo haga (origen `representante` o `club`, quién, cuándo, antes y después, desde cuándo rige). No se edita ni se borra. Lo que cambia el débito (adhesión, tarjeta, alta o baja con débito, cambio de plan, precio) queda **pendiente** hasta que tesorería lo carga en el portal y lo marca (`marcar_cambios`). Pantalla: Cuotas → Cambios para el débito (`cambios_debito`).
 - **Tarjetas**: el número completo se valida (Luhn) y se guarda **cifrado en Supabase Vault (extensión `supabase_vault`, la activa la migración `20261008160000` si faltara) solo hasta que tesorería lo aplica**; en el medio de cobro quedan los últimos 4, el vencimiento y el emisor. `ver_tarjeta` (solo tesorería) lo muestra y deja registro de quién lo vio; `marcar_cambios` lo borra.
 
+## Staff
+
+Migración `20261009100000_staff.sql`; pantallas en `/secretaria/staff` (todo el club) y en la pestaña Staff de `/disciplina/[id]`. Reemplaza a `public.staff` (sus filas se copiaron y la tabla se borró, junto con `/api/staff` y la importación por Excel).
+
+- **La persona es la del padrón** (`padron_socios`, por cédula): no hay otra lista de gente. Puede no ser socia; si la cédula no está, el alta la crea sin membresía (en el padrón figura "sin alta").
+- `socios.staff`: un vínculo por período (`desde`/`hasta`, `motivo_fin`) con una **función** de lista cerrada (`entrenador`, `asistente`, `preparador_fisico`, `coordinador`, `delegado`, `dirigente`, `salud`, `utilero`, `administrativo`, `mantenimiento`, `otro`) y un **detalle** libre (categoría, plantel o cargo). Varias disciplinas o categorías = varios vínculos; la misma función y detalle no se pisan en el tiempo. `disciplina_id` NULL = personal del club.
+- **Lo paga cada disciplina**: no hay importes ni asientos.
+- Permisos: el staff de una disciplina lo gestionan sus representantes y el club (secretaría, tesorería, super_admin); el personal sin disciplina, solo secretaría. Lectura: además la Comisión Fiscal. Nadie escribe la tabla directo.
+- Funciones: `alta_staff` (crea la persona si hace falta; si ya existe, usa sus datos y solo completa el correo o teléfono que falten), `baja_staff` (cierra el período), `anular_baja_staff`, `editar_staff` (función, detalle, inicio, notas y el contacto de la persona en el padrón), `eliminar_staff` (solo para lo cargado por error). Lecturas: `disc_staff(disciplina, historico)` y `staff_club(historico)`.
+- Todo queda en el registro de cambios de la disciplina (`staff_alta`, `staff_baja`, `staff_cambio`; nunca afecta al débito).
+- Más adelante, para mostrar el cuerpo técnico en el sitio público: agregar un permiso de "visible en la web" (y foto) por vínculo.
+
 ## Pendiente
 
 - Pantallas de secretaría (padrón nuevo), de cuotas y cobranza, y estado de cuenta en Mi cuenta.

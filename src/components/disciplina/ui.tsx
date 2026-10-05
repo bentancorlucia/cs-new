@@ -11,6 +11,7 @@ import {
   type SocioDisciplina,
   type TipoCambio,
 } from "@/lib/socios/panel-disciplina";
+import { NOMBRE_FUNCION_STAFF, type FuncionStaff } from "@/lib/socios/staff";
 
 const pill =
   "inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-2 text-[11px] font-medium whitespace-nowrap";
@@ -72,6 +73,9 @@ const ESTILO_CAMBIO: Partial<Record<TipoCambio, string>> = {
   plan_nuevo: "border-dorado-300 bg-dorado-100 text-dorado-800",
   precio: "border-dorado-300 bg-dorado-100 text-dorado-800",
   cobro: "border-teal-200 bg-teal-50 text-teal-800",
+  staff_alta: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  staff_baja: "border-rose-200 bg-rose-50 text-rose-700",
+  staff_cambio: "border-sky-200 bg-sky-50 text-sky-800",
 };
 
 export function BadgeTipoCambio({ tipo }: { tipo: TipoCambio }) {
@@ -143,6 +147,8 @@ const ETIQUETA_CAMPO: Record<string, string> = {
   motivo: "Motivo",
   referencia: "Referencia",
   con_debito: "Con débito",
+  funcion: "Función",
+  detalle: "Detalle",
 };
 
 const OCULTOS = new Set(["plan_id", "persona_id", "suscripcion_id", "cobro_id", "disciplina_id", "id"]);
@@ -151,10 +157,14 @@ export function etiquetaCampo(k: string) {
   return ETIQUETA_CAMPO[k] ?? k.replace(/_/g, " ");
 }
 
+/** La función del staff con su nombre ("Entrenador/a", no "entrenador"). */
+const legible = (campo: string, v: unknown) =>
+  campo === "funcion" && typeof v === "string" ? (NOMBRE_FUNCION_STAFF[v as FuncionStaff] ?? v) : v;
+
 /** Pares campo: antes → después (solo los que cambiaron o son nuevos). */
 export function diferencias(antes: Record<string, unknown> | null, despues: Record<string, unknown> | null) {
   const claves = [...new Set([...Object.keys(antes ?? {}), ...Object.keys(despues ?? {})])].filter((k) => !OCULTOS.has(k));
   return claves
-    .map((k) => ({ campo: k, antes: antes ? antes[k] : undefined, despues: despues ? despues[k] : undefined }))
+    .map((k) => ({ campo: k, antes: legible(k, antes?.[k]), despues: legible(k, despues?.[k]) }))
     .filter((d) => JSON.stringify(d.antes) !== JSON.stringify(d.despues));
 }

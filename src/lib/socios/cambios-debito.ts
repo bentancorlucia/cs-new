@@ -23,7 +23,10 @@ export type TipoCambio =
   | "plan_nuevo"
   | "precio"
   | "cobro"
-  | "representante";
+  | "representante"
+  | "staff_alta"
+  | "staff_baja"
+  | "staff_cambio";
 
 /** Datos de antes/después: el detalle depende del tipo. */
 export interface DatosCambio {
@@ -81,6 +84,9 @@ export const NOMBRE_TIPO_CAMBIO: Record<string, string> = {
   precio: "Precio",
   cobro: "Cobro",
   representante: "Representante",
+  staff_alta: "Alta en el staff",
+  staff_baja: "Baja del staff",
+  staff_cambio: "Cambio en el staff",
 };
 
 export const NOMBRE_ESTADO_DEBITO: Record<string, string> = {

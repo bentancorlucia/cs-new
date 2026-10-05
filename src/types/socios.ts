@@ -510,6 +510,19 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"staff": {
+                  Row: {
+                    "creado_por": string | null,"created_at": string,"desde": string,"detalle": string | null,"disciplina_id": number | null,"funcion": string,"hasta": string | null,"id": number,"motivo_fin": string | null,"notas": string | null,"persona_id": number,"updated_at": string,"_texto_staff": string | null
+                  }
+                  Insert: {
+                    "creado_por"?: string | null,"created_at"?: string,"desde": string,"detalle"?: string | null,"disciplina_id"?: number | null,"funcion": string,"hasta"?: string | null,"id"?: never,"motivo_fin"?: string | null,"notas"?: string | null,"persona_id": number,"updated_at"?: string
+                  }
+                  Update: {
+                    "creado_por"?: string | null,"created_at"?: string,"desde"?: string,"detalle"?: string | null,"disciplina_id"?: number | null,"funcion"?: string,"hasta"?: string | null,"id"?: never,"motivo_fin"?: string | null,"notas"?: string | null,"persona_id"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"suscripciones": {
                   Row: {
                     "creado_por": string | null,"created_at": string,"desde": string,"hasta": string | null,"id": number,"motivo_fin": string | null,"periodicidad": string,"persona_id": number,"plan_id": number
@@ -651,6 +664,9 @@ isOneToOne: false
 "_cuota_mensual":
 { Args: { "p_fecha": string,"p_persona": number }; Returns: number
                            },
+"_cuotas_cuenta_disciplina":
+{ Args: { "p_disciplina": number,"p_fecha": string,"p_persona": number }; Returns: (number)[]
+                           },
 "_delegar":
 { Args: { "p_on"?: boolean }; Returns: undefined
                            },
@@ -662,6 +678,9 @@ isOneToOne: false
                            },
 "_disciplina_principal":
 { Args: { "p_desde": string,"p_hasta": string,"p_persona": number }; Returns: number
+                           },
+"_email_valido":
+{ Args: { "p": string }; Returns: string
                            },
 "_es_representante":
 { Args: { "p_disciplina": number }; Returns: boolean
@@ -687,6 +706,9 @@ isOneToOne: false
 "_exigir_secretaria":
 { Args: Record<PropertyKey, never>; Returns: undefined
                            },
+"_exigir_staff":
+{ Args: { "p_disciplina": number }; Returns: string
+                           },
 "_exigir_tesoreria":
 { Args: Record<PropertyKey, never>; Returns: undefined
                            },
@@ -698,6 +720,9 @@ isOneToOne: false
                            },
 "_nombre":
 { Args: { "p_persona": number }; Returns: string
+                           },
+"_nombre_funcion_staff":
+{ Args: { "p_funcion": string }; Returns: string
                            },
 "_nombre_usuario":
 { Args: Record<PropertyKey, never>; Returns: string
@@ -745,8 +770,14 @@ isOneToOne: false
               "persona_id": number,"planes": string
             }[]
                            },
+"_staff_lista":
+{ Args: { "p_disciplina": number,"p_historico": boolean,"p_todas": boolean }; Returns: Json
+                           },
 "_tarjeta_valida":
 { Args: { "p_numero": string }; Returns: boolean
+                           },
+"_texto_staff":
+{ Args: { "p": Database["socios"]['Tables']["staff"]['Row'] }; Returns: string
                            },
 "_tiene_debito":
 { Args: { "p_fecha": string,"p_persona": number }; Returns: boolean
@@ -754,8 +785,14 @@ isOneToOne: false
 "alta_socio":
 { Args: { "p_desde": string,"p_medio"?: Json,"p_persona": Json,"p_planes"?: Json }; Returns: number
                            },
+"alta_staff":
+{ Args: { "p_desde"?: string,"p_detalle"?: string,"p_disciplina": number,"p_funcion": string,"p_notas"?: string,"p_persona": Json }; Returns: number
+                           },
 "anular_baja":
 { Args: { "p_persona": number }; Returns: undefined
+                           },
+"anular_baja_staff":
+{ Args: { "p_staff": number }; Returns: undefined
                            },
 "anular_cobro":
 { Args: { "p_cobro": number,"p_fecha"?: string,"p_motivo": string }; Returns: undefined
@@ -786,6 +823,9 @@ isOneToOne: false
                            },
 "baja_socio":
 { Args: { "p_hasta": string,"p_motivo": number,"p_notas"?: string,"p_persona": number }; Returns: undefined
+                           },
+"baja_staff":
+{ Args: { "p_hasta": string,"p_motivo"?: string,"p_staff": number }; Returns: undefined
                            },
 "cambiar_medio_cobro":
 { Args: { "p_desde": string,"p_medio": Json,"p_persona": number }; Returns: number
@@ -864,6 +904,15 @@ isOneToOne: false
                            },
 "disc_socios":
 { Args: { "p_disciplina": number,"p_historico"?: boolean }; Returns: Json
+                           },
+"disc_staff":
+{ Args: { "p_disciplina": number,"p_historico"?: boolean }; Returns: Json
+                           },
+"editar_staff":
+{ Args: { "p_contacto"?: Json,"p_desde": string,"p_detalle": string,"p_funcion": string,"p_notas"?: string,"p_staff": number }; Returns: undefined
+                           },
+"eliminar_staff":
+{ Args: { "p_staff": number }; Returns: undefined
                            },
 "emitir_cargo":
 { Args: { "p_centro_costo"?: string,"p_concepto": string,"p_cuenta_ingreso": string,"p_fecha"?: string,"p_importe": number,"p_persona": number,"p_vencimiento"?: string }; Returns: number
@@ -978,6 +1027,9 @@ isOneToOne: false
 { Args: { "p_fecha"?: string }; Returns: {
               "al_dia": boolean,"cuotas_vencidas": number,"deuda_total": number,"deuda_vencida": number,"es_socio": boolean,"medio": string,"persona_id": number,"saldo_a_favor": number
             }[]
+                           },
+"staff_club":
+{ Args: { "p_historico"?: boolean }; Returns: Json
                            },
 "ver_tarjeta":
 { Args: { "p_cambio": number }; Returns: string

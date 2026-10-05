@@ -36,7 +36,7 @@ const AREAS: Record<string, { icono: typeof ShoppingBag; texto: string }> = {
   },
   secretaria: {
     icono: Users,
-    texto: "Secretaría: padrón de socios con datos personales, disciplinas, usuarios y staff",
+    texto: "Secretaría: padrón de socios con datos personales, disciplinas y usuarios",
   },
 };
 

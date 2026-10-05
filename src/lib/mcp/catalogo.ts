@@ -131,11 +131,6 @@ export const CATALOGO: Record<string, TablaCatalogo> = {
     descripcion: "Roles del sistema.",
     columnas: ["descripcion", "id", "nombre"],
   },
-  staff: {
-    modulos: ["secretaria"],
-    descripcion: "Staff del club (entrenadores, funcionarios) con cargo y disciplina.",
-    columnas: ["activo", "apellido", "cargo", "cedula", "created_at", "created_by", "descripcion", "disciplina_id", "email", "fecha_ingreso", "id", "nombre", "notas", "telefono", "updated_at"],
-  },
   pagos_socios: {
     modulos: ["secretaria", "tesoreria"],
     descripcion: "Pagos de cuota social registrados (poco usado todavía).",

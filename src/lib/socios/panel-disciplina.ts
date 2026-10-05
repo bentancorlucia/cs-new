@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { SociosClient } from "./server";
 import type { ResumenLiquidacion } from "./liquidacion-mail";
+import { leerStaffDisciplina, type MiembroStaff } from "./staff";
 import type { TipoMovimiento } from "./disciplinas";
 import { NOMBRE_TIPO_MOVIMIENTO } from "./disciplinas";
 import { medioSchema, vencimientoCorto, type MedioInput } from "./esquemas";
@@ -224,6 +225,9 @@ export const TIPOS_CAMBIO = [
   "precio",
   "cobro",
   "representante",
+  "staff_alta",
+  "staff_baja",
+  "staff_cambio",
 ] as const;
 export type TipoCambio = (typeof TIPOS_CAMBIO)[number];
 
@@ -248,7 +252,7 @@ export interface CambioDisciplina {
   created_at: string;
 }
 
-export const PESTANAS_PANEL = ["resumen", "socios", "planes", "liquidaciones", "morosos", "cuenta", "cambios"] as const;
+export const PESTANAS_PANEL = ["resumen", "socios", "staff", "planes", "liquidaciones", "morosos", "cuenta", "cambios"] as const;
 export type PestanaPanel = (typeof PESTANAS_PANEL)[number];
 
 export interface DatosPanel {
@@ -258,8 +262,9 @@ export interface DatosPanel {
   liquidaciones: LiquidacionLista[];
   cuenta: CuentaDisciplina | null;
   cambios: CambioDisciplina[];
+  staff: MiembroStaff[];
   /** Errores de las lecturas que no son el resumen (la página igual se muestra). */
-  errores: Partial<Record<"socios" | "planes" | "liquidaciones" | "cuenta" | "cambios", string>>;
+  errores: Partial<Record<"socios" | "planes" | "liquidaciones" | "cuenta" | "cambios" | "staff", string>>;
 }
 
 // ------------------------------------------------------------
@@ -280,6 +285,9 @@ export const NOMBRE_TIPO_CAMBIO: Record<TipoCambio, string> = {
   precio: "Precio",
   cobro: "Cobro",
   representante: "Representante",
+  staff_alta: "Alta en el staff",
+  staff_baja: "Baja del staff",
+  staff_cambio: "Cambio en el staff",
 };
 
 export const NOMBRE_MEDIO_DISC: Record<MedioCobroDisc, string> = {
@@ -559,13 +567,14 @@ const mensaje = (e: unknown) => (e instanceof Error ? e.message : "Error inesper
  * página: típicamente falta de permiso); el resto se muestra con su error.
  */
 export async function leerPanel(db: SociosClient, disciplina: number): Promise<DatosPanel> {
-  const [resumen, socios, planes, liquidaciones, cuenta, cambios] = await Promise.allSettled([
+  const [resumen, socios, planes, liquidaciones, cuenta, cambios, staff] = await Promise.allSettled([
     leerResumen(db, disciplina),
     leerSocios(db, disciplina, true),
     leerPlanes(db, disciplina),
     leerLiquidaciones(db, disciplina),
     leerCuenta(db, disciplina),
     leerCambios(db, disciplina),
+    leerStaffDisciplina(db, disciplina),
   ]);
   if (resumen.status === "rejected") throw resumen.reason;
   const errores: DatosPanel["errores"] = {};
@@ -574,6 +583,7 @@ export async function leerPanel(db: SociosClient, disciplina: number): Promise<D
   if (liquidaciones.status === "rejected") errores.liquidaciones = mensaje(liquidaciones.reason);
   if (cuenta.status === "rejected") errores.cuenta = mensaje(cuenta.reason);
   if (cambios.status === "rejected") errores.cambios = mensaje(cambios.reason);
+  if (staff.status === "rejected") errores.staff = mensaje(staff.reason);
   return {
     resumen: resumen.value,
     socios: socios.status === "fulfilled" ? socios.value : [],
@@ -581,6 +591,7 @@ export async function leerPanel(db: SociosClient, disciplina: number): Promise<D
     liquidaciones: liquidaciones.status === "fulfilled" ? liquidaciones.value : [],
     cuenta: cuenta.status === "fulfilled" ? cuenta.value : null,
     cambios: cambios.status === "fulfilled" ? cambios.value : [],
+    staff: staff.status === "fulfilled" ? staff.value : [],
     errores,
   };
 }

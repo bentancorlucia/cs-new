@@ -678,31 +678,6 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
-                },"staff": {
-                  Row: {
-                    "activo": boolean,"apellido": string,"cargo": string,"cedula": string | null,"created_at": string | null,"created_by": string | null,"descripcion": string | null,"disciplina_id": number | null,"email": string | null,"fecha_ingreso": string | null,"id": number,"nombre": string,"notas": string | null,"telefono": string | null,"updated_at": string | null
-                  }
-                  Insert: {
-                    "activo"?: boolean,"apellido": string,"cargo": string,"cedula"?: string | null,"created_at"?: string | null,"created_by"?: string | null,"descripcion"?: string | null,"disciplina_id"?: number | null,"email"?: string | null,"fecha_ingreso"?: string | null,"id"?: number,"nombre": string,"notas"?: string | null,"telefono"?: string | null,"updated_at"?: string | null
-                  }
-                  Update: {
-                    "activo"?: boolean,"apellido"?: string,"cargo"?: string,"cedula"?: string | null,"created_at"?: string | null,"created_by"?: string | null,"descripcion"?: string | null,"disciplina_id"?: number | null,"email"?: string | null,"fecha_ingreso"?: string | null,"id"?: number,"nombre"?: string,"notas"?: string | null,"telefono"?: string | null,"updated_at"?: string | null
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "staff_created_by_fkey"
-      columns: ["created_by"]
-isOneToOne: false
-      referencedRelation: "perfiles"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "staff_disciplina_id_fkey"
-      columns: ["disciplina_id"]
-isOneToOne: false
-      referencedRelation: "disciplinas"
-      referencedColumns: ["id"]
-    }
-                  ]
                 },"stock_movimientos": {
                   Row: {
                     "cantidad": number,"created_at": string | null,"id": number,"motivo": string | null,"producto_id": number,"referencia_id": number | null,"referencia_tipo": string | null,"registrado_por": string | null,"stock_anterior": number,"stock_nuevo": number,"tipo": string,"variante_id": number | null

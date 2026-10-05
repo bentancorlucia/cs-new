@@ -13,6 +13,7 @@ import {
   Layers,
   LayoutDashboard,
   Receipt,
+  UserCog,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -28,6 +29,7 @@ import { LiquidacionesPanel } from "./liquidaciones";
 import { MorososPanel } from "./morosos";
 import { CuentaPanel } from "./cuenta";
 import { CambiosPanel } from "./cambios";
+import { StaffPanel } from "./staff";
 
 
 /** Cambia la URL sin recargar (la pestaña igual cambia si no hay historial). */
@@ -62,7 +64,7 @@ export function PanelDisciplina({
   const [pestana, setPestana] = useState<PestanaPanel>(pestanaInicial);
   const [accion, setAccion] = useState<AccionPanel | null>(null);
   const [liquidacion, setLiquidacion] = useState<number | null>(liquidacionInicial?.id ?? null);
-  const { resumen, socios, planes, liquidaciones, cuenta, cambios, errores } = datos;
+  const { resumen, socios, planes, liquidaciones, cuenta, cambios, staff, errores } = datos;
   const disciplina = resumen.disciplina;
   const vigentes = socios.filter((s) => s.vigente);
   const morosos = vigentes.filter((s) => !s.al_dia || s.deuda_vencida > 0 || s.vencido_disciplina > 0);
@@ -84,6 +86,7 @@ export function PanelDisciplina({
   const opciones = [
     { valor: "resumen" as const, etiqueta: "Resumen", icono: LayoutDashboard },
     { valor: "socios" as const, etiqueta: "Socios", icono: Users, cantidad: vigentes.length },
+    { valor: "staff" as const, etiqueta: "Staff", icono: UserCog, cantidad: staff.filter((m) => m.estado !== "baja").length },
     { valor: "planes" as const, etiqueta: "Planes", icono: Layers },
     { valor: "liquidaciones" as const, etiqueta: "Liquidaciones", icono: Receipt },
     { valor: "morosos" as const, etiqueta: "Morosos", icono: AlertTriangle, cantidad: morosos.length },
@@ -98,6 +101,7 @@ export function PanelDisciplina({
     liquidaciones: errores.liquidaciones,
     cuenta: errores.cuenta,
     cambios: errores.cambios,
+    staff: errores.staff,
   };
 
   return (
@@ -177,6 +181,9 @@ export function PanelDisciplina({
           )}
           {pestana === "socios" && (
             <SociosPanel socios={socios} disciplina={disciplina} puedeEditar={puedeEditar} abrir={abrir} hoy={hoy} />
+          )}
+          {pestana === "staff" && (
+            <StaffPanel staff={staff} socios={socios} disciplina={disciplina} puedeEditar={puedeEditar} hoy={hoy} />
           )}
           {pestana === "planes" && <PlanesPanel planes={planes} socios={vigentes} puedeEditar={puedeEditar} abrir={abrir} hoy={hoy} />}
           {pestana === "liquidaciones" && (
