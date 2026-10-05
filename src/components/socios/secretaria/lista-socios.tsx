@@ -416,6 +416,7 @@ export function ListaSocios({
                               {f.baja && <span className="text-[11px] text-muted-foreground">{formatFecha(f.baja)}</span>}
                             </div>
                           )}
+                          {f.estado === "vigente" && f.baja && <BajaProgramada fecha={f.baja} className="mt-0.5" />}
                         </td>
                         <td className="px-3 py-2.5 whitespace-nowrap tabular-nums text-muted-foreground">
                           {formatCedula(f.cedula)}
@@ -477,6 +478,7 @@ export function ListaSocios({
                         <div className="mt-0.5 text-xs text-muted-foreground tabular-nums">
                           {f.numero ? `N° ${f.numero} · ` : ""}CI {formatCedula(f.cedula)}
                         </div>
+                        {f.estado === "vigente" && f.baja && <BajaProgramada fecha={f.baja} className="mt-1" />}
                       </div>
                       <div className="flex shrink-0 items-center gap-1.5">
                         {f.vinculado && <Link2 className="size-3.5 text-emerald-600" aria-label="Cuenta web vinculada" />}
@@ -533,5 +535,19 @@ function Disciplinas({ lista }: { lista: FilaPadron["disciplinas"] }) {
         </span>
       ))}
     </div>
+  );
+}
+
+/** Sigue vigente pero ya tiene la baja cargada (desde la disciplina o secretaría). */
+function BajaProgramada({ fecha, className }: { fecha: string; className?: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800",
+        className
+      )}
+    >
+      Baja el {formatFecha(fecha)}
+    </span>
   );
 }

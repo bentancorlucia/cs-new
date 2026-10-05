@@ -98,7 +98,7 @@ export interface FilaPadron {
   estado: EstadoSocio;
   /** Alta de la membresía vigente (o la última). */
   alta: string | null;
-  /** Baja de la última membresía, si terminó. */
+  /** Último día de la membresía: la baja ya pasada o, si sigue vigente, la que está cargada para más adelante. */
   baja: string | null;
   disciplinas: { id: number; nombre: string; plan: string }[];
   medio: string | null;
@@ -286,7 +286,7 @@ export async function cargarPadron(): Promise<{
       vinculado: !!p.perfil_id,
       estado,
       alta: (vigente ?? ultima)?.desde ?? null,
-      baja: vigente ? null : (ultima?.hasta ?? null),
+      baja: (vigente ?? ultima)?.hasta ?? null,
       disciplinas: (discPorPersona.get(p.id) ?? []).sort((a, b) => a.nombre.localeCompare(b.nombre, "es")),
       medio: medio?.medio ?? null,
       medioDisciplina: medio?.disciplina_id ? (discPorId.get(medio.disciplina_id) ?? null) : null,
