@@ -29,7 +29,7 @@
 -- Hockey le debe al club 5.200 (Bea + compra en la tienda): se compensa y
 -- se le transfieren 469,50. A rugby, 2.926,80.
 BEGIN;
-SELECT plan(37);
+SELECT plan(39);
 
 DO $$ BEGIN PERFORM contabilidad.crear_ejercicio(2026); END $$;
 
@@ -185,6 +185,11 @@ SELECT is((SELECT (e ->> 'visa_rechazado')::numeric || '/' || (e ->> 'social_a_c
            FROM socios.liquidaciones_disciplina l, jsonb_array_elements(l.detalle) e
            WHERE l.id = (SELECT id FROM liq_r) AND (e ->> 'persona_id')::integer = pg_temp.p('90000007')),
           '3000.00/1000.00', 'el detalle de rugby muestra el rebote de Gabi y su social');
+SELECT is((SELECT e ->> 'social_cubre' FROM socios.liquidaciones_disciplina l, jsonb_array_elements(l.detalle) e
+           WHERE l.id = (SELECT id FROM liq_r) AND (e ->> 'persona_id')::integer = pg_temp.p('90000004')),
+          'Hockey Femenino', 'en rugby, la cuota social de Dani figura cubierta por hockey: se cobra una sola vez');
+SELECT is((socios.cuota_social_de(pg_temp.p('90000004'), '2026-07-15') ->> 'disciplina'), 'Hockey Femenino',
+          'y la ficha lo identifica: la cubre hockey, su inscripción más antigua');
 SELECT is((SELECT debe_al_club || ' / ' || club_le_debe || ' / ' || saldo FROM socios.saldos_disciplinas() WHERE disciplina_id = 7),
           '5200.00 / 5669.50 / -469.50', 'hockey: debe 5.200, el club le debe 5.669,50, neto le debe 469,50');
 SELECT is(pg_temp.saldo('1.1.01.05'), 5365.80 + 4500 + 6900, 'liquidar no mueve el banco');

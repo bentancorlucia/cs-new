@@ -262,6 +262,13 @@ function FilaSocio({ s, i, puedeEditar, abrir }: { s: SocioDisciplina; i: number
             <Pastilla tono="alerta">Baja el {formatFecha(planes.map((p) => p.hasta ?? "").sort().at(-1))}</Pastilla>
           )}
           {s.otras_disciplinas.length > 0 && <Pastilla tono="info">También {s.otras_disciplinas.join(", ")}</Pastilla>}
+          {s.vigente && s.otras_disciplinas.length > 0 && !s.social_anual && (
+            <Pastilla tono={s.social_cubre && s.otras_disciplinas.includes(s.social_cubre) ? "neutro" : "bueno"}>
+              {s.social_cubre && s.otras_disciplinas.includes(s.social_cubre)
+                ? `Cuota social: la cubre ${s.social_cubre}`
+                : "Cuota social: la cubre esta disciplina"}
+            </Pastilla>
+          )}
         </div>
       </div>
 

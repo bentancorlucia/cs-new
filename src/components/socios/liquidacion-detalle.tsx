@@ -110,14 +110,14 @@ export function LiquidacionDetalle({ resumen, className }: { resumen: ResumenLiq
         </Panel>
       )}
 
-      <DetallePorSocio detalle={r.detalle ?? []} />
+      <DetallePorSocio detalle={r.detalle ?? []} disciplina={r.disciplina} />
     </div>
   );
 }
 
 type FiltroSocio = "todos" | "cobrados" | "rebotes" | "a_cargo";
 
-function DetallePorSocio({ detalle }: { detalle: DetalleLiquidacion[] }) {
+function DetallePorSocio({ detalle, disciplina }: { detalle: DetalleLiquidacion[]; disciplina: string }) {
   const [filtro, setFiltro] = useState<FiltroSocio>("todos");
   const cuenta = {
     cobrados: detalle.filter((d) => n(d.visa_disciplina) + n(d.otros_medios) > 0).length,
@@ -176,6 +176,11 @@ function DetallePorSocio({ detalle }: { detalle: DetalleLiquidacion[] }) {
                       <div className="text-xs text-muted-foreground">
                         {d.planes || "—"}
                         {d.numero_socio ? ` · Nº ${d.numero_socio}` : ""}
+                        {d.social_cubre === "anual"
+                          ? " · cuota social anual"
+                          : d.social_cubre && d.social_cubre !== disciplina
+                            ? ` · su cuota social la cubre ${d.social_cubre}`
+                            : ""}
                       </div>
                     </td>
                     <td className="px-3 py-2">

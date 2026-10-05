@@ -12,6 +12,8 @@ export interface DetalleLiquidacion {
   cedula: string;
   numero_socio: number | null;
   planes: string;
+  /** Quién cubre su cuota social del mes (nombre de la disciplina o "anual"). */
+  social_cubre?: string | null;
   medio: string | null;
   tarjeta: string | null;
   visa_debitado: number;

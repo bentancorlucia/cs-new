@@ -29,6 +29,7 @@ export const NOMBRE_MEDIO: Record<string, string> = {
   transferencia_club: "Transferencia al club",
   transferencia_disciplina: "Cuenta de la disciplina",
   efectivo: "Efectivo",
+  liquidacion_disciplina: "A cargo de la disciplina",
 };
 
 export const NOMBRE_TIPO_CREDITO: Record<string, string> = {

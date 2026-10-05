@@ -241,6 +241,7 @@ export function FichaSocio({
           <Inscripciones
             abiertas={abiertas}
             historicas={historicas}
+            cuotaSocial={ficha.cuotaSocial}
             puedeGestionar={puedeGestionar && esSocio && !bajaProgramada}
             onInscribir={() => abrir({ tipo: "inscribir" })}
             onCambiar={(i) => abrir({ tipo: "cambiar", inscripcion: i })}
@@ -339,6 +340,7 @@ export function FichaSocio({
 function Inscripciones({
   abiertas,
   historicas,
+  cuotaSocial,
   puedeGestionar,
   onInscribir,
   onCambiar,
@@ -346,6 +348,7 @@ function Inscripciones({
 }: {
   abiertas: Inscripcion[];
   historicas: Inscripcion[];
+  cuotaSocial: Ficha["cuotaSocial"];
   puedeGestionar: boolean;
   onInscribir: () => void;
   onCambiar: (i: Inscripcion) => void;
@@ -417,6 +420,19 @@ function Inscripciones({
             ))}
           </AnimatePresence>
         </ul>
+      )}
+      {cuotaSocial && cuotaSocial.disciplinas.length > 0 && abiertas.length > 0 && (
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="border-t border-linea bg-dorado-50/40 px-4 py-2.5 text-xs text-muted-foreground"
+        >
+          {cuotaSocial.anual
+            ? "La cuota social la paga anual: no se le cobra mes a mes ni la cubre ninguna disciplina."
+            : cuotaSocial.disciplinas.length > 1
+              ? `Está en ${cuotaSocial.disciplinas.join(" y ")}: la cuota social se cobra una sola vez y la cubre ${cuotaSocial.disciplina} (su inscripción más antigua). En la liquidación, esa disciplina responde por ella.`
+              : `La cuota social la cubre ${cuotaSocial.disciplina}: si no la paga por el club, en la liquidación la pone la disciplina.`}
+        </motion.p>
       )}
       {historicas.length > 0 && (
         <div className="border-t border-linea">

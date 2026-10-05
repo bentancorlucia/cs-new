@@ -101,6 +101,9 @@ export interface SocioDisciplina {
   /** Socio del club hoy. */
   socio: boolean;
   otras_disciplinas: string[];
+  /** Disciplina que cubre su cuota social (se cobra una sola vez: la de su inscripción más antigua). */
+  social_cubre: string | null;
+  social_anual: boolean;
   inscripciones: InscripcionSocio[];
   /** Lo que se le cobra por mes: cuota social + planes. */
   cuota_mensual: number;
@@ -534,6 +537,8 @@ export async function leerSocios(db: SociosClient, disciplina: number, historico
   return filas.map((s) => ({
     ...s,
     otras_disciplinas: s.otras_disciplinas ?? [],
+    social_cubre: s.social_cubre ?? null,
+    social_anual: !!s.social_anual,
     inscripciones: s.inscripciones ?? [],
     cuota_mensual: n(s.cuota_mensual),
     cuotas_vencidas: n(s.cuotas_vencidas),

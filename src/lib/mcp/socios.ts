@@ -27,6 +27,7 @@ const MEDIOS: Record<string, string> = {
   transferencia_club: "Transferencia al club",
   transferencia_disciplina: "Pago en la cuenta de la disciplina",
   efectivo: "Efectivo",
+  liquidacion_disciplina: "Cuota social a cargo de la disciplina",
 };
 
 export async function cobranzaSocios(token: string, conControl: boolean) {

@@ -399,6 +399,8 @@ export interface Ficha {
   movimientos: MovimientoCuenta[];
   pendientes: CuotaPendiente[];
   situacion: Situacion | null;
+  /** Quién cubre su cuota social: se cobra una sola vez aunque esté en varias disciplinas. */
+  cuotaSocial: { disciplina: string | null; disciplinas: string[]; anual: boolean } | null;
   hoy: string;
 }
 
@@ -451,6 +453,8 @@ export async function cargarFicha(id: number): Promise<Ficha | null> {
   for (const r of [membRes, motivosRes, suscRes, mediosRes, planesRes, cuentaRes, pendRes, sitRes]) {
     if (r.error) throw new Error(r.error.message);
   }
+  const { data: socialData } = await so.rpc("cuota_social_de", { p_persona: id });
+  const social = socialData as { disciplina: string | null; disciplinas: string[] | null; anual: boolean } | null;
 
   const motivo = new Map((motivosRes.data ?? []).map((m) => [m.id, m.nombre]));
   const planPorId = new Map((planesRes.data ?? []).map((p) => [p.id, p]));
@@ -521,6 +525,7 @@ export async function cargarFicha(id: number): Promise<Ficha | null> {
           al_dia: sitRes.data.al_dia,
         }
       : null,
+    cuotaSocial: social ? { disciplina: social.disciplina, disciplinas: social.disciplinas ?? [], anual: !!social.anual } : null,
     hoy,
   };
 }

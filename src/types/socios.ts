@@ -705,6 +705,9 @@ isOneToOne: false
 "_persona_en_disciplina":
 { Args: { "p_disciplina": number,"p_persona": number,"p_vigente"?: boolean }; Returns: boolean
                            },
+"_pesos":
+{ Args: { "p": number }; Returns: string
+                           },
 "_plan_social":
 { Args: Record<PropertyKey, never>; Returns: number
                            },
@@ -808,6 +811,9 @@ isOneToOne: false
 { Args: { "p_disciplina": number }; Returns: {
               "asiento_id": string,"cuenta": string,"debe": number,"descripcion": string,"fecha": string,"haber": number,"numero": number,"origen_id": string,"origen_tipo": string,"pedido_id": number,"saldo": number,"tipo": string
             }[]
+                           },
+"cuota_social_de":
+{ Args: { "p_fecha"?: string,"p_persona": number }; Returns: Json
                            },
 "dar_baja":
 { Args: { "p_anular_deuda"?: boolean,"p_hasta": string,"p_motivo": number,"p_notas"?: string,"p_persona": number }; Returns: undefined

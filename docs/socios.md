@@ -79,7 +79,7 @@ Por disciplina y mes del débito (`previsualizar_liquidacion_disciplina(d, mes)`
 ```
 
 - **La cuota social de cada socio de una disciplina la garantiza la disciplina**: al liquidar, la social del mes que siga impaga (tarjeta rebotada, pago directo a la disciplina, deuda) la pone la disciplina: queda cobrada con un cobro `liquidacion_disciplina` y la parte de la disciplina la sigue debiendo el socio (la cobra la disciplina). Es el "socios × cuota social" de la planilla.
-- Un socio en varias disciplinas paga una sola cuota social: está a cargo de la disciplina de su inscripción más antigua (`cuotas.disciplina_responsable_id`, la fija un trigger al emitir).
+- **Un socio en varias disciplinas paga una sola cuota social** (regla confirmada por el club): está a cargo de la disciplina de su inscripción más antigua (`cuotas.disciplina_responsable_id`, la fija un trigger al emitir). Se ve en la ficha del socio (`cuota_social_de`), en el panel de cada disciplina y en el detalle de la liquidación (`social_cubre`); en el estado de cuenta figura como "Cuota social … a cargo de <disciplina>".
 - El débito Visa del mes cuenta entero aunque se acredite al mes siguiente; lo demás, por fecha de aplicación. Un mes liquidado no admite cobros con fecha dentro de él ni se puede anular su débito.
 - Asiento: Debe 5.2.09 (centro de la disciplina) cuotas cobradas − gastos / Haber 1.1.03.01 la social que pone la disciplina / Haber 2.1.07.02 lo que se le paga (o Debe 1.1.04.03 lo que tiene que depositar). El pago sigue siendo otro asiento (`pagar_liquidacion_disciplina`).
 - La liquidación guarda el detalle por socio (`detalle`: débito, rebote, para la disciplina, otros medios, social a cargo) y `resumen_liquidacion(id)` lo devuelve para la pantalla y el mail.
@@ -92,12 +92,11 @@ Migraciones `20261008110000` a `20261008150000`; pantallas en `/disciplina/[id]`
 - `socios.representantes`: nombre, correo, cargo, si recibe la liquidación y si entra al panel. Se vincula sola con la cuenta del sitio con ese correo (también si la crea después) y el rol `representante_disciplina` se asigna y se quita solo. Los administran tesorería y secretaría (`guardar_representante`, `quitar_representante`).
 - El panel usa funciones `disc_*` (SECURITY DEFINER): el representante solo ve y cambia su disciplina; el club también puede. Lecturas: `mis_disciplinas`, `disc_resumen`, `disc_socios`, `disc_planes`, `disc_liquidaciones`, `disc_cuenta`, `disc_cambios`. Cambios: `disc_alta_socio`, `disc_baja`, `disc_cambiar_plan`, `disc_cambiar_medio` (tarjetas), `disc_actualizar_datos`, `disc_crear_plan`, `disc_nuevo_precio`, `disc_registrar_cobro`. Delegan en las funciones de secretaría y tesorería con `socios.delegado` encendido solo durante la llamada.
 - **Registro de cambios** (`socios.cambios_disciplina`): lo escriben triggers de membresías, inscripciones y medios de cobro, y las funciones del panel, haga el cambio quien lo haga (origen `representante` o `club`, quién, cuándo, antes y después, desde cuándo rige). No se edita ni se borra. Lo que cambia el débito (adhesión, tarjeta, alta o baja con débito, cambio de plan, precio) queda **pendiente** hasta que tesorería lo carga en el portal y lo marca (`marcar_cambios`). Pantalla: Cuotas → Cambios para el débito (`cambios_debito`).
-- **Tarjetas**: el número completo se valida (Luhn) y se guarda **cifrado en Supabase Vault solo hasta que tesorería lo aplica**; en el medio de cobro quedan los últimos 4, el vencimiento y el emisor. `ver_tarjeta` (solo tesorería) lo muestra y deja registro de quién lo vio; `marcar_cambios` lo borra.
+- **Tarjetas**: el número completo se valida (Luhn) y se guarda **cifrado en Supabase Vault (extensión `supabase_vault`, la activa la migración `20261008160000` si faltara) solo hasta que tesorería lo aplica**; en el medio de cobro quedan los últimos 4, el vencimiento y el emisor. `ver_tarjeta` (solo tesorería) lo muestra y deja registro de quién lo vio; `marcar_cambios` lo borra.
 
 ## Pendiente
 
 - Pantallas de secretaría (padrón nuevo), de cuotas y cobranza, y estado de cuenta en Mi cuenta.
 - Formato del archivo de liquidación de Visa (hoy se cargan las filas: persona, importe, cobrado/rechazado).
-- Confirmar con tesorería: ¿un socio en dos disciplinas paga dos cuotas sociales (como en la planilla, una por disciplina) o una sola (como hace el sistema)?
 - Migrar el padrón actual: crear membresías e inscripciones desde `padron_socios`/`padron_disciplinas` (las categorías en texto libre se mapean a planes).
 - Cron diario de `socios.sincronizar_vigencias()`.
