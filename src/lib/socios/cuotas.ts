@@ -928,6 +928,149 @@ export async function identificarDebitos(
   });
 }
 
+/** Una línea del archivo de Visanet, sin el número de la tarjeta. */
+export interface LineaIdentificarVisa {
+  /** BIN + últimos 4: agrupa los cargos de la misma tarjeta. */
+  grupo: string;
+  ultimos4: string;
+  vencimiento: string | null;
+  /** Referencia cargada en el portal (la cédula, sin ceros a la izquierda). */
+  referencia: string;
+  importe: number;
+}
+
+export interface CandidatoVisa {
+  persona: Persona;
+  /** Lo que se le cargaba en la planilla del mes. */
+  esperado: number | null;
+}
+
+export interface IdentificacionVisanet {
+  persona: Persona | null;
+  via: "cedula" | "titular" | "tarjeta" | "importe" | null;
+  esperado: number | null;
+  /** Quienes tienen el débito con esa tarjeta, cuando no se pudo decidir. */
+  candidatos: CandidatoVisa[];
+  avisos: string[];
+}
+
+export interface IdentificacionArchivoVisa {
+  lineas: IdentificacionVisanet[];
+  /** En la planilla del mes con importe y sin ninguna línea en el archivo. */
+  faltantes: CandidatoVisa[];
+}
+
+const mesAnio = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+
+/**
+ * Identifica las líneas del archivo de Visanet contra quienes tienen el débito
+ * vigente en el mes:
+ *  1. la referencia es la cédula del socio (o del titular de la tarjeta);
+ *  2. si no, y la tarjeta es de una sola persona, es esa;
+ *  3. si la tarjeta es de varias (una familia), la que tiene pendiente
+ *     justo ese importe en la planilla del mes.
+ * Lo que queda se elige a mano entre los candidatos. El sistema anterior cargaba
+ * varias líneas por persona (cuota social y de la disciplina) con la cédula
+ * corrida un dígito: esas caen en 2 o 3, y en la pantalla se suman.
+ */
+export async function identificarArchivoVisa(
+  db: ClienteSocios,
+  padron: ClientePadron,
+  periodo: string,
+  lineas: LineaIdentificarVisa[]
+): Promise<IdentificacionArchivoVisa> {
+  const planilla = await planillaDebito(db, padron, periodo);
+  const personas = await leerPersonas(padron, planilla.map((p) => p.persona_id));
+  const porTarjeta = new Map<string, FilaPlanilla[]>();
+  const porCedula = new Map<string, FilaPlanilla>();
+  const porTitular = new Map<string, FilaPlanilla[]>();
+  for (const f of planilla) {
+    if (f.ultimos4) porTarjeta.set(f.ultimos4, [...(porTarjeta.get(f.ultimos4) ?? []), f]);
+    const ced = soloDigitos(f.cedula);
+    if (ced) porCedula.set(ced, f);
+    const tit = soloDigitos(f.titular_documento);
+    if (tit) porTitular.set(tit, [...(porTitular.get(tit) ?? []), f]);
+  }
+
+  // Cédulas del archivo que no tienen débito vigente (medio de cobro sin cargar).
+  const otras = [...new Set(lineas.map((l) => soloDigitos(l.referencia)).filter((r) => r.length >= 6 && !porCedula.has(r)))];
+  const externas = new Map<string, Persona>();
+  for (let i = 0; i < otras.length; i += 200) {
+    const filas = exigir(await padron.from("padron_socios").select("*").in("cedula", otras.slice(i, i + 200))) as FilaPadron[];
+    for (const f of filas) externas.set(f.cedula, aPersona(f));
+  }
+
+  const candidato = (f: FilaPlanilla): CandidatoVisa | null => {
+    const p = personas.get(f.persona_id);
+    return p ? { persona: p, esperado: f.importe } : null;
+  };
+  const asignado = new Map<number, number>();
+  const usados = new Set<number>();
+  const salida: IdentificacionVisanet[] = lineas.map(() => ({ persona: null, via: null, esperado: null, candidatos: [], avisos: [] }));
+
+  const asignar = (i: number, f: FilaPlanilla, via: NonNullable<IdentificacionVisanet["via"]>) => {
+    const l = lineas[i];
+    const p = personas.get(f.persona_id);
+    if (!p) return;
+    const avisos: string[] = [];
+    if (f.ultimos4 && f.ultimos4 !== l.ultimos4) avisos.push(`En el club figura la tarjeta terminada en ${f.ultimos4}`);
+    if (f.vencimiento && l.vencimiento && inicioMes(f.vencimiento) !== l.vencimiento) {
+      avisos.push(`Visa informa vencimiento ${mesAnio(l.vencimiento)}; en el club figura ${mesAnio(f.vencimiento)}`);
+    }
+    salida[i] = { persona: p, via, esperado: f.importe, candidatos: [], avisos };
+    asignado.set(f.persona_id, r2((asignado.get(f.persona_id) ?? 0) + l.importe));
+    usados.add(f.persona_id);
+  };
+
+  const grupos = new Map<string, number[]>();
+  lineas.forEach((l, i) => grupos.set(l.grupo, [...(grupos.get(l.grupo) ?? []), i]));
+
+  for (const indices of grupos.values()) {
+    const ult4 = lineas[indices[0]].ultimos4;
+    const tarjeta = porTarjeta.get(ult4) ?? [];
+    const pendientes: number[] = [];
+    // 1. Por cédula del socio o del titular.
+    for (const i of indices) {
+      const ref = soloDigitos(lineas[i].referencia);
+      const f = porCedula.get(ref);
+      if (f) {
+        asignar(i, f, "cedula");
+        continue;
+      }
+      const ext = externas.get(ref);
+      if (ext) {
+        salida[i] = { persona: ext, via: "cedula", esperado: null, candidatos: [], avisos: ["No tiene débito Visa vigente en el club"] };
+        continue;
+      }
+      const titulares = (porTitular.get(ref) ?? []).filter((t) => t.ultimos4 === ult4);
+      if (titulares.length === 1) asignar(i, titulares[0], "titular");
+      else pendientes.push(i);
+    }
+    // 2 y 3. Por la tarjeta, y entre varias, por el importe pendiente.
+    for (const i of pendientes) {
+      if (tarjeta.length === 1) {
+        asignar(i, tarjeta[0], "tarjeta");
+        continue;
+      }
+      const l = lineas[i];
+      const justo = tarjeta.filter((t) => Math.abs(r2(t.importe - (asignado.get(t.persona_id) ?? 0)) - l.importe) < 0.005);
+      if (justo.length === 1) {
+        asignar(i, justo[0], "importe");
+        continue;
+      }
+      salida[i].candidatos = tarjeta.map(candidato).filter((c): c is CandidatoVisa => !!c);
+      if (tarjeta.length === 0) salida[i].avisos.push(`Nadie tiene débito vigente con la tarjeta terminada en ${ult4}`);
+    }
+  }
+
+  const faltantes = planilla
+    .filter((f) => f.importe > 0 && !usados.has(f.persona_id))
+    .map(candidato)
+    .filter((c): c is CandidatoVisa => !!c)
+    .filter((c) => !salida.some((s) => s.candidatos.some((k) => k.persona.id === c.persona.id)));
+  return { lineas: salida, faltantes };
+}
+
 export interface SimulacionVisa {
   bruto: number;
   comision: number;

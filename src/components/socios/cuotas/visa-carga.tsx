@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, CheckCircle2, ClipboardPaste, CreditCard, FileUp, Loader2, Scale, UserCheck, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardPaste, CreditCard, FileCheck2, FileUp, Loader2, RefreshCw, Scale, UserCheck, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatImporte } from "@/lib/contabilidad/formato";
@@ -13,12 +13,14 @@ import {
   nombrePersona,
   nombrePeriodo,
   r2,
+  type CandidatoVisa,
   type CuentaDisponible,
   type Persona,
   type SimulacionVisa,
   type TipoClave,
 } from "@/lib/socios/cuotas";
-import { aplicarLiquidacionVisa, identificarVisa, simularVisa } from "@/app/(dashboard)/cuotas/actions";
+import { leerArchivoVisanet, NOMBRE_TIPO_VISANET, type ArchivoVisanet, type LineaVisanet } from "@/lib/socios/visanet";
+import { aplicarLiquidacionVisa, identificarArchivoVisanet, identificarVisa, simularVisa } from "@/app/(dashboard)/cuotas/actions";
 import {
   Aviso,
   Boton,
@@ -41,17 +43,29 @@ interface Item {
   cobrado: boolean;
   motivo: string;
   persona: Persona | null;
-  via: "cedula" | "titular" | "tarjeta" | "manual" | null;
-  candidatos: Persona[];
+  via: "cedula" | "titular" | "tarjeta" | "importe" | "manual" | null;
+  candidatos: CandidatoVisa[];
   ignorar: boolean;
+  /** Archivo de Visanet: la cédula cargada en el portal, el código de autorización y avisos. */
+  documento?: string;
+  autorizacion?: string | null;
+  avisos?: string[];
+  /** Lo que se le cargaba a la persona en la planilla del mes. */
+  esperado?: number | null;
 }
 
 const VIA: Record<string, string> = {
   cedula: "por cédula",
   titular: "por titular",
   tarjeta: "por tarjeta",
+  importe: "por importe",
   manual: "a mano",
 };
+
+/** "20162139" → "2.016.213-9". */
+const formatoCedula = (d: string) => (d.length >= 2 ? `${Number(d.slice(0, -1)).toLocaleString("es-UY")}-${d.slice(-1)}` : d);
+
+const totalLineas = (xs: LineaVisanet[]) => ({ cantidad: xs.length, importe: r2(xs.reduce((s, x) => s + x.importe, 0)) });
 
 /** "1.234,50", "1,234.50", "1234.5", 1234.5 → número (o null). */
 function parsearImporte(v: string): number | null {
@@ -117,6 +131,10 @@ export function CargaVisa({
   const [cobradoSi, setCobradoSi] = useState<Record<string, boolean>>({});
   const [items, setItems] = useState<Item[] | null>(null);
   const [sim, setSim] = useState<{ clave: string; datos: SimulacionVisa } | null>(null);
+  const [visanet, setVisanet] = useState<ArchivoVisanet | null>(null);
+  const [cambiosTarjeta, setCambiosTarjeta] = useState<ArchivoVisanet | null>(null);
+  const [faltantes, setFaltantes] = useState<CandidatoVisa[]>([]);
+  const [soloRevisar, setSoloRevisar] = useState(false);
   const [leyendo, setLeyendo] = useState(false);
   const [identificando, startId] = useTransition();
   const [simulando, startSim] = useTransition();
@@ -142,6 +160,9 @@ export function CargaVisa({
     const conTitulos = limpias[0].some((c) => c && !/^[\d.,\s$-]+$/.test(c));
     setEncabezado(conTitulos);
     setTabla({ filas: limpias, nombre });
+    setVisanet(null);
+    setCambiosTarjeta(null);
+    setFaltantes([]);
     const enc = conTitulos ? limpias[0] : limpias[0].map((_, i) => `Columna ${i + 1}`);
     const g = adivinar(enc);
     if (g.colImporte < 0) g.colImporte = Math.min(1, enc.length - 1);
@@ -149,6 +170,75 @@ export function CargaVisa({
     setCobradoSi({});
     setItems(null);
     setSim(null);
+  }
+
+  /** Archivos de Visanet: se identifican solos, sin elegir columnas. */
+  function cargarVisanet(a: ArchivoVisanet) {
+    const per = a.periodo ?? periodo;
+    if (a.periodo) setMes(a.periodo.slice(0, 7));
+    setVisanet(a);
+    setTabla(null);
+    setItems(null);
+    setSim(null);
+    setFaltantes([]);
+    setSoloRevisar(a.lineas.length > 40);
+    startId(async () => {
+      const r = await identificarArchivoVisanet({
+        periodo: per,
+        lineas: a.lineas.map((l) => ({ grupo: l.grupo, ultimos4: l.ultimos4, vencimiento: l.vencimiento, referencia: l.referencia, importe: l.importe })),
+      });
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      setFaltantes(r.data.faltantes);
+      setItems(
+        a.lineas.map((l, idx) => {
+          const id = r.data.lineas[idx];
+          return {
+            idx,
+            clave: `•••• ${l.ultimos4}`,
+            documento: l.referencia,
+            importe: l.importe,
+            cobrado: l.aprobado,
+            motivo: l.motivo,
+            autorizacion: l.autorizacion,
+            persona: id?.persona ?? null,
+            via: id?.via ?? null,
+            esperado: id?.esperado ?? null,
+            candidatos: id?.candidatos ?? [],
+            avisos: id?.avisos ?? [],
+            ignorar: l.importe <= 0,
+          };
+        })
+      );
+    });
+  }
+
+  async function leerArchivos(lista: File[]) {
+    if (lista.length === 0) return;
+    if (lista.some((f) => f.size > 5 * 1024 * 1024)) {
+      toast.error("Cada archivo puede tener hasta 5 MB");
+      return;
+    }
+    const textos = lista.filter((f) => /\.(txt|csv)$/i.test(f.name) || !/\.\w+$/.test(f.name));
+    const leidos = await Promise.all(textos.map(async (f) => leerArchivoVisanet(await f.text(), f.name)));
+    const deVisa = leidos.filter((a): a is ArchivoVisanet => !!a);
+    if (deVisa.length > 0) {
+      const principal =
+        deVisa.find((a) => a.tipo === "resultado") ?? deVisa.find((a) => a.tipo === "rechazos") ?? deVisa.find((a) => a.tipo === "listado_rechazos");
+      setCambiosTarjeta(deVisa.find((a) => a.tipo === "cambios") ?? null);
+      if (lista.length > deVisa.length) toast.warning("Se ignoraron los archivos que no son de Visa");
+      if (principal) cargarVisanet(principal);
+      else toast.info("Ese archivo solo trae los cambios de tarjeta: subí también RESULTADO_VISANET.TXT");
+      if (archivoRef.current) archivoRef.current.value = "";
+      return;
+    }
+    if (lista.length > 1) {
+      toast.error("Subí un solo archivo (salvo los de Visa, que se pueden subir juntos)");
+      return;
+    }
+    await leerArchivo(lista[0]);
   }
 
   async function leerArchivo(file: File) {
@@ -220,7 +310,7 @@ export function CargaVisa({
           ...b,
           persona: r.data[i]?.persona ?? null,
           via: r.data[i]?.via ?? null,
-          candidatos: r.data[i]?.candidatos ?? [],
+          candidatos: (r.data[i]?.candidatos ?? []).map((p) => ({ persona: p, esperado: null })),
           ignorar: b.importe <= 0,
         }))
       );
@@ -236,14 +326,35 @@ export function CargaVisa({
   const cobrados = activos.filter((i) => i.cobrado);
   const rechazados = activos.filter((i) => !i.cobrado);
   const sinPersona = cobrados.filter((i) => !i.persona);
-  const repetidos = new Set(
-    cobrados
-      .map((i) => i.persona?.id)
-      .filter((id, k, arr): id is number => id != null && arr.indexOf(id) !== k)
-  );
+  // Varias líneas de la misma persona (cuota social y de la disciplina por separado): un solo cobro por la suma.
+  const porPersona = (() => {
+    const m = new Map<number, { persona_id: number; importe: number; lineas: number; autorizaciones: string[] }>();
+    for (const c of cobrados) {
+      if (!c.persona) continue;
+      const x = m.get(c.persona.id) ?? { persona_id: c.persona.id, importe: 0, lineas: 0, autorizaciones: [] };
+      x.importe = r2(x.importe + c.importe);
+      x.lineas += 1;
+      if (c.autorizacion) x.autorizaciones.push(c.autorizacion);
+      m.set(c.persona.id, x);
+    }
+    return m;
+  })();
+  const agrupados = [...porPersona.values()];
+  const paraRevisar = (it: Item) => {
+    if (!it.persona || !it.cobrado || (it.avisos?.length ?? 0) > 0) return true;
+    const g = porPersona.get(it.persona.id);
+    return !!g && (g.lineas > 1 || (it.esperado != null && Math.abs(it.esperado - g.importe) > 0.004));
+  };
+  const conVariasLineas = agrupados.filter((a) => a.lineas > 1).length;
+  const etiquetaMes = `${periodo.slice(5, 7)}/${periodo.slice(0, 4)}`;
+  const cobrosAplicar = agrupados.map((a) => ({
+    persona_id: a.persona_id,
+    importe: a.importe,
+    referencia: a.autorizaciones.length ? `Visa ${etiquetaMes} · aut. ${a.autorizaciones.join("/")}`.slice(0, 120) : null,
+  }));
   const bruto = r2(cobrados.reduce((s, i) => s + i.importe, 0));
   const neto = r2(bruto - gastos);
-  const claveSim = JSON.stringify([periodo, fecha, montoComision, montoIva, cobrados.map((c) => [c.persona?.id, c.importe])]);
+  const claveSim = JSON.stringify([periodo, fecha, montoComision, montoIva, agrupados.map((c) => [c.persona_id, c.importe])]);
   const simVigente = sim && sim.clave === claveSim ? sim.datos : null;
   const yaDebitados = simVigente?.personas.filter((p) => p.yaDebitado) ?? [];
 
@@ -251,7 +362,7 @@ export function CargaVisa({
   if (!items) problemas.push("Identificá a las personas");
   if (cobrados.length === 0 && items) problemas.push("No hay débitos cobrados");
   if (sinPersona.length) problemas.push(`${sinPersona.length} cobro${sinPersona.length === 1 ? "" : "s"} sin identificar`);
-  if (repetidos.size) problemas.push("Hay personas repetidas entre los cobrados");
+  if (visanet?.periodo && visanet.periodo !== periodo) problemas.push(`El archivo es de ${nombrePeriodo(visanet.periodo)}: corregí el mes del débito`);
   if (gastos >= bruto && bruto > 0) problemas.push("La comisión más el IVA no pueden ser mayores que lo cobrado");
   if (!fecha || fecha > hoy) problemas.push("La fecha de acreditación no puede ser futura");
 
@@ -262,7 +373,7 @@ export function CargaVisa({
         fecha,
         comision: montoComision,
         iva: montoIva,
-        cobrados: cobrados.map((c) => ({ persona_id: c.persona!.id, importe: c.importe })),
+        cobrados: cobrosAplicar.map(({ persona_id, importe }) => ({ persona_id, importe })),
       });
       if (!r.ok) {
         toast.error(r.error);
@@ -335,15 +446,18 @@ export function CargaVisa({
               className="flex min-h-28 flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-linea bg-superficie/40 p-4 text-sm text-muted-foreground transition-colors hover:border-bordo-200 hover:text-bordo-800"
             >
               {leyendo ? <Loader2 className="size-6 animate-spin" /> : <FileUp className="size-6" />}
-              <span className="font-medium">Subir CSV o Excel</span>
-              <span className="text-[11px]">{tabla?.nombre ?? "Las columnas se eligen después"}</span>
+              <span className="font-medium">Subir los archivos de Visa, un CSV o un Excel</span>
+              <span className="text-center text-[11px]">
+                {visanet?.nombre ?? tabla?.nombre ?? "RESULTADO_VISANET.TXT se lee solo (podés subir también arch_rech y arch_cambio)"}
+              </span>
             </motion.button>
             <input
               ref={archivoRef}
               type="file"
-              accept=".csv,.txt,.xlsx,.xls"
+              multiple
+              accept=".csv,.txt,.TXT,.xlsx,.xls"
               className="hidden"
-              onChange={(e) => e.target.files?.[0] && leerArchivo(e.target.files[0])}
+              onChange={(e) => leerArchivos([...(e.target.files ?? [])])}
             />
             <div className="space-y-2">
               <textarea
@@ -359,6 +473,17 @@ export function CargaVisa({
               </Boton>
             </div>
           </div>
+
+          <AnimatePresence>
+            {visanet && (
+              <ResumenVisanet
+                archivo={visanet}
+                cambios={cambiosTarjeta}
+                identificando={identificando}
+                alReidentificar={() => cargarVisanet(visanet)}
+              />
+            )}
+          </AnimatePresence>
 
           <AnimatePresence>
             {tabla && (
@@ -457,17 +582,41 @@ export function CargaVisa({
               titulo="3 · Personas"
               icono={UserCheck}
               accion={
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
                   <Pastilla tono="bueno">{cobrados.length} cobrados</Pastilla>
                   <Pastilla tono="alerta">{rechazados.length} rechazados</Pastilla>
                   {sinPersona.length > 0 && <Pastilla tono="alerta">{sinPersona.length} sin identificar</Pastilla>}
+                  {conVariasLineas > 0 && <Pastilla>{conVariasLineas} con varias líneas</Pastilla>}
+                  {items.length > 20 && (
+                    <label className="ml-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <input type="checkbox" checked={soloRevisar} onChange={(e) => setSoloRevisar(e.target.checked)} className="size-3.5 accent-bordo-800" />
+                      Solo lo que hay que revisar
+                    </label>
+                  )}
                 </div>
               }
             >
+              {faltantes.length > 0 && (
+                <div className="border-b border-linea p-4">
+                  <Aviso titulo={`${faltantes.length} persona${faltantes.length === 1 ? "" : "s"} de la planilla de ${nombrePeriodo(periodo)} no están en el archivo`}>
+                    <div className="mt-1 max-h-32 space-y-0.5 overflow-y-auto">
+                      {faltantes.map((f) => (
+                        <div key={f.persona.id} className="flex justify-between gap-3">
+                          <span className="truncate">{nombrePersona(f.persona)}</span>
+                          <span className="tabular-nums">{f.esperado != null ? formatImporte(f.esperado) : ""}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-1">No se cargaron en el portal o Visa no los procesó: su cuota sigue pendiente.</div>
+                  </Aviso>
+                </div>
+              )}
               <ul className="divide-y divide-linea">
-                {items.map((it, i) => {
-                  const repetido = it.cobrado && it.persona && repetidos.has(it.persona.id) && !it.ignorar;
+                {items.filter((it) => !soloRevisar || paraRevisar(it)).map((it, i) => {
+                  const grupo = it.cobrado && it.persona && !it.ignorar ? porPersona.get(it.persona.id) : undefined;
+                  const repetido = !!grupo && grupo.lineas > 1;
                   const falta = it.cobrado && !it.persona && !it.ignorar;
+                  const esperado = it.persona ? it.esperado : null;
                   return (
                     <motion.li
                       key={it.idx}
@@ -477,19 +626,30 @@ export function CargaVisa({
                       className={cn(
                         "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2 px-4 py-2.5 text-sm sm:grid-cols-[8rem_minmax(0,1fr)_7rem_7rem_auto]",
                         it.ignorar && "opacity-50",
-                        (falta || repetido) && "bg-rose-50/50"
+                        falta && "bg-rose-50/50",
+                        !falta && (it.avisos?.length ?? 0) > 0 && "bg-dorado-50/40"
                       )}
                     >
-                      <div className="font-mono text-xs tabular-nums">{it.clave || "—"}</div>
+                      <div className="font-mono text-xs tabular-nums">
+                        {it.clave || "—"}
+                        {it.documento && <div className="text-[10px] text-muted-foreground">CI {formatoCedula(it.documento)}</div>}
+                      </div>
                       <div className="col-span-2 row-start-2 min-w-0 sm:col-span-1 sm:row-start-auto">
                         {it.persona ? (
                           <div className="flex min-w-0 items-center gap-2">
                             <span className="truncate">{nombrePersona(it.persona)}</span>
                             <span className="shrink-0 text-[11px] text-muted-foreground">{it.via ? VIA[it.via] : ""}</span>
-                            <button type="button" onClick={() => cambiar(it.idx, { persona: null, via: null })} className="shrink-0 text-[11px] text-bordo-800 hover:underline">
+                            <button type="button" onClick={() => cambiar(it.idx, { persona: null, via: null, esperado: null })} className="shrink-0 text-[11px] text-bordo-800 hover:underline">
                               cambiar
                             </button>
-                            {repetido && <span className="shrink-0 text-[11px] text-rose-700">repetida</span>}
+                            {repetido && (
+                              <span className="shrink-0 text-[11px] text-sky-800">
+                                {grupo!.lineas} líneas: se suman ({formatImporte(grupo!.importe)})
+                              </span>
+                            )}
+                            {esperado != null && grupo && Math.abs(esperado - grupo.importe) > 0.004 && (
+                              <span className="shrink-0 text-[11px] text-dorado-800">planilla {formatImporte(esperado)}</span>
+                            )}
                           </div>
                         ) : (
                           <div className="space-y-1.5">
@@ -497,19 +657,27 @@ export function CargaVisa({
                               <div className="flex flex-wrap gap-1">
                                 {it.candidatos.map((c) => (
                                   <button
-                                    key={c.id}
+                                    key={c.persona.id}
                                     type="button"
-                                    onClick={() => cambiar(it.idx, { persona: c, via: "tarjeta" })}
+                                    onClick={() => cambiar(it.idx, { persona: c.persona, via: "tarjeta", esperado: c.esperado })}
                                     className="rounded-full border border-linea px-2 py-0.5 text-[11px] hover:border-bordo-200 hover:bg-bordo-50"
                                   >
-                                    {nombrePersona(c)}
+                                    {nombrePersona(c.persona)}
+                                    {c.esperado != null && <span className="ml-1 text-muted-foreground tabular-nums">{formatImporte(c.esperado)}</span>}
                                   </button>
                                 ))}
                               </div>
                             )}
-                            <BuscadorPersona compacto valor={null} onElegir={(p) => p && cambiar(it.idx, { persona: p, via: "manual" })} placeholder={it.cobrado ? "Buscar a quién corresponde…" : "Opcional en un rechazo"} />
+                            <BuscadorPersona compacto valor={null} onElegir={(p) => p && cambiar(it.idx, { persona: p, via: "manual", esperado: null })} placeholder={it.cobrado ? "Buscar a quién corresponde…" : "Opcional en un rechazo"} />
                           </div>
                         )}
+                        {!it.cobrado && it.motivo && <div className="mt-0.5 text-[11px] text-rose-700">{it.motivo}</div>}
+                        {it.avisos?.map((a) => (
+                          <div key={a} className="mt-0.5 flex items-center gap-1 text-[11px] text-dorado-800">
+                            <AlertTriangle className="size-3 shrink-0" />
+                            {a}
+                          </div>
+                        ))}
                       </div>
                       <div className="text-right tabular-nums">{formatImporte(it.importe)}</div>
                       <button
@@ -642,7 +810,7 @@ export function CargaVisa({
         titulo={`Aplicar el débito de ${nombrePeriodo(periodo)}`}
         descripcion={
           <span>
-            {cobrados.length} cobros por {formatImporte(bruto, "UYU")}, comisión {formatImporte(montoComision, "UYU")} más IVA{" "}
+            {agrupados.length} cobros por {formatImporte(bruto, "UYU")}, comisión {formatImporte(montoComision, "UYU")} más IVA{" "}
             {formatImporte(montoIva, "UYU")}, neto {formatImporte(neto, "UYU")} al banco el {fecha.split("-").reverse().join("/")}. {rechazados.length} rechazos
             quedan registrados. Todo se aplica junto, con un asiento.
           </span>
@@ -652,6 +820,9 @@ export function CargaVisa({
         alTerminar={() => {
           setItems(null);
           setTabla(null);
+          setVisanet(null);
+          setCambiosTarjeta(null);
+          setFaltantes([]);
           setSim(null);
           setPegado("");
           setComision("");
@@ -666,11 +837,11 @@ export function CargaVisa({
             comision: montoComision,
             iva: montoIva,
             cuenta_id: cuentaId || null,
-            archivo: tabla?.nombre ?? null,
-            cobrados: cobrados.map((c) => ({ persona_id: c.persona!.id, importe: c.importe })),
+            archivo: visanet?.nombre ?? tabla?.nombre ?? null,
+            cobrados: cobrosAplicar,
             rechazados: rechazados.map((c) => ({
               persona_id: c.persona?.id ?? null,
-              documento: c.persona ? null : c.clave || "sin identificar",
+              documento: c.persona ? null : c.documento ? `CI ${c.documento} · ${c.clave}` : c.clave || "sin identificar",
               importe: c.importe,
               motivo: c.motivo || null,
             })),
@@ -711,5 +882,84 @@ function Numero({ etiqueta, valor, fuerte }: { etiqueta: string; valor: number; 
       <div className="text-[10px] uppercase tracking-editorial text-muted-foreground">{etiqueta}</div>
       <ImporteAnimado valor={valor} className={cn("font-heading text-base sm:text-lg", fuerte && "text-emerald-800")} />
     </div>
+  );
+}
+
+function ResumenVisanet({
+  archivo,
+  cambios,
+  identificando,
+  alReidentificar,
+}: {
+  archivo: ArchivoVisanet;
+  cambios: ArchivoVisanet | null;
+  identificando: boolean;
+  alReidentificar: () => void;
+}) {
+  const aprobados = totalLineas(archivo.lineas.filter((l) => l.aprobado));
+  const rechazados = totalLineas(archivo.lineas.filter((l) => !l.aprobado));
+  const fechas = [...new Set(archivo.lineas.filter((l) => l.aprobado && l.fecha).map((l) => l.fecha!))].sort();
+  const cuadra = archivo.descuadres.length === 0 && (archivo.totales.aprobados || archivo.totales.rechazados);
+  const sinCambios = cambios && cambios.texto.every((t) => /no existen/i.test(t));
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={easeSmooth} className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <Pastilla tono="bueno">
+          <FileCheck2 className="size-3" /> {NOMBRE_TIPO_VISANET[archivo.tipo]}
+        </Pastilla>
+        {archivo.periodo && <Pastilla>{nombrePeriodo(archivo.periodo)}</Pastilla>}
+        {archivo.comercio && <span className="text-muted-foreground">Comercio {archivo.comercio}</span>}
+        {fechas.length > 0 && (
+          <span className="text-muted-foreground">Procesado el {fechas.map((f) => f.split("-").reverse().slice(0, 2).join("/")).join(" y ")}</span>
+        )}
+        <Boton variante="secundario" className="ml-auto h-7 px-2.5 text-xs" onClick={alReidentificar} pendiente={identificando}>
+          {!identificando && <RefreshCw className="size-3.5" />}
+          Volver a identificar
+        </Boton>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {archivo.tipo === "resultado" && <Numero etiqueta={`Aprobados · ${aprobados.cantidad}`} valor={aprobados.importe} fuerte />}
+        <Numero etiqueta={`Rechazados · ${rechazados.cantidad}`} valor={rechazados.importe} />
+        {archivo.totales.enviados && archivo.tipo === "resultado" && (
+          <Numero etiqueta={`Enviados · ${archivo.totales.enviados.cantidad}`} valor={archivo.totales.enviados.importe} />
+        )}
+      </div>
+      {cuadra && (
+        <p className="flex items-center gap-1.5 text-xs text-emerald-800">
+          <CheckCircle2 className="size-3.5" /> Las líneas coinciden con los totales del pie del archivo.
+        </p>
+      )}
+      {archivo.descuadres.length > 0 && (
+        <Aviso titulo="El archivo no cuadra con su pie">
+          {archivo.descuadres.map((d) => (
+            <div key={d}>{d}</div>
+          ))}
+        </Aviso>
+      )}
+      {archivo.ilegibles.length > 0 && (
+        <Aviso titulo={`${archivo.ilegibles.length} línea${archivo.ilegibles.length === 1 ? "" : "s"} sin leer`}>
+          Líneas {archivo.ilegibles.slice(0, 15).join(", ")}
+          {archivo.ilegibles.length > 15 ? "…" : ""}. Revisá que sea el archivo original de Visa.
+        </Aviso>
+      )}
+      {archivo.tipo !== "resultado" && (
+        <Aviso titulo="Este archivo trae solo los rechazos">
+          Para aplicar el mes subí RESULTADO_VISANET.TXT, que trae los aprobados y los rechazados juntos.
+        </Aviso>
+      )}
+      {cambios &&
+        (sinCambios ? (
+          <Explicacion>Cambios de tarjeta: Visa informa que no hay.</Explicacion>
+        ) : (
+          <Aviso titulo="Visa informó cambios de tarjeta">
+            <div className="max-h-32 overflow-y-auto font-mono text-[11px]">
+              {cambios.texto.map((t, i) => (
+                <div key={i}>{t.replace(/\d{12,19}/g, (n) => `•••• ${n.slice(-4)}`)}</div>
+              ))}
+            </div>
+            <div className="mt-1">Actualizá la tarjeta en el medio de cobro de cada socio.</div>
+          </Aviso>
+        ))}
+    </motion.div>
   );
 }

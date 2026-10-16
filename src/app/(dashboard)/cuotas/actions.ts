@@ -9,6 +9,7 @@ import { hoyUruguay, mensajeError } from "@/lib/contabilidad/formato";
 import {
   buscarPersonas,
   cuentaPersona,
+  identificarArchivoVisa,
   identificarDebitos,
   planillaDebito,
   previsualizarLote,
@@ -17,6 +18,7 @@ import {
   type FilaPlanilla,
   type FilaPrevia,
   type Identificacion,
+  type IdentificacionArchivoVisa,
   type Persona,
   type SimulacionVisa,
 } from "@/lib/socios/cuotas";
@@ -233,6 +235,37 @@ export async function identificarVisa(input: z.input<typeof identificarSchema>):
     if (!p.success) return invalido(p.error.issues);
     const [db, padron] = await Promise.all([createSociosClient(), createServerClient()]);
     return { ok: true, data: await identificarDebitos(db, padron, p.data.claves, p.data.fecha) };
+  } catch (e) {
+    return fallo(e);
+  }
+}
+
+const archivoVisaSchema = z.object({
+  periodo,
+  lineas: z
+    .array(
+      z.object({
+        grupo: z.string().trim().max(20),
+        ultimos4: z.string().regex(/^\d{4}$/, "Tarjeta inválida"),
+        vencimiento: z.string().regex(/^\d{4}-\d{2}-01$/).nullable(),
+        referencia: z.string().trim().max(20),
+        importe: z.number().min(0).max(100_000_000),
+      })
+    )
+    .min(1, "El archivo no tiene líneas")
+    .max(5000),
+});
+
+/** Identifica a las personas de las líneas del archivo de Visanet (sin el número de tarjeta). */
+export async function identificarArchivoVisanet(
+  input: z.input<typeof archivoVisaSchema>
+): Promise<Resultado<IdentificacionArchivoVisa>> {
+  try {
+    await exigir("verTesoreria");
+    const p = archivoVisaSchema.safeParse(input);
+    if (!p.success) return invalido(p.error.issues);
+    const [db, padron] = await Promise.all([createSociosClient(), createServerClient()]);
+    return { ok: true, data: await identificarArchivoVisa(db, padron, p.data.periodo, p.data.lineas) };
   } catch (e) {
     return fallo(e);
   }
