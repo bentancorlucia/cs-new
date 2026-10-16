@@ -634,7 +634,7 @@ function AccionesCuenta({ cuenta }: { cuenta: CuentaPlan }) {
   return (
     <div className="flex shrink-0 items-center gap-0.5">
       {/* Accesos rápidos en desktop */}
-      <div className="hidden items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100 md:flex">
+      <div className="hidden items-center gap-0.5 md:flex">
         {agrupadora && (
           <IconoAccion etiqueta="Agregar subcuenta" onClick={() => agregarSub(cuenta)}>
             <Plus className="size-3.5" />
